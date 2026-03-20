@@ -37,26 +37,6 @@ function ConnectStep({ setId, setName, onContinue }) {
     },
     {
       n: 2,
-      title: 'Mirror your screen via AirPlay',
-      body: (
-        <ul className="space-y-2">
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Swipe down from the top-right corner to open Control Center.
-          </li>
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Tap <span className="text-[#f5f5f5]">Screen Mirroring</span> and select your Apple TV or AirPlay display.
-          </li>
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Your TV will now mirror whatever is on your screen.
-          </li>
-        </ul>
-      ),
-    },
-    {
-      n: 3,
       title: 'Open the presentation screen',
       body: (
         <button
@@ -71,15 +51,46 @@ function ConnectStep({ setId, setName, onContinue }) {
           {opened ? '✓ Presentation screen opened' : 'Open Presentation Screen'}
         </button>
       ),
-      note: opened ? 'Switch to the new tab — your TV should now show the full-screen slides.' : null,
+      note: opened ? 'Switch to that tab now — it shows the full-screen slide display.' : null,
+    },
+    {
+      n: 3,
+      title: 'Switch to the presentation tab & AirPlay',
+      body: (
+        <ul className="space-y-2">
+          <li className="flex items-start gap-2 text-sm text-muted">
+            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
+            Switch to the presentation tab so your iPad shows only the slide.
+          </li>
+          <li className="flex items-start gap-2 text-sm text-muted">
+            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
+            Swipe down from the top-right → tap <span className="text-[#f5f5f5]">Screen Mirroring</span> → select your TV.
+          </li>
+          <li className="flex items-start gap-2 text-sm text-muted">
+            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
+            Your TV will now show only the clean slide — no app chrome.
+          </li>
+        </ul>
+      ),
     },
     {
       n: 4,
-      title: 'Come back here to control',
+      title: 'Control slides from the presentation screen',
       body: (
-        <p className="text-sm text-muted">
-          Switch back to this tab. Your TV will keep showing the presentation screen while you control slides from here.
-        </p>
+        <ul className="space-y-2">
+          <li className="flex items-start gap-2 text-sm text-muted">
+            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
+            <span><span className="text-[#f5f5f5]">Swipe left/right</span> or <span className="text-[#f5f5f5]">tap the left/right edges</span> to go to the previous or next slide.</span>
+          </li>
+          <li className="flex items-start gap-2 text-sm text-muted">
+            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
+            <span><span className="text-[#f5f5f5]">Tap the center</span> to reveal a mini control bar with Prev, Next, and Blank.</span>
+          </li>
+          <li className="flex items-start gap-2 text-sm text-muted">
+            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
+            Have a second device? Open this Controller page on it — changes sync automatically.
+          </li>
+        </ul>
       ),
     },
   ]

@@ -83,19 +83,35 @@ create policy "Users manage items in own sets"
 -- ────────────────────────────────────────────────────────────
 -- MEDIA ITEMS (Content Library — files uploaded by user)
 -- ────────────────────────────────────────────────────────────
+-- type values:
+--   'image'        — uploaded or imported image (JPEG, PNG, WebP, GIF)
+--   'presentation' — PowerPoint, Keynote, PDF, or Google Slides
+--   'loop'         — slideshow loop; images stored as JSONB in metadata
+--
+-- metadata JSONB structure for loops:
+--   { "duration": <seconds>, "images": [{ "id", "name", "url", "storage_path" }] }
+-- ────────────────────────────────────────────────────────────
 create table public.media_items (
-  id          uuid primary key default uuid_generate_v4(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
-  name        text not null,
-  category    text not null default 'other',  -- 'presentation', 'image', or any user-created folder name
-  file_path   text not null,           -- path inside the 'media' storage bucket
-  file_size   bigint,
-  mime_type   text,
-  source      text not null default 'upload'
-                check (source in ('upload','google_drive','apple_notes')),
-  external_url text,                   -- for future Drive/Notes direct links
-  created_at  timestamptz default now(),
-  updated_at  timestamptz default now()
+  id           uuid primary key default uuid_generate_v4(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  name         text not null,
+  type         text not null default 'image'
+                 check (type in ('image', 'presentation', 'loop')),
+  storage_path text,                    -- path inside the 'media' storage bucket (null for loops)
+  url          text,                    -- public URL of the file (null for loops)
+  metadata     jsonb default null,      -- extra data; used by loops: { duration, images[] }
+
+  -- Legacy columns kept for backward compatibility with any existing rows.
+  -- New code uses type / storage_path / url / metadata instead.
+  category     text,
+  file_path    text,
+  file_size    bigint,
+  mime_type    text,
+  source       text,
+  external_url text,
+
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now()
 );
 
 alter table public.media_items enable row level security;
@@ -105,14 +121,43 @@ create policy "Users manage own media"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Storage bucket policies (run after creating a 'media' bucket in Supabase Storage)
+-- ────────────────────────────────────────────────────────────
+-- STORAGE BUCKET (run once after creating 'media' bucket)
+-- ────────────────────────────────────────────────────────────
+-- In the Supabase Dashboard → Storage, create a bucket named 'media' and set it to Public.
+-- Then run the policies below in the SQL Editor:
+--
 -- insert into storage.buckets (id, name, public) values ('media', 'media', true);
+--
 -- create policy "Users upload own media" on storage.objects for insert
 --   with check (auth.uid()::text = (storage.foldername(name))[1]);
+--
 -- create policy "Users read own media" on storage.objects for select
 --   using (auth.uid()::text = (storage.foldername(name))[1]);
+--
 -- create policy "Users delete own media" on storage.objects for delete
 --   using (auth.uid()::text = (storage.foldername(name))[1]);
+
+-- ────────────────────────────────────────────────────────────
+-- MIGRATION: add new columns to existing media_items table
+-- Run this block if you already have a media_items table
+-- created from an earlier version of this schema:
+-- ────────────────────────────────────────────────────────────
+-- alter table public.media_items
+--   add column if not exists type         text not null default 'image'
+--     check (type in ('image', 'presentation', 'loop')),
+--   add column if not exists storage_path text,
+--   add column if not exists url          text,
+--   add column if not exists metadata     jsonb default null;
+--
+-- -- Migrate existing rows: copy file_path → storage_path, category → type
+-- update public.media_items
+--   set storage_path = file_path,
+--       type = case
+--         when category in ('image','presentation','loop') then category
+--         else 'image'
+--       end
+--   where storage_path is null;
 
 -- ────────────────────────────────────────────────────────────
 -- AUTO-UPDATE updated_at

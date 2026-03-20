@@ -6,8 +6,14 @@ import {
   Upload, Image, FolderOpen, Monitor,
   Trash2, ExternalLink, Plus, X, Folder,
   Clock, GalleryHorizontal, Pencil, Check, ChevronLeft,
-  HardDrive,
+  HardDrive, Loader2,
 } from 'lucide-react'
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function generateUUID() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
 
 // ─── Apple Photos icon ─────────────────────────────────────────────────────────
 function ApplePhotosIcon({ size = 16 }) {
@@ -61,10 +67,28 @@ function GooglePhotosIcon({ size = 18 }) {
   )
 }
 
+// ─── Upload progress bar ───────────────────────────────────────────────────────
+function UploadProgress({ current, total, label }) {
+  if (!total) return null
+  const pct = Math.round((current / total) * 100)
+  return (
+    <div className="fixed bottom-6 right-6 z-50 bg-surface border border-border rounded-xl shadow-2xl p-4 w-64 space-y-2">
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium">{label || 'Uploading…'}</span>
+        <span className="text-muted text-xs">{current}/{total}</span>
+      </div>
+      <div className="h-1.5 bg-card rounded-full overflow-hidden">
+        <div className="h-full bg-accent rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
 // ─── Google Photos Picker modal ────────────────────────────────────────────────
 
-function GooglePhotosPicker({ onSelect, onClose }) {
-  const [step, setStep]           = useState('loading') // loading | signin | albums | photos
+function GooglePhotosPicker({ userId, onSelect, onClose, mode = 'images' }) {
+  // mode: 'images' = add to Images tab; 'loop' = add to loop editor (returns raw photo objects)
+  const [step, setStep]           = useState('loading') // loading | signin | albums | photos | uploading
   const [token, setToken]         = useState(null)
   const [albums, setAlbums]       = useState([])
   const [photos, setPhotos]       = useState([])
@@ -74,10 +98,9 @@ function GooglePhotosPicker({ onSelect, onClose }) {
   const [error, setError]         = useState(null)
   const [nextAlbumPage, setNextAlbumPage] = useState(null)
   const [nextPhotoPage, setNextPhotoPage] = useState(null)
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 })
 
   // On mount: pull the Google provider_token from the active Supabase session.
-  // This is the access token obtained when the user signed in with Google —
-  // no separate sign-in or Client ID needed.
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const t = session?.provider_token
@@ -85,7 +108,6 @@ function GooglePhotosPicker({ onSelect, onClose }) {
         setToken(t)
         fetchAlbums(t)
       } else {
-        // Not signed in with Google (e.g. mock/email mode)
         setStep('signin')
       }
     })
@@ -93,18 +115,23 @@ function GooglePhotosPicker({ onSelect, onClose }) {
 
   const fetchAlbums = async (accessToken, pageToken = null) => {
     setLoading(true)
+    setError(null)
     try {
       const url = new URL('https://photoslibrary.googleapis.com/v1/albums')
       url.searchParams.set('pageSize', '50')
       if (pageToken) url.searchParams.set('pageToken', pageToken)
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData?.error?.message || `HTTP ${res.status}`)
+      }
       const data = await res.json()
       setAlbums(prev => pageToken ? [...prev, ...(data.albums || [])] : (data.albums || []))
       setNextAlbumPage(data.nextPageToken || null)
       setStep('albums')
     } catch (e) {
-      setError('Could not load albums. Check that the Photos Library API is enabled in Google Cloud Console.')
+      setError(`Could not load albums: ${e.message}. Check that the Photos Library API is enabled in Google Cloud Console.`)
+      setStep('albums')
     }
     setLoading(false)
   }
@@ -112,19 +139,23 @@ function GooglePhotosPicker({ onSelect, onClose }) {
   const fetchPhotos = async (album, pageToken = null) => {
     setActiveAlbum(album)
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ albumId: album.id, pageSize: 50, ...(pageToken ? { pageToken } : {}) }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData?.error?.message || `HTTP ${res.status}`)
+      }
       const data = await res.json()
       setPhotos(prev => pageToken ? [...prev, ...(data.mediaItems || [])] : (data.mediaItems || []))
       setNextPhotoPage(data.nextPageToken || null)
       setStep('photos')
     } catch (e) {
-      setError('Could not load photos from this album.')
+      setError(`Could not load photos: ${e.message}`)
     }
     setLoading(false)
   }
@@ -137,14 +168,64 @@ function GooglePhotosPicker({ onSelect, onClose }) {
     )
   }
 
-  const confirmSelection = () => {
-    const imgs = selected.map(p => ({
-      id: p.id,
-      name: p.filename || p.id,
-      // =w1920-h1080 requests a sized version; Google Photos serves it as-is
-      url: `${p.baseUrl}=w1920-h1080`,
-    }))
-    onSelect(imgs)
+  // Download a Google Photos image and upload it to Supabase Storage
+  const uploadPhotoToStorage = async (photo, storagePrefix) => {
+    // Use =d to get a download URL (full resolution download)
+    const downloadUrl = `${photo.baseUrl}=d`
+    const filename = photo.filename || `${photo.id}.jpg`
+    const res = await fetch(downloadUrl)
+    if (!res.ok) throw new Error(`Failed to download photo: HTTP ${res.status}`)
+    const blob = await res.blob()
+    const uuid = generateUUID()
+    const storagePath = `${userId}/${storagePrefix}${uuid}-${filename}`
+    const { error: storageErr } = await supabase.storage.from('media').upload(storagePath, blob, {
+      contentType: blob.type || 'image/jpeg',
+    })
+    if (storageErr) throw new Error(storageErr.message)
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(storagePath)
+    return { storagePath, publicUrl, filename }
+  }
+
+  const confirmSelection = async () => {
+    if (selected.length === 0) return
+
+    // For loop mode, return raw photo objects without uploading
+    // (upload happens when loop is saved)
+    if (mode === 'loop') {
+      const imgs = selected.map(p => ({
+        id: p.id,
+        name: p.filename || p.id,
+        url: `${p.baseUrl}=w1920-h1080`,
+        baseUrl: p.baseUrl,
+        fromGPhotos: true,
+      }))
+      onSelect(imgs)
+      onClose()
+      return
+    }
+
+    // For images mode: download each and upload to Supabase
+    setStep('uploading')
+    setUploadProgress({ current: 0, total: selected.length })
+    const results = []
+    for (let i = 0; i < selected.length; i++) {
+      const photo = selected[i]
+      try {
+        const { storagePath, publicUrl, filename } = await uploadPhotoToStorage(photo, '')
+        const { data: inserted } = await supabase.from('media_items').insert({
+          user_id: userId,
+          name: filename,
+          type: 'image',
+          storage_path: storagePath,
+          url: publicUrl,
+        }).select().single()
+        if (inserted) results.push(inserted)
+      } catch (e) {
+        console.error('Failed to upload photo', photo.id, e)
+      }
+      setUploadProgress({ current: i + 1, total: selected.length })
+    }
+    onSelect(results)
     onClose()
   }
 
@@ -187,6 +268,22 @@ function GooglePhotosPicker({ onSelect, onClose }) {
             </div>
           )}
 
+          {/* Step: Uploading */}
+          {step === 'uploading' && (
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-muted">
+                Uploading {uploadProgress.current} of {uploadProgress.total} photos…
+              </p>
+              <div className="w-48 h-1.5 bg-card rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-accent rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Step: Not signed in with Google */}
           {step === 'signin' && (
             <div className="flex flex-col items-center justify-center py-10 gap-5 text-center">
@@ -194,7 +291,7 @@ function GooglePhotosPicker({ onSelect, onClose }) {
                 <GooglePhotosIcon size={32} />
               </div>
               <div className="space-y-1.5">
-                <p className="font-medium">Google account required</p>
+                <p className="font-medium">Sign in with Google to access Google Photos</p>
                 <p className="text-sm text-muted max-w-sm">
                   Google Photos access uses the same Google account you sign in to PresentGO with.
                   Sign out and sign back in with Google to enable this.
@@ -319,7 +416,7 @@ function GooglePhotosPicker({ onSelect, onClose }) {
             {selected.length > 0 ? `${selected.length} photo${selected.length !== 1 ? 's' : ''} selected` : ' '}
           </span>
           <div className="flex gap-2">
-            <button onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+            <button onClick={onClose} className="btn-secondary text-sm" disabled={step === 'uploading'}>Cancel</button>
             {step === 'photos' && (
               <button
                 onClick={confirmSelection}
@@ -361,24 +458,128 @@ const LOOP_DURATIONS = [
 
 // ─── Loop creator / editor modal ───────────────────────────────────────────────
 
-function LoopEditor({ loop, onSave, onClose }) {
-  const [name, setName]         = useState(loop?.name || '')
-  const [duration, setDuration] = useState(loop?.duration || 10)
-  const [images, setImages]     = useState(loop?.images || [])
+function LoopEditor({ loop, userId, onSave, onClose }) {
+  const [name, setName]           = useState(loop?.name || '')
+  const [duration, setDuration]   = useState(loop?.duration || 10)
+  const [images, setImages]       = useState(loop?.images || [])
   const [showGPhotos, setShowGPhotos] = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 })
   const fileRef = useRef(null)
 
-  const addImages = (files) => {
+  // Upload a local File to Storage and return {id, name, url, storage_path}
+  const uploadImageFile = async (file) => {
+    const uuid = generateUUID()
+    const storagePath = `${userId}/loops/${uuid}-${file.name}`
+    const { error } = await supabase.storage.from('media').upload(storagePath, file, {
+      contentType: file.type,
+    })
+    if (error) throw new Error(error.message)
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(storagePath)
+    return {
+      id: uuid,
+      name: file.name,
+      url: publicUrl,
+      storage_path: storagePath,
+    }
+  }
+
+  // Download a Google Photos photo and upload to Storage
+  const uploadGPhoto = async (photo) => {
+    const downloadUrl = `${photo.baseUrl}=d`
+    const filename = photo.name || `${photo.id}.jpg`
+    const res = await fetch(downloadUrl)
+    if (!res.ok) throw new Error(`Failed to download: HTTP ${res.status}`)
+    const blob = await res.blob()
+    const uuid = generateUUID()
+    const storagePath = `${userId}/loops/${uuid}-${filename}`
+    const { error } = await supabase.storage.from('media').upload(storagePath, blob, {
+      contentType: blob.type || 'image/jpeg',
+    })
+    if (error) throw new Error(error.message)
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(storagePath)
+    return {
+      id: uuid,
+      name: filename,
+      url: publicUrl,
+      storage_path: storagePath,
+    }
+  }
+
+  const addLocalFiles = (files) => {
+    // Store as temp objects with blob URLs until save; mark them as pending upload
     const newImgs = Array.from(files)
       .filter(f => f.type.startsWith('image/'))
-      .map(f => ({ id: `${Date.now()}-${f.name}`, name: f.name, url: URL.createObjectURL(f) }))
+      .map(f => ({
+        id: `pending-${generateUUID()}`,
+        name: f.name,
+        url: URL.createObjectURL(f),
+        _file: f,        // raw File object — uploaded on save
+        _pending: true,
+      }))
+    setImages(prev => [...prev, ...newImgs])
+  }
+
+  // When Google Photos returns selections (in loop mode, they come with baseUrl + fromGPhotos flag)
+  const handleGPhotosSelect = (photos) => {
+    const newImgs = photos.map(p => ({
+      id: `gpending-${generateUUID()}`,
+      name: p.name,
+      url: `${p.baseUrl}=w1920-h1080`,
+      baseUrl: p.baseUrl,
+      _fromGPhotos: true,
+      _pending: true,
+    }))
     setImages(prev => [...prev, ...newImgs])
   }
 
   const removeImage = (id) => setImages(prev => prev.filter(img => img.id !== id))
-
   const moveUp   = (i) => setImages(prev => { const a = [...prev]; [a[i-1], a[i]] = [a[i], a[i-1]]; return a })
   const moveDown = (i) => setImages(prev => { const a = [...prev]; [a[i], a[i+1]] = [a[i+1], a[i]]; return a })
+
+  const handleSave = async () => {
+    if (!name.trim() || images.length === 0) return
+    setSaving(true)
+
+    // Upload any pending images
+    const pendingCount = images.filter(img => img._pending).length
+    setUploadProgress({ current: 0, total: pendingCount })
+
+    let uploadedCount = 0
+    const finalImages = []
+    for (const img of images) {
+      if (img._pending) {
+        try {
+          let uploaded
+          if (img._fromGPhotos) {
+            uploaded = await uploadGPhoto(img)
+          } else {
+            uploaded = await uploadImageFile(img._file)
+          }
+          finalImages.push(uploaded)
+        } catch (e) {
+          console.error('Failed to upload image', img.name, e)
+          // Keep original if upload fails — use blob URL (not ideal but don't drop it)
+          finalImages.push({ id: img.id, name: img.name, url: img.url, storage_path: null })
+        }
+        uploadedCount++
+        setUploadProgress({ current: uploadedCount, total: pendingCount })
+      } else {
+        // Already uploaded
+        finalImages.push({ id: img.id, name: img.name, url: img.url, storage_path: img.storage_path })
+      }
+    }
+
+    await onSave({
+      id: loop?.id || null,
+      name: name.trim(),
+      duration,
+      images: finalImages,
+    })
+
+    setSaving(false)
+    onClose()
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
@@ -387,7 +588,7 @@ function LoopEditor({ loop, onSave, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <h2 className="text-lg font-semibold">{loop ? 'Edit Loop' : 'New Loop'}</h2>
-          <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg"><X size={18} /></button>
+          <button onClick={onClose} disabled={saving} className="btn-ghost p-1.5 rounded-lg"><X size={18} /></button>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-5">
@@ -460,7 +661,7 @@ function LoopEditor({ loop, onSave, onClose }) {
               multiple
               accept="image/*"
               className="hidden"
-              onChange={e => { addImages(e.target.files); e.target.value = '' }}
+              onChange={e => { addLocalFiles(e.target.files); e.target.value = '' }}
             />
 
             {images.length === 0 ? (
@@ -481,6 +682,12 @@ function LoopEditor({ loop, onSave, onClose }) {
                     <span className="absolute top-1.5 left-1.5 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium">
                       {i + 1}
                     </span>
+                    {/* Pending badge */}
+                    {img._pending && (
+                      <span className="absolute top-1.5 right-8 bg-amber-500/80 text-white text-[9px] px-1.5 py-0.5 rounded-full font-medium">
+                        new
+                      </span>
+                    )}
                     {/* Controls */}
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-1">
                       <button
@@ -517,13 +724,20 @@ function LoopEditor({ loop, onSave, onClose }) {
 
         {/* Footer */}
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-border shrink-0">
-          <button onClick={onClose} className="btn-secondary">Cancel</button>
+          {saving && uploadProgress.total > 0 && (
+            <span className="text-xs text-muted flex items-center gap-1.5 mr-auto">
+              <Loader2 size={12} className="animate-spin" />
+              Uploading {uploadProgress.current}/{uploadProgress.total}…
+            </span>
+          )}
+          <button onClick={onClose} disabled={saving} className="btn-secondary">Cancel</button>
           <button
-            disabled={!name.trim() || images.length === 0}
-            onClick={() => onSave({ id: loop?.id || Date.now().toString(), name: name.trim(), duration, images })}
+            disabled={!name.trim() || images.length === 0 || saving}
+            onClick={handleSave}
             className="btn-primary flex items-center gap-2"
           >
-            <Check size={15} /> {loop ? 'Save Changes' : 'Create Loop'}
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+            {loop ? 'Save Changes' : 'Create Loop'}
           </button>
         </div>
       </div>
@@ -531,7 +745,9 @@ function LoopEditor({ loop, onSave, onClose }) {
       {/* Google Photos picker — layered above the loop editor */}
       {showGPhotos && (
         <GooglePhotosPicker
-          onSelect={imgs => setImages(prev => [...prev, ...imgs])}
+          userId={userId}
+          mode="loop"
+          onSelect={handleGPhotosSelect}
           onClose={() => setShowGPhotos(false)}
         />
       )}
@@ -541,27 +757,81 @@ function LoopEditor({ loop, onSave, onClose }) {
 
 // ─── Loops panel ───────────────────────────────────────────────────────────────
 
-function LoopsPanel({ storageKey }) {
-  const loopsKey = `${storageKey}-loops`
-  const [loops, setLoops] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(loopsKey) || '[]') } catch { return [] }
-  })
+function LoopsPanel({ userId }) {
+  const [loops, setLoops]   = useState([])
+  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)   // null | 'new' | loop object
-  const [preview, setPreview] = useState(null)   // loop being previewed
 
   useEffect(() => {
-    localStorage.setItem(loopsKey, JSON.stringify(loops))
-  }, [loops, loopsKey])
+    loadLoops()
+  }, [userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveLoop = (loop) => {
-    setLoops(prev => {
-      const exists = prev.find(l => l.id === loop.id)
-      return exists ? prev.map(l => l.id === loop.id ? loop : l) : [...prev, loop]
-    })
-    setEditing(null)
+  const loadLoops = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('media_items')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('type', 'loop')
+      .order('created_at', { ascending: false })
+    if (!error && data) {
+      setLoops(data.map(row => ({
+        id: row.id,
+        name: row.name,
+        duration: row.metadata?.duration || 10,
+        images: row.metadata?.images || [],
+        _row: row,
+      })))
+    }
+    setLoading(false)
   }
 
-  const deleteLoop = (id) => setLoops(prev => prev.filter(l => l.id !== id))
+  const saveLoop = async (loopData) => {
+    const metadata = { duration: loopData.duration, images: loopData.images }
+
+    if (loopData.id) {
+      // Update existing
+      await supabase
+        .from('media_items')
+        .update({ name: loopData.name, metadata })
+        .eq('id', loopData.id)
+    } else {
+      // Insert new
+      await supabase.from('media_items').insert({
+        user_id: userId,
+        name: loopData.name,
+        type: 'loop',
+        storage_path: null,
+        url: null,
+        metadata,
+      })
+    }
+
+    setEditing(null)
+    loadLoops()
+  }
+
+  const deleteLoop = async (loop) => {
+    // Delete all associated storage files
+    const storagePaths = (loop.images || [])
+      .filter(img => img.storage_path)
+      .map(img => img.storage_path)
+
+    if (storagePaths.length > 0) {
+      await supabase.storage.from('media').remove(storagePaths)
+    }
+
+    await supabase.from('media_items').delete().eq('id', loop.id)
+    setLoops(prev => prev.filter(l => l.id !== loop.id))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -623,7 +893,7 @@ function LoopsPanel({ storageKey }) {
                   <Pencil size={12} /> Edit
                 </button>
                 <button
-                  onClick={() => deleteLoop(loop.id)}
+                  onClick={() => deleteLoop(loop)}
                   className="p-1.5 rounded-lg border border-border text-muted hover:text-red-400 hover:border-red-500/30 transition-colors"
                   title="Delete loop"
                 >
@@ -639,6 +909,7 @@ function LoopsPanel({ storageKey }) {
       {editing && (
         <LoopEditor
           loop={editing === 'new' ? null : editing}
+          userId={userId}
           onSave={saveLoop}
           onClose={() => setEditing(null)}
         />
@@ -647,11 +918,13 @@ function LoopsPanel({ storageKey }) {
   )
 }
 
-function guessCategory(filename) {
+// ─── Utility functions ─────────────────────────────────────────────────────────
+
+function guessType(filename) {
   const ext = filename.split('.').pop()?.toLowerCase()
-  if (['pptx', 'ppt', 'key', 'keynote'].includes(ext)) return 'presentation'
+  if (['pptx', 'ppt', 'key', 'keynote', 'pdf'].includes(ext)) return 'presentation'
   if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return 'image'
-  return null // will use activeCategory or 'other'
+  return null
 }
 
 function formatSize(bytes) {
@@ -666,6 +939,37 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// ─── Google Drive Picker ───────────────────────────────────────────────────────
+
+let gapiLoaded = false
+let gapiLoading = false
+const gapiCallbacks = []
+
+function loadGapi() {
+  return new Promise((resolve, reject) => {
+    if (gapiLoaded) { resolve(); return }
+    gapiCallbacks.push({ resolve, reject })
+    if (gapiLoading) return
+    gapiLoading = true
+    const script = document.createElement('script')
+    script.src = 'https://apis.google.com/js/api.js'
+    script.onload = () => {
+      gapiLoaded = true
+      gapiLoading = false
+      gapiCallbacks.forEach(cb => cb.resolve())
+      gapiCallbacks.length = 0
+    }
+    script.onerror = () => {
+      gapiLoading = false
+      gapiCallbacks.forEach(cb => cb.reject(new Error('Failed to load Google API')))
+      gapiCallbacks.length = 0
+    }
+    document.head.appendChild(script)
+  })
+}
+
+// ─── Main ContentLibrary component ────────────────────────────────────────────
+
 export default function ContentLibrary() {
   const { user } = useAuth()
   const storageKey = `presentgo-folders-${user.id}`
@@ -674,9 +978,11 @@ export default function ContentLibrary() {
   const [loading, setLoading]           = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
   const [uploading, setUploading]       = useState(false)
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 })
   const [dragOver, setDragOver]         = useState(false)
-  const [showGDriveInfo, setShowGDriveInfo] = useState(false)
   const [showGPhotosImages, setShowGPhotosImages] = useState(false)
+  const [gDriveLoading, setGDriveLoading] = useState(false)
+  const [gDriveError, setGDriveError]   = useState(null)
   const [customFolders, setCustomFolders] = useState(() => {
     try { return JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { return [] }
   })
@@ -686,7 +992,7 @@ export default function ContentLibrary() {
   const folderInputRef    = useRef(null)
   const applePhotosRef    = useRef(null)
 
-  useEffect(() => { loadItems() }, [user.id])
+  useEffect(() => { loadItems() }, [user.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(customFolders))
@@ -698,58 +1004,177 @@ export default function ContentLibrary() {
   }, [addingFolder])
 
   const loadItems = async () => {
-    const { data } = await supabase
+    setLoading(true)
+    const { data, error } = await supabase
       .from('media_items')
       .select('*')
       .eq('user_id', user.id)
+      .in('type', ['image', 'presentation'])
       .order('created_at', { ascending: false })
-    setItems(data || [])
+    if (!error) setItems(data || [])
     setLoading(false)
   }
 
   const handleFiles = async (files) => {
     if (!files?.length) return
     setUploading(true)
-    for (const file of Array.from(files)) {
-      // Use auto-detection, fall back to the active custom folder or 'other'
-      const guessed = guessCategory(file.name)
-      const category = guessed
-        || (activeCategory !== 'all' ? activeCategory : 'other')
-      const path = `${user.id}/${Date.now()}-${file.name}`
-      const { error: storageError } = await supabase.storage.from('media').upload(path, file)
-      if (storageError) { console.error(storageError); continue }
+    const fileArray = Array.from(files)
+    setUploadProgress({ current: 0, total: fileArray.length })
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i]
+      const guessed = guessType(file.name)
+      const type = guessed || (activeCategory !== 'all' && activeCategory !== 'loop' ? activeCategory : 'image')
+      const uuid = generateUUID()
+      const storagePath = `${user.id}/${uuid}-${file.name}`
+      const { error: storageError } = await supabase.storage.from('media').upload(storagePath, file, {
+        contentType: file.type,
+      })
+      if (storageError) { console.error(storageError); setUploadProgress({ current: i + 1, total: fileArray.length }); continue }
+      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(storagePath)
       await supabase.from('media_items').insert({
         user_id: user.id,
         name: file.name,
-        category,
-        file_path: path,
-        file_size: file.size,
-        mime_type: file.type,
-        source: 'upload',
+        type,
+        storage_path: storagePath,
+        url: publicUrl,
       })
+      setUploadProgress({ current: i + 1, total: fileArray.length })
     }
     setUploading(false)
+    setUploadProgress({ current: 0, total: 0 })
     loadItems()
   }
 
-  const handleGPhotosImages = (imgs) => {
-    const newItems = imgs.map(img => ({
-      id: `gphotos-${img.id}`,
-      name: img.name,
-      category: 'image',
-      file_path: null,
-      source_url: img.url,
-      created_at: new Date().toISOString(),
-    }))
+  // Called when Google Photos picker finishes uploading images
+  const handleGPhotosImages = (newItems) => {
     setItems(prev => [...newItems, ...prev])
     setShowGPhotosImages(false)
   }
 
   const handleDelete = async (item) => {
-    await supabase.storage.from('media').remove([item.file_path])
+    if (item.storage_path) {
+      await supabase.storage.from('media').remove([item.storage_path])
+    }
     await supabase.from('media_items').delete().eq('id', item.id)
     setItems(prev => prev.filter(i => i.id !== item.id))
   }
+
+  // ─── Google Drive Picker ─────────────────────────────────────────────────────
+
+  const openGoogleDrivePicker = async () => {
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
+    if (!apiKey) {
+      setGDriveError('VITE_GOOGLE_API_KEY is not set. Add it to your .env file.')
+      return
+    }
+
+    setGDriveLoading(true)
+    setGDriveError(null)
+
+    try {
+      await loadGapi()
+
+      await new Promise((resolve, reject) => {
+        window.gapi.load('picker', { callback: resolve, onerror: reject })
+      })
+
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.provider_token
+
+      if (!token) {
+        setGDriveError('No Google OAuth token found. Sign in with Google to use Drive import.')
+        setGDriveLoading(false)
+        return
+      }
+
+      const allowedTypes = [
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+        'application/vnd.ms-powerpoint',                                             // .ppt
+        'application/vnd.apple.keynote',                                             // .key
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+      ]
+
+      const pickerCallback = async (data) => {
+        if (data.action !== window.google.picker.Action.PICKED) return
+        const picked = data.docs || []
+        if (picked.length === 0) return
+
+        setGDriveLoading(true)
+        setUploadProgress({ current: 0, total: picked.length })
+
+        for (let i = 0; i < picked.length; i++) {
+          const doc = picked[i]
+          try {
+            const isImage = doc.mimeType?.startsWith('image/')
+            const type = isImage ? 'image' : 'presentation'
+
+            // Download file content from Drive
+            const downloadUrl = `https://www.googleapis.com/drive/v3/files/${doc.id}?alt=media`
+            const res = await fetch(downloadUrl, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (!res.ok) throw new Error(`Drive download failed: HTTP ${res.status}`)
+            const blob = await res.blob()
+
+            const filename = doc.name || `drive-file-${doc.id}`
+            const uuid = generateUUID()
+            const storagePath = `${user.id}/${uuid}-${filename}`
+            const { error: storageErr } = await supabase.storage.from('media').upload(storagePath, blob, {
+              contentType: doc.mimeType || 'application/octet-stream',
+            })
+            if (storageErr) throw new Error(storageErr.message)
+
+            const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(storagePath)
+            await supabase.from('media_items').insert({
+              user_id: user.id,
+              name: filename,
+              type,
+              storage_path: storagePath,
+              url: publicUrl,
+            })
+          } catch (e) {
+            console.error('Failed to import Drive file', doc.name, e)
+          }
+          setUploadProgress({ current: i + 1, total: picked.length })
+        }
+
+        setGDriveLoading(false)
+        setUploadProgress({ current: 0, total: 0 })
+        loadItems()
+      }
+
+      const docsView = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setMimeTypes(allowedTypes.join(','))
+
+      const pickerBuilder = new window.google.picker.PickerBuilder()
+        .addView(docsView)
+        .addView(new window.google.picker.DocsUploadView())
+        .setOAuthToken(token)
+        .setDeveloperKey(apiKey)
+        .setCallback(pickerCallback)
+
+      if (clientId) {
+        pickerBuilder.setAppId(clientId)
+      }
+
+      const picker = pickerBuilder.build()
+      picker.setVisible(true)
+    } catch (e) {
+      console.error('Google Picker error', e)
+      setGDriveError(`Could not open Google Drive: ${e.message}`)
+    }
+
+    setGDriveLoading(false)
+  }
+
+  // ─── Folder management ───────────────────────────────────────────────────────
 
   const createFolder = () => {
     const name = newFolderName.trim()
@@ -768,8 +1193,12 @@ export default function ContentLibrary() {
   }
 
   const getPublicUrl = (item) => {
-    const { data } = supabase.storage.from('media').getPublicUrl(item.file_path)
-    return data.publicUrl
+    if (item.url) return item.url
+    if (item.storage_path) {
+      const { data } = supabase.storage.from('media').getPublicUrl(item.storage_path)
+      return data.publicUrl
+    }
+    return '#'
   }
 
   const getCategoryLabel = (catId) => {
@@ -777,11 +1206,17 @@ export default function ContentLibrary() {
     return fixed ? fixed.label.replace(/s$/, '') : catId
   }
 
+  // Items for the non-loop tabs
   const filtered = activeCategory === 'all'
     ? items
-    : items.filter(i => i.category === activeCategory)
+    : items.filter(i => i.type === activeCategory || i.category === activeCategory)
 
-  const countFor = (id) => id === 'all' ? items.length : items.filter(i => i.category === id).length
+  // Count helpers
+  const countFor = (id) => {
+    if (id === 'all') return items.length
+    if (id === 'loop') return 0  // loops are in their own panel
+    return items.filter(i => i.type === id || i.category === id).length
+  }
 
   return (
     <Layout>
@@ -796,10 +1231,15 @@ export default function ContentLibrary() {
           <div className="flex items-center gap-2 shrink-0">
             {/* Google Drive button */}
             <button
-              onClick={() => setShowGDriveInfo(o => !o)}
+              onClick={openGoogleDrivePicker}
+              disabled={gDriveLoading}
               className="btn-secondary flex items-center gap-2 text-sm"
             >
-              <GoogleDriveIcon size={15} /> Google Drive
+              {gDriveLoading
+                ? <Loader2 size={15} className="animate-spin" />
+                : <GoogleDriveIcon size={15} />
+              }
+              Google Drive
             </button>
 
             {/* Upload from Desktop */}
@@ -808,7 +1248,7 @@ export default function ContentLibrary() {
               className="btn-primary flex items-center gap-2 text-sm"
               disabled={uploading}
             >
-              <Upload size={15} />
+              {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
               {uploading ? 'Uploading…' : 'Upload from Desktop'}
             </button>
             <input
@@ -822,15 +1262,15 @@ export default function ContentLibrary() {
           </div>
         </div>
 
-        {/* Google Drive info banner */}
-        {showGDriveInfo && (
-          <div className="card border-accent/30 bg-accent/5 flex items-start gap-3">
+        {/* Google Drive error banner */}
+        {gDriveError && (
+          <div className="card border-red-500/30 bg-red-500/5 flex items-start gap-3">
             <GoogleDriveIcon size={18} />
             <div className="flex-1 text-sm space-y-1">
-              <p className="font-medium text-accent-light">Google Drive import</p>
-              <p className="text-muted">Sign in with Google to import PowerPoint (.pptx), Keynote (.key), PDF, or Google Slides files directly from your Drive. Drive API integration will be enabled in an upcoming update.</p>
+              <p className="font-medium text-red-400">Google Drive error</p>
+              <p className="text-muted">{gDriveError}</p>
             </div>
-            <button onClick={() => setShowGDriveInfo(false)} className="text-muted hover:text-[#f5f5f5] mt-0.5 shrink-0"><X size={14} /></button>
+            <button onClick={() => setGDriveError(null)} className="text-muted hover:text-[#f5f5f5] mt-0.5 shrink-0"><X size={14} /></button>
           </div>
         )}
 
@@ -939,27 +1379,29 @@ export default function ContentLibrary() {
         )}
 
         {/* Drop zone — hidden on Loops tab */}
-        {activeCategory !== 'loop' && <div
-          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files) }}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${
-            dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-[#444]'
-          }`}
-        >
-          <Upload size={28} className="mx-auto text-muted mb-3" />
-          <p className="text-sm text-muted">
-            Drag & drop files here, or <span className="text-accent-light">browse to upload</span>
-            {activeCategory !== 'all' && (
-              <span className="text-muted"> into <span className="text-[#f5f5f5]">{getCategoryLabel(activeCategory)}</span></span>
-            )}
-          </p>
-          <p className="text-xs text-muted/60 mt-1">PowerPoint (.pptx), Keynote (.key), PDF, JPG, PNG and more</p>
-        </div>}
+        {activeCategory !== 'loop' && (
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files) }}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${
+              dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-[#444]'
+            }`}
+          >
+            <Upload size={28} className="mx-auto text-muted mb-3" />
+            <p className="text-sm text-muted">
+              Drag & drop files here, or <span className="text-accent-light">browse to upload</span>
+              {activeCategory !== 'all' && (
+                <span className="text-muted"> into <span className="text-[#f5f5f5]">{getCategoryLabel(activeCategory)}</span></span>
+              )}
+            </p>
+            <p className="text-xs text-muted/60 mt-1">PowerPoint (.pptx), Keynote (.key), PDF, JPG, PNG and more</p>
+          </div>
+        )}
 
         {/* Loops panel — replaces file grid when Loops tab is active */}
-        {activeCategory === 'loop' && <LoopsPanel storageKey={storageKey} />}
+        {activeCategory === 'loop' && <LoopsPanel userId={user.id} />}
 
         {/* Items */}
         {activeCategory !== 'loop' && loading ? (
@@ -982,8 +1424,8 @@ export default function ContentLibrary() {
         ) : activeCategory !== 'loop' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filtered.map(item => {
-              const Icon = FIXED_ICONS[item.category] || Folder
-              const colorClass = FIXED_COLORS[item.category] || 'text-accent-light bg-accent/10'
+              const Icon = FIXED_ICONS[item.type] || FIXED_ICONS[item.category] || Folder
+              const colorClass = FIXED_COLORS[item.type] || FIXED_COLORS[item.category] || 'text-accent-light bg-accent/10'
               return (
                 <div key={item.id} className="card flex items-center gap-3 group hover:border-[#444] transition-colors">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
@@ -992,7 +1434,7 @@ export default function ContentLibrary() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.name}</p>
                     <p className="text-xs text-muted">
-                      {getCategoryLabel(item.category)}
+                      {getCategoryLabel(item.type || item.category)}
                       {item.file_size ? ` · ${formatSize(item.file_size)}` : ''}
                       {' · '}{formatDate(item.created_at)}
                     </p>
@@ -1025,8 +1467,26 @@ export default function ContentLibrary() {
       {/* Google Photos picker for Images tab */}
       {showGPhotosImages && (
         <GooglePhotosPicker
+          userId={user.id}
+          mode="images"
           onSelect={handleGPhotosImages}
           onClose={() => setShowGPhotosImages(false)}
+        />
+      )}
+
+      {/* Upload progress toast */}
+      {uploading && uploadProgress.total > 0 && (
+        <UploadProgress
+          current={uploadProgress.current}
+          total={uploadProgress.total}
+          label="Uploading files…"
+        />
+      )}
+      {gDriveLoading && uploadProgress.total > 0 && (
+        <UploadProgress
+          current={uploadProgress.current}
+          total={uploadProgress.total}
+          label="Importing from Drive…"
         />
       )}
     </Layout>
