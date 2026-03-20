@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ── Dark theme (default) ─────────────────────────────────────── */
+  :root {
+    --color-bg:           #0f0f0f;
+    --color-surface:      #1a1a1a;
+    --color-card:         #242424;
+    --color-border:       #2e2e2e;
+    --color-text:         #f5f5f5;
+    --color-muted:        #888888;
+    --color-scrollbar-bg:    #0f0f0f;
+    --color-scrollbar-thumb: #333333;
+    --color-scrollbar-hover: #555555;
+  }
+
+  /* ── Light theme ──────────────────────────────────────────────── */
+  html.light {
+    --color-bg:           #f8fafc;
+    --color-surface:      #f1f5f9;
+    --color-card:         #ffffff;
+    --color-border:       #e2e8f0;
+    --color-text:         #0f172a;
+    --color-muted:        #64748b;
+    --color-scrollbar-bg:    #f1f5f9;
+    --color-scrollbar-thumb: #94a3b8;
+    --color-scrollbar-hover: #64748b;
+  }
+
+  html, body, #root {
+    @apply h-full;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    @apply font-sans antialiased;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--color-scrollbar-bg); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-scrollbar-thumb);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-scrollbar-hover); }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-accent hover:bg-accent-hover text-white font-medium px-4 py-2 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-card hover:bg-surface font-medium px-4 py-2 rounded-lg border border-border transition-colors duration-150;
+    color: var(--color-text);
+  }
+
+  .btn-ghost {
+    @apply hover:bg-card font-medium px-4 py-2 rounded-lg transition-colors duration-150;
+    color: var(--color-muted);
+  }
+  .btn-ghost:hover { color: var(--color-text); }
+
+  .btn-danger {
+    @apply bg-red-700 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-150;
+  }
+
+  .input {
+    @apply bg-card border border-border rounded-lg px-3 py-2
+           focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent
+           w-full transition-colors duration-150;
+    color: var(--color-text);
+  }
+  .input::placeholder { color: var(--color-muted); }
+
+  .card {
+    @apply bg-card border border-border rounded-xl p-4;
+  }
+
+  .label {
+    @apply block text-sm font-medium mb-1;
+    color: var(--color-muted);
+  }
+}
+
+/* Present-mode slide text */
+.slide-text {
+  text-shadow: 0 2px 20px rgba(0,0,0,0.8);
+}
+
+/* Slide fade transition */
+.slide-fade-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.slide-fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
