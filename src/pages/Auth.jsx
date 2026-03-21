@@ -65,7 +65,7 @@ export default function Auth() {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold">PresentGO</h1>
-            <p className="text-muted text-sm mt-1">Presentations on the go. Quick, wireless and done!</p>
+            <p className="text-muted text-sm mt-1">Create and display presentations in a breeze.</p>
           </div>
         </div>
 
