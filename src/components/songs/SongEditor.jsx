@@ -482,8 +482,25 @@ export default function SongEditor({ song, onClose, onSaved }) {
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
+  const generateChordChart = () => {
+    if (sectionOrder.length === 0) return
+    const lines = []
+    for (const label of sectionOrder) {
+      lines.push(`[${label}]`)
+      for (const slide of (sectionsMap[label] || [])) {
+        for (const lyricLine of slide.lines) {
+          lines.push('')         // blank chord line above
+          lines.push(lyricLine) // lyric line
+        }
+      }
+      lines.push('') // blank line between sections
+    }
+    setChordChart(lines.join('\n'))
+  }
+
   const goTo = nextStep => {
     if (nextStep === 2 && !showSlides && rawLyrics.trim()) handleFormatSong()
+    if (nextStep === 4 && !chordChart.trim() && sectionOrder.length > 0) generateChordChart()
     setStep(nextStep)
     setMaxReached(m => Math.max(m, nextStep))
   }
