@@ -615,7 +615,7 @@ export default function SongEditor({ song, onClose, onSaved }) {
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Summary bar */}
         <div className="flex items-center justify-between text-xs text-muted px-1">
           <span>{sectionOrder.length} sections · {slides.length} total slides</span>
@@ -630,18 +630,18 @@ export default function SongEditor({ song, onClose, onSaved }) {
           const lps = sectionLPS[label] || linesPerSlide
           return (
             <div key={label} className="rounded-xl border border-border bg-card overflow-hidden">
-              {/* Section header */}
-              <div className="flex items-center justify-between px-4 py-2.5 bg-accent/5 border-b border-border">
+              {/* Section header — compact */}
+              <div className="flex items-center justify-between px-3 py-2 bg-accent/5 border-b border-border">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-widest text-accent-light">{label}</span>
                   <span className="text-[10px] text-muted">{secSlides.length} slide{secSlides.length !== 1 ? 's' : ''}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted">Lines per slide</span>
-                  <div className="flex gap-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted">Lines/slide</span>
+                  <div className="flex gap-0.5">
                     {[2, 3, 4].map(n => (
                       <button key={n} onClick={() => reformatSection(label, n)}
-                        className={`w-7 h-7 rounded-lg border text-xs font-medium transition-colors ${
+                        className={`w-6 h-6 rounded border text-[11px] font-medium transition-colors ${
                           lps === n
                             ? 'border-accent bg-accent/20 text-accent-light'
                             : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
@@ -651,52 +651,55 @@ export default function SongEditor({ song, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* Slides for this section */}
-              <div className="divide-y divide-border/50">
+              {/* Slides grid — 2 columns */}
+              <div className="p-2 grid grid-cols-2 gap-2">
                 {secSlides.map((slide, si) => (
-                  <div key={si} className="px-4 py-3 group/slide hover:bg-[#1a1a1a] transition-colors">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[10px] text-muted font-medium w-12">Slide {si + 1}</span>
-                      <span className="flex-1" />
-                      <div className="flex items-center gap-1 opacity-0 group-hover/slide:opacity-100 transition-opacity">
+                  <div key={si} className="group/slide relative rounded-lg border border-border/60 bg-surface p-2.5 hover:border-accent/30 hover:bg-[#1a1a1a] transition-colors">
+                    {/* Slide header */}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[9px] font-semibold uppercase tracking-wider text-muted">Slide {si + 1}</span>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover/slide:opacity-100 transition-opacity">
                         <button disabled={si === 0} onClick={() => moveSecSlide(label, si, -1)}
-                          className="p-1 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20">
-                          <ArrowUp size={11} />
+                          className="p-0.5 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20">
+                          <ArrowLeft size={10} />
                         </button>
                         <button disabled={si === secSlides.length - 1} onClick={() => moveSecSlide(label, si, 1)}
-                          className="p-1 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20">
-                          <ArrowDown size={11} />
+                          className="p-0.5 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20">
+                          <ArrowRight size={10} />
                         </button>
                         <button onClick={() => removeSecSlide(label, si)}
-                          className="p-1 rounded hover:bg-red-700/30 text-muted hover:text-red-400">
-                          <Trash2 size={11} />
+                          className="p-0.5 rounded hover:bg-red-700/30 text-muted hover:text-red-400">
+                          <Trash2 size={10} />
                         </button>
                       </div>
                     </div>
-                    {slide.lines.map((line, li) => (
-                      <div key={li} className="flex items-center gap-2 group/line py-0.5">
-                        <span className="text-[10px] text-gray-700 w-4 text-right shrink-0">{li + 1}</span>
-                        <input
-                          className="flex-1 bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none text-sm py-0.5 text-[#f5f5f5]"
-                          value={line}
-                          onChange={e => updateSecLine(label, si, li, e.target.value)}
-                        />
-                        <button
-                          onClick={() => {
-                            const newLines = slide.lines.filter((_, idx) => idx !== li)
-                            if (newLines.length === 0) { removeSecSlide(label, si); return }
-                            const newMap = {
-                              ...sectionsMap,
-                              [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: newLines } : s),
-                            }
-                            setSectionsMap(newMap)
-                            setSlides(buildSlidesFromArrangement(newMap, arrangement))
-                          }}
-                          className="opacity-0 group-hover/line:opacity-100 p-1 rounded hover:bg-red-700/30 text-muted hover:text-red-400 shrink-0 transition-opacity">
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
+                    {/* Editable lines */}
+                    <div className="space-y-0.5">
+                      {slide.lines.map((line, li) => (
+                        <div key={li} className="flex items-center gap-1 group/line">
+                          <input
+                            className="flex-1 bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none text-xs py-0.5 text-[#f5f5f5] min-w-0"
+                            value={line}
+                            onChange={e => updateSecLine(label, si, li, e.target.value)}
+                          />
+                          <button
+                            onClick={() => {
+                              const newLines = slide.lines.filter((_, idx) => idx !== li)
+                              if (newLines.length === 0) { removeSecSlide(label, si); return }
+                              const newMap = {
+                                ...sectionsMap,
+                                [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: newLines } : s),
+                              }
+                              setSectionsMap(newMap)
+                              setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                            }}
+                            className="opacity-0 group-hover/line:opacity-100 p-0.5 rounded hover:bg-red-700/30 text-muted hover:text-red-400 shrink-0 transition-opacity">
+                            <X size={9} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Add line */}
                     <button
                       onClick={() => {
                         const newMap = {
@@ -706,26 +709,27 @@ export default function SongEditor({ song, onClose, onSaved }) {
                         setSectionsMap(newMap)
                         setSlides(buildSlidesFromArrangement(newMap, arrangement))
                       }}
-                      className="mt-1.5 flex items-center gap-1 text-[10px] text-muted hover:text-accent-light transition-colors pl-6">
-                      <Plus size={9} /> add line
+                      className="mt-1.5 flex items-center gap-0.5 text-[9px] text-muted hover:text-accent-light transition-colors">
+                      <Plus size={8} /> add line
                     </button>
                   </div>
                 ))}
-              </div>
 
-              {/* Add slide to section */}
-              <button
-                onClick={() => {
-                  const newMap = {
-                    ...sectionsMap,
-                    [label]: [...sectionsMap[label], { lines: [''], label: null }],
-                  }
-                  setSectionsMap(newMap)
-                  setSlides(buildSlidesFromArrangement(newMap, arrangement))
-                }}
-                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted hover:text-accent-light hover:bg-accent/5 transition-colors border-t border-border/50">
-                <Plus size={11} /> Add slide to {label}
-              </button>
+                {/* Add slide — dashed grid cell */}
+                <button
+                  onClick={() => {
+                    const newMap = {
+                      ...sectionsMap,
+                      [label]: [...sectionsMap[label], { lines: [''], label: null }],
+                    }
+                    setSectionsMap(newMap)
+                    setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                  }}
+                  className="rounded-lg border border-dashed border-border/50 bg-transparent flex flex-col items-center justify-center gap-1 text-[10px] text-muted hover:text-accent-light hover:border-accent/40 hover:bg-accent/5 transition-colors min-h-[64px]">
+                  <Plus size={13} />
+                  Add slide
+                </button>
+              </div>
             </div>
           )
         })}
