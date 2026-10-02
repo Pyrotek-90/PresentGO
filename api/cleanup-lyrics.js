@@ -1,20 +1,20 @@
 import Anthropic from '@anthropic-ai/sdk'
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { lyrics } = req.body
+  const { lyrics } = req.body || {}
   if (!lyrics?.trim()) return res.status(400).json({ error: 'lyrics required' })
 
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return res.status(500).json({ error: 'AI cleanup not configured' })
+  if (!apiKey) return res.status(500).json({ error: 'AI cleanup not configured on this server.' })
 
   try {
     const client = new Anthropic({ apiKey })
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2048,
+      max_tokens: 1500,
       messages: [{
         role: 'user',
         content: `You are cleaning up song lyrics for a church presentation app.
@@ -34,8 +34,9 @@ ${lyrics}`,
       }],
     })
 
-    res.json({ cleaned: response.content[0].text })
+    return res.json({ cleaned: response.content[0].text })
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Cleanup failed' })
+    console.error('cleanup-lyrics error:', err)
+    return res.status(500).json({ error: err.message || 'Cleanup failed — try again.' })
   }
 }

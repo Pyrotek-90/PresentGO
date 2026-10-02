@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { formatLyrics } from '../../lib/lyricFormatter'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
-  ArrowUp, ArrowDown, Search, Loader2, Lock, ChevronDown, Tag, Sparkles,
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock, ChevronDown, Tag, Sparkles, ListOrdered,
 } from 'lucide-react'
 
 const PRESET_LABELS = [
@@ -260,11 +260,25 @@ export default function SongEditor({ song, onClose, onSaved }) {
   const [pickerIdx, setPickerIdx]       = useState(-1)
   const [showSlides, setShowSlides]     = useState(!!song?.slides?.length)
 
+  // Arrangement state
+  const [sectionsMap, setSectionsMap]   = useState({})   // { 'Verse 1': [slides] }
+  const [sectionOrder, setSectionOrder] = useState([])   // unique labels in order
+  const [arrangement, setArrangement]   = useState([])   // [{ id, label }, ...]
+
   const lyricsRef = useRef(null)
 
   useEffect(() => {
     if (song?.slides) setSlides(song.slides)
   }, [song])
+
+  // Generate final slides from arrangement × sectionsMap
+  const buildSlidesFromArrangement = (map, arr) =>
+    arr.flatMap(entry =>
+      (map[entry.label] || []).map((s, i) => ({
+        ...s,
+        label: i === 0 ? entry.label : null,
+      }))
+    )
 
   const handleSongFound = ({ title: t, artist: a, lyrics }) => {
     if (t) setTitle(t)
@@ -272,8 +286,10 @@ export default function SongEditor({ song, onClose, onSaved }) {
     setRawLyrics(lyrics)
     setSlides([])
     setShowSlides(false)
+    setSectionsMap({})
+    setSectionOrder([])
+    setArrangement([])
     setShowSearch(false)
-    // Focus the lyrics textarea after a tick so the user can immediately review
     setTimeout(() => lyricsRef.current?.focus(), 50)
   }
 
@@ -306,21 +322,104 @@ export default function SongEditor({ song, onClose, onSaved }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lyrics: rawLyrics }),
       })
-      const json = await res.json()
+
+      let json
+      try {
+        json = await res.json()
+      } catch {
+        throw new Error(
+          res.status === 404
+            ? 'Smart Cleanup only runs on the deployed app (present-go-five.vercel.app), not locally.'
+            : `Server error (${res.status}) — try again or paste lyrics manually.`
+        )
+      }
+
       if (!res.ok || json.error) throw new Error(json.error || 'Cleanup failed')
       setRawLyrics(json.cleaned)
       setSlides([])
       setShowSlides(false)
+      setSectionsMap({})
+      setSectionOrder([])
+      setArrangement([])
     } catch (e) {
-      setCleanupErr(e.message || 'Smart cleanup unavailable. Check that ANTHROPIC_API_KEY is set.')
+      setCleanupErr(e.message || 'Smart cleanup unavailable.')
     } finally {
       setCleaningUp(false)
     }
   }
 
-  const handleFormat = () => {
-    const formatted = formatLyrics(rawLyrics, linesPerSlide)
-    setSlides(formatted)
+  const handleFormatSong = () => {
+    const lines = rawLyrics.split('\n')
+    const sections = []   // [{ label, lines }]
+    let currentLabel = null
+    let buffer = []
+
+    for (const line of lines) {
+      const match = line.match(/^\[(.+?)\]$/)
+      if (match) {
+        if (currentLabel !== null) {
+          sections.push({ label: currentLabel, lines: [...buffer] })
+        } else if (buffer.some(l => l.trim())) {
+          sections.push({ label: 'Intro', lines: [...buffer] })
+        }
+        currentLabel = match[1].trim()
+        buffer = []
+      } else {
+        buffer.push(line)
+      }
+    }
+    if (currentLabel !== null && buffer.some(l => l.trim())) {
+      sections.push({ label: currentLabel, lines: [...buffer] })
+    } else if (currentLabel === null && buffer.some(l => l.trim())) {
+      sections.push({ label: 'Song', lines: buffer })
+    }
+
+    // Deduplicate identical section content (keep first occurrence)
+    const seen = {}
+    const uniqueSections = []
+    for (const sec of sections) {
+      const key = sec.lines.join('\n').trim()
+      if (!seen[sec.label]) {
+        seen[sec.label] = key
+        uniqueSections.push(sec)
+      } else if (seen[sec.label] !== key) {
+        // Same label but different content → keep (e.g. Verse 1 vs Verse 2)
+        uniqueSections.push(sec)
+      }
+      // exact duplicate of same label → skip
+    }
+
+    // Build sectionsMap: label → array of slide objects
+    const map = {}
+    const order = []
+    for (const sec of uniqueSections) {
+      if (map[sec.label]) continue   // already have this label
+      order.push(sec.label)
+      const contentLines = sec.lines.join('\n').trim().split('\n')
+      const secSlides = []
+      let cur = []
+      for (const l of contentLines) {
+        if (l.trim() === '') {
+          if (cur.length > 0) { secSlides.push({ lines: cur, label: null }); cur = [] }
+        } else {
+          cur.push(l)
+          if (cur.length >= linesPerSlide) { secSlides.push({ lines: cur, label: null }); cur = [] }
+        }
+      }
+      if (cur.length > 0) secSlides.push({ lines: cur, label: null })
+      if (secSlides.length > 0) {
+        secSlides[0] = { ...secSlides[0], label: sec.label }
+        map[sec.label] = secSlides
+      }
+    }
+
+    setSectionsMap(map)
+    setSectionOrder(order)
+
+    const defaultArr = order.map(label => ({ id: crypto.randomUUID(), label }))
+    setArrangement(defaultArr)
+    const finalSlides = buildSlidesFromArrangement(map, defaultArr)
+    setSlides(finalSlides)
     setShowSlides(true)
   }
 
@@ -445,7 +544,13 @@ export default function SongEditor({ song, onClose, onSaved }) {
               className="input h-64 resize-none font-mono text-sm leading-relaxed"
               placeholder={`[Verse 1]\nAmazing grace how sweet the sound\nThat saved a wretch like me\n\n[Chorus]\nMy chains are gone I've been set free\nMy God my Savior has ransomed me`}
               value={rawLyrics}
-              onChange={e => { setRawLyrics(e.target.value); setShowSlides(false) }}
+              onChange={e => {
+                setRawLyrics(e.target.value)
+                setShowSlides(false)
+                setSectionsMap({})
+                setSectionOrder([])
+                setArrangement([])
+              }}
             />
 
             <p className="text-[11px] text-muted">
@@ -475,15 +580,106 @@ export default function SongEditor({ song, onClose, onSaved }) {
                     </button>
                   ))}
                 </div>
-                <button onClick={handleFormat} className="btn-primary flex items-center gap-2 ml-auto">
+                <button onClick={handleFormatSong} className="btn-primary flex items-center gap-2 ml-auto">
                   <Wand2 size={15} />
-                  Format into Slides
+                  Format Song
                 </button>
               </div>
             </div>
           )}
 
-          {/* ── 5. Slide preview ──────────────────────────────────────────── */}
+          {/* ── 5. Song Arrangement ───────────────────────────────────────── */}
+          {sectionOrder.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <ListOrdered size={15} className="text-accent-light" />
+                  Song Arrangement
+                </p>
+                <button
+                  onClick={() => { setArrangement([]); setSlides([]); setShowSlides(false) }}
+                  className="text-xs text-muted hover:text-red-400 transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+
+              {/* Section palette */}
+              <div>
+                <p className="text-[11px] text-muted mb-2">Tap a section to add it to the arrangement:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sectionOrder.map(label => (
+                    <button
+                      key={label}
+                      onClick={() => {
+                        const newArr = [...arrangement, { id: crypto.randomUUID(), label }]
+                        setArrangement(newArr)
+                        setSlides(buildSlidesFromArrangement(sectionsMap, newArr))
+                        setShowSlides(true)
+                      }}
+                      className="px-2.5 py-1 rounded-lg border border-accent/40 bg-accent/10 text-accent-light text-xs font-medium hover:bg-accent/20 transition-colors"
+                    >
+                      + {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Arrangement chips */}
+              {arrangement.length > 0 ? (
+                <div>
+                  <p className="text-[11px] text-muted mb-2">
+                    Order — {arrangement.length} section{arrangement.length !== 1 ? 's' : ''} · {slides.length} slides
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {arrangement.map((entry, i) => (
+                      <span
+                        key={entry.id}
+                        className="inline-flex items-center gap-0.5 pl-1 pr-1.5 py-1 rounded-lg bg-surface border border-border text-xs text-[#f5f5f5]"
+                      >
+                        <button
+                          disabled={i === 0}
+                          onClick={() => {
+                            const n = [...arrangement]; [n[i - 1], n[i]] = [n[i], n[i - 1]]
+                            setArrangement(n); setSlides(buildSlidesFromArrangement(sectionsMap, n))
+                          }}
+                          className="p-0.5 rounded text-muted hover:text-[#f5f5f5] disabled:opacity-20 transition-colors"
+                        >
+                          <ArrowLeft size={10} />
+                        </button>
+                        <span className="px-1">{entry.label}</span>
+                        <button
+                          disabled={i === arrangement.length - 1}
+                          onClick={() => {
+                            const n = [...arrangement]; [n[i], n[i + 1]] = [n[i + 1], n[i]]
+                            setArrangement(n); setSlides(buildSlidesFromArrangement(sectionsMap, n))
+                          }}
+                          className="p-0.5 rounded text-muted hover:text-[#f5f5f5] disabled:opacity-20 transition-colors"
+                        >
+                          <ArrowRight size={10} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const n = arrangement.filter((_, ai) => ai !== i)
+                            setArrangement(n)
+                            setSlides(buildSlidesFromArrangement(sectionsMap, n))
+                            if (n.length === 0) setShowSlides(false)
+                          }}
+                          className="p-0.5 rounded text-muted hover:text-red-400 transition-colors"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted italic">Tap sections above to build your arrangement.</p>
+              )}
+            </div>
+          )}
+
+          {/* ── 6. Slide preview ──────────────────────────────────────────── */}
           {showSlides && slides.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
