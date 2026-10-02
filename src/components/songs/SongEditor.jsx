@@ -86,23 +86,17 @@ function InsertLabelMenu({ onInsert, onClose }) {
   )
 }
 
-// ─── Lyrics search ────────────────────────────────────────────────────────────
-async function suggestSongs(query) {
-  const res = await fetch(`https://api.lyrics.ovh/suggest/${encodeURIComponent(query)}`)
+// ─── Lyrics search via lrclib.net (free, no key, lyrics included in results) ──
+async function searchSongs(query) {
+  const res = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`)
   if (!res.ok) throw new Error('Search failed')
   const json = await res.json()
-  return (json.data || []).slice(0, 8).map(item => ({
-    title: item.title,
-    artist: item.artist?.name || '',
+  return (json || []).slice(0, 10).map(item => ({
+    title:       item.trackName,
+    artist:      item.artistName || '',
+    album:       item.albumName  || '',
+    plainLyrics: item.plainLyrics || '',
   }))
-}
-
-async function fetchLyrics(artist, title) {
-  const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`)
-  if (!res.ok) throw new Error('Lyrics not found')
-  const json = await res.json()
-  if (json.error) throw new Error(json.error)
-  return json.lyrics || ''
 }
 
 function LyricsSearch({ onSongFound }) {
@@ -120,21 +114,19 @@ function LyricsSearch({ onSongFound }) {
     if (!query.trim()) return
     setSearching(true); setSearchErr(null); setResults([])
     try {
-      const hits = await suggestSongs(query.trim())
+      const hits = await searchSongs(query.trim())
       setResults(hits)
       if (hits.length === 0) setSearchErr('No results — try a different title or artist.')
     } catch { setSearchErr('Search unavailable. Check your connection.') }
     finally { setSearching(false) }
   }
 
-  const handlePick = async (result) => {
-    const key = `${result.artist}–${result.title}`
-    setFetching(key); setSearchErr(null)
-    try {
-      const lyrics = await fetchLyrics(result.artist, result.title)
-      onSongFound({ title: result.title, artist: result.artist, lyrics })
-    } catch { setSearchErr(`Couldn't retrieve lyrics for "${result.title}". Try another result.`) }
-    finally { setFetching(null) }
+  const handlePick = (result) => {
+    if (!result.plainLyrics) {
+      setSearchErr(`No lyrics found for "${result.title}". Try another result or paste lyrics manually.`)
+      return
+    }
+    onSongFound({ title: result.title, artist: result.artist, lyrics: result.plainLyrics })
   }
 
   return (
@@ -151,24 +143,22 @@ function LyricsSearch({ onSongFound }) {
 
       {results.length > 0 && (
         <ul className="rounded-xl border border-border overflow-hidden divide-y divide-border">
-          {results.map((r, i) => {
-            const key = `${r.artist}–${r.title}`
-            const isFetching = fetching === key
-            return (
-              <li key={i}>
-                <button onClick={() => handlePick(r)} disabled={!!fetching}
-                  className="w-full text-left px-4 py-2.5 hover:bg-[#222] transition-colors flex items-center justify-between gap-3 group">
-                  <span className="min-w-0">
-                    <span className="block text-sm text-[#f5f5f5] truncate">{r.title}</span>
-                    <span className="block text-xs text-muted truncate">{r.artist}</span>
+          {results.map((r, i) => (
+            <li key={i}>
+              <button onClick={() => handlePick(r)}
+                className="w-full text-left px-4 py-2.5 hover:bg-[#222] transition-colors flex items-center justify-between gap-3 group">
+                <span className="min-w-0">
+                  <span className="block text-sm text-[#f5f5f5] truncate">{r.title}</span>
+                  <span className="block text-xs text-muted truncate">
+                    {r.artist}{r.album ? ` · ${r.album}` : ''}
                   </span>
-                  {isFetching
-                    ? <Loader2 size={13} className="animate-spin text-accent-light shrink-0" />
-                    : <span className="text-xs text-muted group-hover:text-accent-light shrink-0 transition-colors">Select →</span>}
-                </button>
-              </li>
-            )
-          })}
+                </span>
+                <span className={`text-xs shrink-0 transition-colors ${r.plainLyrics ? 'text-muted group-hover:text-accent-light' : 'text-red-400/60'}`}>
+                  {r.plainLyrics ? 'Select →' : 'No lyrics'}
+                </span>
+              </button>
+            </li>
+          ))}
         </ul>
       )}
       {searchErr && <p className="text-xs text-red-400">{searchErr}</p>}
