@@ -679,9 +679,24 @@ export default function SongEditor({ song, onClose, onSaved }) {
                       {slide.lines.map((line, li) => (
                         <div key={li} className="flex items-center gap-1 group/line">
                           <input
+                            id={`line-${label}-${si}-${li}`}
                             className="flex-1 bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none text-sm py-0.5 text-[#f5f5f5] min-w-0"
                             value={line}
                             onChange={e => updateSecLine(label, si, li, e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const newLines = [...slide.lines]
+                                newLines.splice(li + 1, 0, '')
+                                const newMap = {
+                                  ...sectionsMap,
+                                  [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: newLines } : s),
+                                }
+                                setSectionsMap(newMap)
+                                setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                                setTimeout(() => document.getElementById(`line-${label}-${si}-${li + 1}`)?.focus(), 0)
+                              }
+                            }}
                           />
                           <button
                             onClick={() => {
@@ -699,18 +714,6 @@ export default function SongEditor({ song, onClose, onSaved }) {
                           </button>
                         </div>
                       ))}
-                      <button
-                        onClick={() => {
-                          const newMap = {
-                            ...sectionsMap,
-                            [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: [...s.lines, ''] } : s),
-                          }
-                          setSectionsMap(newMap)
-                          setSlides(buildSlidesFromArrangement(newMap, arrangement))
-                        }}
-                        className="mt-1 flex items-center gap-0.5 text-[9px] text-muted hover:text-accent-light transition-colors">
-                        <Plus size={8} /> add line
-                      </button>
                     </div>
                   </div>
                 ))}
