@@ -86,10 +86,10 @@ function InsertLabelMenu({ onInsert, onClose }) {
   )
 }
 
-// ─── Lyrics search via lrclib.net (free, no key, lyrics included in results) ──
-async function searchSongs(query) {
+// ─── Lyrics search — tries lrclib.net then lyrics.ovh as fallback ────────────
+async function tryLrclib(query) {
   const res = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`)
-  if (!res.ok) throw new Error('Search failed')
+  if (!res.ok) throw new Error('lrclib down')
   const json = await res.json()
   return (json || []).slice(0, 10).map(item => ({
     title:       item.trackName,
@@ -99,12 +99,46 @@ async function searchSongs(query) {
   }))
 }
 
+async function tryLyricsOvh(query) {
+  const res = await fetch(`https://api.lyrics.ovh/suggest/${encodeURIComponent(query)}`)
+  if (!res.ok) throw new Error('lyrics.ovh down')
+  const json = await res.json()
+  // lyrics.ovh suggest doesn't return lyrics — fetch them per result
+  const results = (json.data || []).slice(0, 8)
+  const withLyrics = await Promise.allSettled(
+    results.map(async item => {
+      try {
+        const lr = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(item.artist.name)}/${encodeURIComponent(item.title)}`)
+        const lj = await lr.json()
+        return { title: item.title, artist: item.artist?.name || '', album: '', plainLyrics: lj.lyrics || '' }
+      } catch {
+        return { title: item.title, artist: item.artist?.name || '', album: '', plainLyrics: '' }
+      }
+    })
+  )
+  return withLyrics.filter(r => r.status === 'fulfilled').map(r => r.value)
+}
+
+async function searchSongs(query) {
+  try {
+    const hits = await tryLrclib(query)
+    if (hits.length > 0) return { hits, source: 'lrclib' }
+  } catch { /* fall through to backup */ }
+
+  try {
+    const hits = await tryLyricsOvh(query)
+    return { hits, source: 'lyrics.ovh' }
+  } catch { /* fall through */ }
+
+  throw new Error('all_down')
+}
+
 function LyricsSearch({ onSongFound }) {
   const [query, setQuery]         = useState('')
   const [results, setResults]     = useState([])
   const [searching, setSearching] = useState(false)
-  const [fetching, setFetching]   = useState(null)
   const [searchErr, setSearchErr] = useState(null)
+  const [showGoogleFallback, setShowGoogleFallback] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -112,18 +146,34 @@ function LyricsSearch({ onSongFound }) {
   const handleSearch = async (e) => {
     e?.preventDefault()
     if (!query.trim()) return
-    setSearching(true); setSearchErr(null); setResults([])
+    setSearching(true); setSearchErr(null); setResults([]); setShowGoogleFallback(false)
     try {
-      const hits = await searchSongs(query.trim())
+      const { hits } = await searchSongs(query.trim())
       setResults(hits)
-      if (hits.length === 0) setSearchErr('No results — try a different title or artist.')
-    } catch { setSearchErr('Search unavailable. Check your connection.') }
-    finally { setSearching(false) }
+      if (hits.length === 0) {
+        setSearchErr('No results found.')
+        setShowGoogleFallback(true)
+      }
+    } catch (err) {
+      if (err.message === 'all_down') {
+        setSearchErr('Both lyrics services are down right now.')
+      } else {
+        setSearchErr('Search failed — check your connection.')
+      }
+      setShowGoogleFallback(true)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const openGoogleSearch = () => {
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(query + ' lyrics')}`, '_blank')
   }
 
   const handlePick = (result) => {
     if (!result.plainLyrics) {
       setSearchErr(`No lyrics found for "${result.title}". Try another result or paste lyrics manually.`)
+      setShowGoogleFallback(true)
       return
     }
     onSongFound({ title: result.title, artist: result.artist, lyrics: result.plainLyrics })
@@ -161,7 +211,20 @@ function LyricsSearch({ onSongFound }) {
           ))}
         </ul>
       )}
-      {searchErr && <p className="text-xs text-red-400">{searchErr}</p>}
+      {searchErr && (
+        <div className="space-y-2">
+          <p className="text-xs text-red-400">{searchErr}</p>
+          {showGoogleFallback && query.trim() && (
+            <button
+              onClick={openGoogleSearch}
+              className="flex items-center gap-2 text-xs text-accent-light hover:underline"
+            >
+              <Search size={12} />
+              Search "{query} lyrics" on Google — then paste below
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex items-start gap-2">
         <Lock size={11} className="text-muted shrink-0 mt-0.5" />
