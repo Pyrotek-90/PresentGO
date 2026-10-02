@@ -292,6 +292,8 @@ export default function SongEditor({ song, onClose, onSaved }) {
   const [sectionsMap, setSectionsMap]   = useState({})
   const [sectionOrder, setSectionOrder] = useState([])
   const [arrangement, setArrangement]   = useState([])
+  const [sectionsRaw, setSectionsRaw]   = useState({})   // { label: string[] } raw lines per section
+  const [sectionLPS, setSectionLPS]     = useState({})   // { label: number } lines-per-slide per section
 
   // Chords step
   const [songKey, setSongKey]   = useState(song?.metadata?.key || '')
@@ -326,6 +328,7 @@ export default function SongEditor({ song, onClose, onSaved }) {
     setRawLyrics(lyrics)
     setSlides([]); setShowSlides(false)
     setSectionsMap({}); setSectionOrder([]); setArrangement([])
+    setSectionsRaw({}); setSectionLPS({})
     setShowSearch(false)
     setTimeout(() => lyricsRef.current?.focus(), 50)
   }
@@ -365,6 +368,7 @@ export default function SongEditor({ song, onClose, onSaved }) {
       setRawLyrics(json.cleaned)
       setSlides([]); setShowSlides(false)
       setSectionsMap({}); setSectionOrder([]); setArrangement([])
+      setSectionsRaw({}); setSectionLPS({})
     } catch (e) {
       setCleanupErr(e.message || 'Smart cleanup unavailable.')
     } finally { setCleaningUp(false) }
@@ -387,33 +391,79 @@ export default function SongEditor({ song, onClose, onSaved }) {
     else if (currentLabel === null && buffer.some(l => l.trim())) sections.push({ label: 'Song', lines: buffer })
 
     // Build sectionsMap (deduplicate same label with same content)
-    const map = {}, order = [], seen = {}
+    const map = {}, order = [], raw = {}, lpsMap = {}
     for (const sec of sections) {
       if (map[sec.label]) continue
       order.push(sec.label)
-      const contentLines = sec.lines.join('\n').trim().split('\n')
-      const secSlides = []
-      let cur = []
-      for (const l of contentLines) {
-        if (l.trim() === '') {
-          if (cur.length > 0) { secSlides.push({ lines: cur, label: null }); cur = [] }
-        } else {
-          cur.push(l)
-          if (cur.length >= linesPerSlide) { secSlides.push({ lines: cur, label: null }); cur = [] }
-        }
-      }
-      if (cur.length > 0) secSlides.push({ lines: cur, label: null })
-      if (secSlides.length > 0) {
-        secSlides[0] = { ...secSlides[0], label: sec.label }
-        map[sec.label] = secSlides
-      }
+      raw[sec.label] = sec.lines
+      lpsMap[sec.label] = linesPerSlide
+      map[sec.label] = parseSectionSlides(sec.label, sec.lines, linesPerSlide)
     }
 
+    setSectionsRaw(raw); setSectionLPS(lpsMap)
     setSectionsMap(map); setSectionOrder(order)
     const defaultArr = order.map(label => ({ id: crypto.randomUUID(), label }))
     setArrangement(defaultArr)
     setSlides(buildSlidesFromArrangement(map, defaultArr))
     setShowSlides(true)
+  }
+
+  // Parse raw lines for one section into slide objects
+  const parseSectionSlides = (label, rawLines, lps) => {
+    const contentLines = rawLines.join('\n').trim().split('\n')
+    const secSlides = []
+    let cur = []
+    for (const l of contentLines) {
+      if (l.trim() === '') {
+        if (cur.length > 0) { secSlides.push({ lines: cur, label: null }); cur = [] }
+      } else {
+        cur.push(l)
+        if (cur.length >= lps) { secSlides.push({ lines: cur, label: null }); cur = [] }
+      }
+    }
+    if (cur.length > 0) secSlides.push({ lines: cur, label: null })
+    if (secSlides.length > 0) secSlides[0] = { ...secSlides[0], label }
+    return secSlides
+  }
+
+  // Reformat a single section at a new LPS, keep all other sections intact
+  const reformatSection = (label, lps) => {
+    const newSlides = parseSectionSlides(label, sectionsRaw[label] || [], lps)
+    const newMap = { ...sectionsMap, [label]: newSlides }
+    setSectionsMap(newMap)
+    setSectionLPS(prev => ({ ...prev, [label]: lps }))
+    setSlides(buildSlidesFromArrangement(newMap, arrangement))
+  }
+
+  // Edit a line in sectionsMap directly
+  const updateSecLine = (label, si, li, value) => {
+    const newMap = {
+      ...sectionsMap,
+      [label]: sectionsMap[label].map((s, idx) =>
+        idx === si ? { ...s, lines: s.lines.map((l, li2) => li2 === li ? value : l) } : s
+      ),
+    }
+    setSectionsMap(newMap)
+    setSlides(buildSlidesFromArrangement(newMap, arrangement))
+  }
+
+  // Remove a slide from a section
+  const removeSecSlide = (label, si) => {
+    const kept = sectionsMap[label].filter((_, idx) => idx !== si)
+    const newMap = { ...sectionsMap, [label]: kept }
+    setSectionsMap(newMap)
+    setSlides(buildSlidesFromArrangement(newMap, arrangement))
+  }
+
+  // Reorder slides within a section
+  const moveSecSlide = (label, si, dir) => {
+    const arr = [...sectionsMap[label]]
+    const target = si + dir
+    if (target < 0 || target >= arr.length) return
+    ;[arr[si], arr[target]] = [arr[target], arr[si]]
+    const newMap = { ...sectionsMap, [label]: arr }
+    setSectionsMap(newMap)
+    setSlides(buildSlidesFromArrangement(newMap, arrangement))
   }
 
   const insertChordAtCursor = chord => {
@@ -551,110 +601,137 @@ export default function SongEditor({ song, onClose, onSaved }) {
     </div>
   )
 
-  const renderStep2 = () => (
-    <div className="space-y-5">
-      {/* Format controls */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">Lines per slide</span>
-            <div className="flex gap-2">
-              {[2, 3, 4].map(n => (
-                <button key={n} onClick={() => { setLinesPerSlide(n); }}
-                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                    linesPerSlide === n ? 'border-accent bg-accent/20 text-accent-light' : 'border-border bg-surface text-muted hover:text-[#f5f5f5]'
-                  }`}>{n}</button>
-              ))}
-            </div>
-          </div>
-          <button onClick={handleFormatSong} className="btn-secondary flex items-center gap-2 text-sm">
-            <Wand2 size={14} /> Reformat
+  const renderStep2 = () => {
+    if (!showSlides || sectionOrder.length === 0) {
+      return (
+        <div className="text-center py-12 text-muted space-y-4">
+          <Wand2 size={36} className="mx-auto opacity-25" />
+          <p className="text-sm">Go back and click <strong>Format Slides</strong> to generate your slides.</p>
+          <button onClick={() => { handleFormatSong(); }} className="btn-primary mx-auto flex items-center gap-2">
+            <Wand2 size={14} /> Format Now
           </button>
         </div>
-      </div>
+      )
+    }
 
-      {/* Slide preview */}
-      {showSlides && slides.length > 0 ? (
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-muted">
-            {slides.length} slides · edit inline, drag to reorder
-          </p>
-          {slides.map((slide, i) => (
-            <div key={i} className="card space-y-2 group/slide">
-              <div className="relative flex items-center gap-2 -mt-1 mb-0.5 min-h-[22px]">
-                {slide.label != null ? (
-                  <input
-                    className="text-[10px] font-semibold uppercase tracking-wider text-accent-light bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full focus:outline-none focus:border-accent w-32"
-                    value={slide.label} placeholder="Section name"
-                    onChange={e => setSlides(prev => prev.map((s, si) => si === i ? { ...s, label: e.target.value } : s))}
-                  />
-                ) : (
-                  <button onClick={() => setPickerIdx(idx => idx === i ? -1 : i)}
-                    className="flex items-center gap-1 text-[10px] text-muted hover:text-accent-light transition-colors opacity-0 group-hover/slide:opacity-100">
-                    <Tag size={10} /> label section
-                  </button>
-                )}
-                {pickerIdx === i && (
-                  <LabelPicker
-                    onSelect={label => { setSlides(prev => prev.map((s, si) => si === i ? { ...s, label } : s)); setPickerIdx(-1) }}
-                    onClose={() => setPickerIdx(-1)}
-                  />
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted w-5 shrink-0">{i + 1}</span>
-                <span className="flex-1" />
-                <div className="flex items-center gap-1 opacity-0 group-hover/slide:opacity-100 transition-opacity">
-                  <button disabled={i === 0} onClick={() => setSlides(prev => { const n=[...prev]; [n[i-1],n[i]]=[n[i],n[i-1]]; return n })}
-                    className="p-1 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ArrowUp size={12} /></button>
-                  <button disabled={i === slides.length - 1} onClick={() => setSlides(prev => { const n=[...prev]; [n[i],n[i+1]]=[n[i+1],n[i]]; return n })}
-                    className="p-1 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ArrowDown size={12} /></button>
-                  <button onClick={() => setSlides(prev => prev.filter((_, si) => si !== i))}
-                    className="p-1 rounded hover:bg-red-700/30 text-muted hover:text-red-400"><Trash2 size={12} /></button>
+    return (
+      <div className="space-y-4">
+        {/* Summary bar */}
+        <div className="flex items-center justify-between text-xs text-muted px-1">
+          <span>{sectionOrder.length} sections · {slides.length} total slides</span>
+          <button onClick={handleFormatSong} className="flex items-center gap-1.5 hover:text-[#f5f5f5] transition-colors">
+            <Wand2 size={12} /> Reset all sections
+          </button>
+        </div>
+
+        {/* One card per section */}
+        {sectionOrder.map(label => {
+          const secSlides = sectionsMap[label] || []
+          const lps = sectionLPS[label] || linesPerSlide
+          return (
+            <div key={label} className="rounded-xl border border-border bg-card overflow-hidden">
+              {/* Section header */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-accent/5 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-accent-light">{label}</span>
+                  <span className="text-[10px] text-muted">{secSlides.length} slide{secSlides.length !== 1 ? 's' : ''}</span>
                 </div>
-              </div>
-              {slide.lines.map((line, j) => (
-                <div key={j} className="flex items-center gap-2 group/line">
-                  <span className="text-[10px] text-gray-700 w-4 shrink-0 text-right">{j + 1}</span>
-                  <input className="flex-1 bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none text-sm py-0.5 text-[#f5f5f5]"
-                    value={line}
-                    onChange={e => setSlides(prev => prev.map((s, si) =>
-                      si === i ? { ...s, lines: s.lines.map((l, li) => li === j ? e.target.value : l) } : s
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted">Lines per slide</span>
+                  <div className="flex gap-1">
+                    {[2, 3, 4].map(n => (
+                      <button key={n} onClick={() => reformatSection(label, n)}
+                        className={`w-7 h-7 rounded-lg border text-xs font-medium transition-colors ${
+                          lps === n
+                            ? 'border-accent bg-accent/20 text-accent-light'
+                            : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                        }`}>{n}</button>
                     ))}
-                  />
-                  <div className="flex gap-1 opacity-0 group-hover/line:opacity-100 transition-opacity shrink-0">
-                    {j > 0 && (
-                      <button onClick={() => setSlides(prev => {
-                        const s = prev[i]
-                        return [...prev.slice(0, i), { ...s, lines: s.lines.slice(0, j) }, { ...s, lines: s.lines.slice(j), label: null }, ...prev.slice(i + 1)]
-                      })} className="p-1 rounded hover:bg-[#333] text-muted hover:text-accent-light"><SplitSquareHorizontal size={11} /></button>
-                    )}
-                    <button onClick={() => setSlides(prev => prev.map((s, si) =>
-                      si === i ? { ...s, lines: s.lines.filter((_, li) => li !== j) } : s
-                    ).filter(s => s.lines.length > 0))}
-                      className="p-1 rounded hover:bg-red-700/30 text-muted hover:text-red-400"><X size={11} /></button>
                   </div>
                 </div>
-              ))}
-              <button onClick={() => setSlides(prev => prev.map((s, si) => si === i ? { ...s, lines: [...s.lines, ''] } : s))}
-                className="flex items-center gap-1 text-[10px] text-muted hover:text-accent-light transition-colors pl-6">
-                <Plus size={10} /> add line
+              </div>
+
+              {/* Slides for this section */}
+              <div className="divide-y divide-border/50">
+                {secSlides.map((slide, si) => (
+                  <div key={si} className="px-4 py-3 group/slide hover:bg-[#1a1a1a] transition-colors">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] text-muted font-medium w-12">Slide {si + 1}</span>
+                      <span className="flex-1" />
+                      <div className="flex items-center gap-1 opacity-0 group-hover/slide:opacity-100 transition-opacity">
+                        <button disabled={si === 0} onClick={() => moveSecSlide(label, si, -1)}
+                          className="p-1 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20">
+                          <ArrowUp size={11} />
+                        </button>
+                        <button disabled={si === secSlides.length - 1} onClick={() => moveSecSlide(label, si, 1)}
+                          className="p-1 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20">
+                          <ArrowDown size={11} />
+                        </button>
+                        <button onClick={() => removeSecSlide(label, si)}
+                          className="p-1 rounded hover:bg-red-700/30 text-muted hover:text-red-400">
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    </div>
+                    {slide.lines.map((line, li) => (
+                      <div key={li} className="flex items-center gap-2 group/line py-0.5">
+                        <span className="text-[10px] text-gray-700 w-4 text-right shrink-0">{li + 1}</span>
+                        <input
+                          className="flex-1 bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none text-sm py-0.5 text-[#f5f5f5]"
+                          value={line}
+                          onChange={e => updateSecLine(label, si, li, e.target.value)}
+                        />
+                        <button
+                          onClick={() => {
+                            const newLines = slide.lines.filter((_, idx) => idx !== li)
+                            if (newLines.length === 0) { removeSecSlide(label, si); return }
+                            const newMap = {
+                              ...sectionsMap,
+                              [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: newLines } : s),
+                            }
+                            setSectionsMap(newMap)
+                            setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                          }}
+                          className="opacity-0 group-hover/line:opacity-100 p-1 rounded hover:bg-red-700/30 text-muted hover:text-red-400 shrink-0 transition-opacity">
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => {
+                        const newMap = {
+                          ...sectionsMap,
+                          [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: [...s.lines, ''] } : s),
+                        }
+                        setSectionsMap(newMap)
+                        setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                      }}
+                      className="mt-1.5 flex items-center gap-1 text-[10px] text-muted hover:text-accent-light transition-colors pl-6">
+                      <Plus size={9} /> add line
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add slide to section */}
+              <button
+                onClick={() => {
+                  const newMap = {
+                    ...sectionsMap,
+                    [label]: [...sectionsMap[label], { lines: [''], label: null }],
+                  }
+                  setSectionsMap(newMap)
+                  setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                }}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted hover:text-accent-light hover:bg-accent/5 transition-colors border-t border-border/50">
+                <Plus size={11} /> Add slide to {label}
               </button>
             </div>
-          ))}
-          <button onClick={() => setSlides(prev => [...prev, { lines: [''], label: null }])}
-            className="btn-secondary w-full text-sm flex items-center justify-center gap-2">
-            <Plus size={14} /> Add Slide
-          </button>
-        </div>
-      ) : (
-        <div className="text-center py-10 text-muted">
-          <Wand2 size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Click <strong>Reformat</strong> to generate slides from your lyrics.</p>
-        </div>
-      )}
-    </div>
-  )
+          )
+        })}
+      </div>
+    )
+  }
 
   const renderStep3 = () => (
     <div className="space-y-5">
