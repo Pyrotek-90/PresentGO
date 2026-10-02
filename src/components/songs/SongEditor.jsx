@@ -17,7 +17,17 @@ const STEPS = [
 ]
 
 // ─── Chord chart data ─────────────────────────────────────────────────────────
-const KEYS = ['C', 'C#/Db', 'D', 'Eb', 'E', 'F', 'F#/Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+const KEY_ROOTS = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+// Maps (root, accidental) → DIATONIC key string
+const DIATONIC_KEY_MAP = {
+  C: { '': 'C', '#': 'C#/Db', b: null    },
+  D: { '': 'D', '#': 'Eb',    b: 'C#/Db' },
+  E: { '': 'E', '#': null,    b: 'Eb'    },
+  F: { '': 'F', '#': 'F#/Gb', b: null    },
+  G: { '': 'G', '#': 'Ab',    b: 'F#/Gb' },
+  A: { '': 'A', '#': 'Bb',    b: 'Ab'    },
+  B: { '': 'B', '#': null,    b: 'Bb'    },
+}
 const NUMERALS = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°']
 const DIATONIC = {
   'C':     ['C', 'Dm', 'Em', 'F', 'G', 'Am', 'Bdim'],
@@ -298,7 +308,22 @@ export default function SongEditor({ song, onClose, onSaved }) {
   // Chords step
   const [songKey, setSongKey]   = useState(song?.metadata?.key || '')
   const [chordChart, setChordChart] = useState(song?.metadata?.chord_chart || '')
-  const [chordInput, setChordInput] = useState('')  // chord being typed into chart
+  const [chordInput, setChordInput] = useState('')
+  // Key selector components — parsed from saved songKey on edit
+  const [keyRoot, setKeyRoot] = useState(() => {
+    const k = song?.metadata?.key || ''
+    if (!k || k === 'Nashville Number System') return k === 'Nashville Number System' ? 'Nashville' : ''
+    return k.match(/^([A-G])/)?.[1] || ''
+  })
+  const [keyAccidental, setKeyAccidental] = useState(() => {
+    const k = song?.metadata?.key || ''
+    const m = k.match(/^[A-G]([#♭b])/)
+    return m ? (m[1] === '♭' ? 'b' : m[1]) : ''
+  })
+  const [keyMode, setKeyMode] = useState(() => {
+    const k = song?.metadata?.key || ''
+    return k.includes('Minor') ? 'Minor' : 'Major'
+  })
 
   // Details step
   const [bpm, setBpm]           = useState(song?.metadata?.bpm || '')
@@ -848,27 +873,82 @@ export default function SongEditor({ song, onClose, onSaved }) {
   )
 
   const renderStep4 = () => {
-    const diatonic = DIATONIC[songKey] || []
+    const applyKey = (root, acc, mode) => {
+      const isNashville = root === 'Nashville'
+      const noteDisplay = !root || isNashville ? '' : acc === 'b' ? `${root}♭` : acc === '#' ? `${root}#` : root
+      const composed = isNashville ? 'Nashville Number System' : root ? `${noteDisplay} ${mode}` : ''
+      setSongKey(composed)
+    }
+    const handleRoot = r => { setKeyRoot(r); applyKey(r, keyAccidental, keyMode) }
+    const handleAcc  = a => { setKeyAccidental(a); applyKey(keyRoot, a, keyMode) }
+    const handleMode = m => { setKeyMode(m); applyKey(keyRoot, keyAccidental, m) }
+
+    const diatonicLookup = keyRoot && keyRoot !== 'Nashville' ? DIATONIC_KEY_MAP[keyRoot]?.[keyAccidental] : null
+    const diatonic = (diatonicLookup ? DIATONIC[diatonicLookup] : null) || []
+    const isNashville = keyRoot === 'Nashville'
+    const accidentalDisabled = a => !DIATONIC_KEY_MAP[keyRoot]?.[a]
+
     return (
       <div className="space-y-5">
         {/* Key selector */}
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <p className="text-sm font-medium">Song Key</p>
-          <div className="flex flex-wrap gap-2">
-            {KEYS.map(k => (
-              <button key={k} onClick={() => setSongKey(k === songKey ? '' : k)}
-                className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                  songKey === k ? 'border-accent bg-accent/20 text-accent-light font-semibold' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                }`}>{k}</button>
-            ))}
+        <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+          <p className="text-sm font-medium">
+            Song Key
+            {songKey && <span className="ml-2 text-accent-light font-semibold">{songKey}</span>}
+          </p>
+
+          {/* Root note */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-widest text-muted">Key</p>
+            <div className="flex flex-wrap gap-1.5">
+              {KEY_ROOTS.map(r => (
+                <button key={r} onClick={() => handleRoot(r === keyRoot ? '' : r)}
+                  className={`w-9 h-9 rounded-lg border text-sm font-medium transition-colors ${
+                    keyRoot === r ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                  }`}>{r}</button>
+              ))}
+              <button onClick={() => { setKeyAccidental(''); setKeyMode('Major'); handleRoot(keyRoot === 'Nashville' ? '' : 'Nashville') }}
+                className={`px-3 h-9 rounded-lg border text-xs font-medium transition-colors ${
+                  isNashville ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                }`}>Nashville</button>
+            </div>
           </div>
+
+          {/* Accidental + Mode — only when a note root is selected */}
+          {keyRoot && !isNashville && (
+            <div className="flex gap-6">
+              <div className="space-y-1.5">
+                <p className="text-[10px] uppercase tracking-widest text-muted">Accidental</p>
+                <div className="flex gap-1">
+                  {[['', '♮'], ['#', '♯'], ['b', '♭']].map(([val, sym]) => (
+                    <button key={val} onClick={() => !accidentalDisabled(val) && handleAcc(val)}
+                      disabled={accidentalDisabled(val)}
+                      className={`w-10 h-9 rounded-lg border text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed ${
+                        keyAccidental === val ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                      }`}>{sym}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-[10px] uppercase tracking-widest text-muted">Mode</p>
+                <div className="flex gap-1">
+                  {['Major', 'Minor'].map(m => (
+                    <button key={m} onClick={() => handleMode(m)}
+                      className={`px-4 h-9 rounded-lg border text-xs font-medium transition-colors ${
+                        keyMode === m ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                      }`}>{m}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Diatonic chord reference */}
-        {songKey && (
+        {/* Diatonic chord reference — major keys only */}
+        {diatonic.length > 0 && (
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Chords in Key of {songKey} major</p>
+              <p className="text-sm font-medium">Chords in {songKey}</p>
               <p className="text-[11px] text-muted">Click a chord to insert into the chart below</p>
             </div>
             <div className="grid grid-cols-7 gap-2">

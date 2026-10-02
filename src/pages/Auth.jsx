@@ -153,7 +153,7 @@ export default function Auth() {
         </div>
 
         <p className="text-center text-xs text-muted">
-          PresentGO · Presentations on the go
+          PresentGO · Create and display presentations in a breeze.
         </p>
       </div>
     </div>
