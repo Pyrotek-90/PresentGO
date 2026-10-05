@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import SongEditor from '../components/songs/SongEditor'
-import { Plus, Search, Music, Pencil, Trash2 } from 'lucide-react'
+import ChordChartViewer from '../components/songs/ChordChartViewer'
+import { Plus, Search, Music, Music2, Pencil, Trash2 } from 'lucide-react'
 
 export default function Library() {
   const { user } = useAuth()
@@ -12,6 +13,7 @@ export default function Library() {
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(null) // song or true (new)
   const [deleting, setDeleting] = useState(null)
+  const [viewingChart, setViewingChart] = useState(null)
 
   const load = async () => {
     const { data } = await supabase
@@ -101,12 +103,27 @@ export default function Library() {
                     {song.ccli_number && (
                       <span className="text-xs text-muted">CCLI #{song.ccli_number}</span>
                     )}
+                    {(song.metadata?.original_key || song.metadata?.key) && (
+                      <span className="text-xs text-accent-light">
+                        {song.metadata.original_key || song.metadata.key}
+                        {song.metadata.transposed_keys?.length > 0 && ` +${song.metadata.transposed_keys.length}`}
+                      </span>
+                    )}
                     {song.slides?.length > 0 && (
                       <span className="text-xs text-muted">{song.slides.length} slides</span>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {song.metadata?.chord_chart && (
+                    <button
+                      onClick={() => setViewingChart(song)}
+                      className="p-2 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] transition-colors"
+                      title="Chord charts"
+                    >
+                      <Music2 size={15} />
+                    </button>
+                  )}
                   <button
                     onClick={() => setEditing(song)}
                     className="p-2 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] transition-colors"
@@ -130,6 +147,8 @@ export default function Library() {
           </div>
         )}
       </div>
+
+      {viewingChart && <ChordChartViewer song={viewingChart} onClose={() => setViewingChart(null)} />}
 
       {editing && (
         <SongEditor

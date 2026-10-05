@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
@@ -330,6 +331,11 @@ export default function SongEditor({ song, onClose, onSaved }) {
   const [themes, setThemes]     = useState(song?.metadata?.themes || [])
   const [themeInput, setThemeInput] = useState('')
   const [author, setAuthor]     = useState(song?.metadata?.author || '')
+  const [transposedKeys, setTransposedKeys] = useState(song?.metadata?.transposed_keys || [])
+  const [wantTransposed, setWantTransposed] = useState(!!song?.metadata?.transposed_keys?.length)
+  const [lookup, setLookup] = useState({ status: 'idle', filled: [] }) // idle | loading | done | none
+  const songKeyRef = useRef(song?.metadata?.key || '')
+  songKeyRef.current = songKey
 
   // Save state
   const [saving, setSaving]     = useState(false)
@@ -356,6 +362,32 @@ export default function SongEditor({ song, onClose, onSaved }) {
     setSectionsRaw({}); setSectionLPS({})
     setShowSearch(false)
     setTimeout(() => lyricsRef.current?.focus(), 50)
+    lookupSongDetails(t, a)
+  }
+
+  const lookupSongDetails = async (t, a) => {
+    setLookup({ status: 'loading', filled: [] })
+    try {
+      const res = await fetch('/api/song-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: t, artist: a }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) throw new Error(json.error)
+      const filled = []
+      if (json.bpm) { setBpm(prev => prev || String(json.bpm)); filled.push('Tempo') }
+      if (json.songwriters) { setAuthor(prev => prev || json.songwriters); filled.push('Songwriter(s)') }
+      const k = parseKey(json.key)
+      if (k && !songKeyRef.current) {
+        setKeyRoot(k.root); setKeyAccidental(k.accidental); setKeyMode(k.mode)
+        setSongKey(formatKey(k.root, k.accidental, k.mode))
+        filled.push('Original Key')
+      }
+      setLookup({ status: filled.length ? 'done' : 'none', filled, bpmSource: json.sources?.bpm })
+    } catch {
+      setLookup({ status: 'none', filled: [] })
+    }
   }
 
   const insertSectionLabel = label => {
@@ -554,6 +586,8 @@ export default function SongEditor({ song, onClose, onSaved }) {
         bpm,
         themes,
         author,
+        original_key: songKey,
+        transposed_keys: wantTransposed ? transposedKeys : [],
       },
     }
 
@@ -990,8 +1024,21 @@ export default function SongEditor({ song, onClose, onSaved }) {
     )
   }
 
-  const renderStep5 = () => (
+  const renderStep5 = () => {
+    const keyOptions = transposeKeyOptions(songKey)
+    const toggleKey = k => setTransposedKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
+    return (
     <div className="space-y-5">
+      {lookup.status === 'loading' && (
+        <div className="flex items-center gap-2 text-xs text-muted"><Loader2 size={12} className="animate-spin" /> Looking up original song details…</div>
+      )}
+      {lookup.status === 'done' && (
+        <div className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-[11px] text-accent-light flex items-start gap-2">
+          <Sparkles size={12} className="shrink-0 mt-0.5" />
+          <span>Auto-filled from the original song: {lookup.filled.join(', ')}. These are best-effort suggestions — please verify and edit as needed.</span>
+        </div>
+      )}
+
       {/* BPM + Key summary */}
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -1000,9 +1047,11 @@ export default function SongEditor({ song, onClose, onSaved }) {
             value={bpm} onChange={e => setBpm(e.target.value)} />
         </div>
         <div>
-          <label className="label">Key / Mode</label>
-          <input className="input" value={songKey} readOnly placeholder="Set on Chords step"
-            className="input text-muted cursor-default" />
+          <label className="label">Original Key</label>
+          <div className="flex gap-2">
+            <input className="input flex-1 text-muted cursor-default" value={songKey} readOnly placeholder="Not set" />
+            <button type="button" onClick={() => setStep(4)} className="btn-secondary px-3 shrink-0 text-xs">Change</button>
+          </div>
         </div>
       </div>
 
@@ -1045,6 +1094,43 @@ export default function SongEditor({ song, onClose, onSaved }) {
         )}
       </div>
 
+      {/* Transposed keys */}
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div>
+          <p className="text-sm font-medium">Add transposed keys to your Song Library?</p>
+          <p className="text-[11px] text-muted mt-0.5">Chord charts for each key you choose will be available from the Song Library.</p>
+        </div>
+        {!keyOptions.length ? (
+          <p className="text-[11px] text-muted">Set the song's Original Key on the Chords step to enable transposed keys.</p>
+        ) : (
+          <>
+            <div className="flex gap-1.5">
+              {[[false, 'No, original key only'], [true, 'Yes, choose keys']].map(([v, label]) => (
+                <button key={label} type="button" onClick={() => setWantTransposed(v)}
+                  className={`px-3 h-8 rounded-lg border text-xs font-medium transition-colors ${
+                    wantTransposed === v ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                  }`}>{label}</button>
+              ))}
+            </div>
+            {wantTransposed && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {keyOptions.map(k => (
+                    <button key={k} type="button" onClick={() => toggleKey(k)}
+                      className={`px-2.5 h-8 rounded-lg border text-xs font-medium transition-colors ${
+                        transposedKeys.includes(k) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                      }`}>{k}</button>
+                  ))}
+                </div>
+                {!hasChords(chordChart) && (
+                  <p className="text-[11px] text-amber-400/80">No chords entered yet on the Chords step — transposed charts will be empty until you add some.</p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       {/* CCLI reminder */}
       <div className="rounded-xl border border-border/50 bg-card/50 p-3 flex items-start gap-3">
         <Lock size={13} className="text-muted shrink-0 mt-0.5" />
@@ -1056,7 +1142,8 @@ export default function SongEditor({ song, onClose, onSaved }) {
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (

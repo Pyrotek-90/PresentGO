@@ -18,6 +18,7 @@ create table public.songs (
   raw_lyrics      text,
   slides          jsonb default '[]'::jsonb,  -- formatted slide array
   lines_per_slide int  default 2,
+  metadata        jsonb default '{}'::jsonb,  -- key, bpm, author, themes, chord_chart, transposed_keys
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
 );
@@ -178,3 +179,8 @@ create trigger sets_updated_at before update on public.sets
 
 create trigger media_items_updated_at before update on public.media_items
   for each row execute function public.handle_updated_at();
+
+-- ────────────────────────────────────────────────────────────
+-- MIGRATION: add song metadata (run if songs table already exists)
+-- ────────────────────────────────────────────────────────────
+-- alter table public.songs add column if not exists metadata jsonb default '{}'::jsonb;
