@@ -1003,55 +1003,42 @@ export default function SongEditor({ song, onClose, onSaved }) {
         </div>
       )}
 
-      {/* Tempo + keys — compact */}
-      <div className="rounded-xl border border-border bg-card p-3 space-y-3">
-        <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
-          <div className="w-24">
-            <label className="label">Tempo (BPM)</label>
-            <input className="input" type="number" min="40" max="240" placeholder="75"
-              value={bpm} onChange={e => setBpm(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Original Key</label>
-            <div className="flex gap-1.5">
-              <select className="input w-24" value={origNote} onChange={e => setOriginalKey(e.target.value, keyMode)}>
-                <option value="">—</option>
-                {NOTE_OPTIONS.map(n => <option key={n} value={n}>{n.replace('b', '♭')}</option>)}
-              </select>
-              <select className="input w-24" value={keyMode} onChange={e => setOriginalKey(origNote, e.target.value)}>
-                <option>Major</option><option>Minor</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="label">Transposed Keys</label>
-            <div className="flex gap-1.5">
-              <select className="input w-24" value={wantTransposed ? 'yes' : 'no'} disabled={!keyOptions.length}
-                onChange={e => setWantTransposed(e.target.value === 'yes')}>
-                <option value="no">None</option><option value="yes">Add…</option>
-              </select>
-              <select className="input w-24" value={effTMode} disabled={!wantTransposed || !keyOptions.length}
-                onChange={e => setTMode(e.target.value)}>
-                <option>Major</option><option>Minor</option>
-              </select>
-            </div>
-          </div>
+      {/* Tempo + keys — one-line bar */}
+      <div className="rounded-xl border border-border bg-card px-3 py-2 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+          <span className="text-[10px] uppercase tracking-widest text-muted">BPM</span>
+          <input className="input !w-16 !h-8 !py-0 !px-2 text-sm" type="number" min="40" max="240" placeholder="75"
+            value={bpm} onChange={e => setBpm(e.target.value)} />
+          <span className="h-5 w-px bg-border mx-1" />
+          <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
+          <select className="input !w-[4.5rem] !h-8 !py-0 !px-2 text-sm" value={origNote} onChange={e => setOriginalKey(e.target.value, keyMode)}>
+            <option value="">—</option>
+            {NOTE_OPTIONS.map(n => <option key={n} value={n}>{n.replace('b', '♭')}</option>)}
+          </select>
+          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={keyMode} onChange={e => setOriginalKey(origNote, e.target.value)}>
+            <option>Major</option><option>Minor</option>
+          </select>
+          <span className="h-5 w-px bg-border mx-1" />
+          <span className="text-[10px] uppercase tracking-widest text-muted">Transpose</span>
+          <select className="input !w-[4.5rem] !h-8 !py-0 !px-2 text-sm" value={wantTransposed ? 'yes' : 'no'} disabled={!keyOptions.length}
+            onChange={e => setWantTransposed(e.target.value === 'yes')}>
+            <option value="no">None</option><option value="yes">Add…</option>
+          </select>
+          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={effTMode} disabled={!wantTransposed || !keyOptions.length}
+            onChange={e => setTMode(e.target.value)}>
+            <option>Major</option><option>Minor</option>
+          </select>
         </div>
         {!songKey && <p className="text-[11px] text-muted">Pick an Original Key to enable transposed keys and chord charts.</p>}
         {wantTransposed && keyOptions.length > 0 && (
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap gap-1.5">
-              {keyOptions.map(k => (
-                <button key={k} type="button" onClick={() => toggleKey(k)}
-                  className={`px-2 h-7 rounded-md border text-xs font-medium transition-colors ${
-                    transposedKeys.includes(k) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                  }`}>{k.replace(/ (Major|Minor)$/, '')}</button>
-              ))}
-            </div>
-            <p className="text-[11px] text-muted">
-              {transposedKeys.length ? `Charts will be available in: ${transposedKeys.join(', ')}.` : 'Select the keys to add to your Song Library.'}
-              {!hasChords(chordChart) && <span className="text-amber-400/80"> No chords entered on the Chords step yet.</span>}
-            </p>
+          <div className="flex flex-wrap items-center gap-1">
+            {keyOptions.map(k => (
+              <button key={k} type="button" onClick={() => toggleKey(k)}
+                className={`px-2 h-7 rounded-md border text-xs font-medium transition-colors ${
+                  transposedKeys.includes(k) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                }`}>{k.replace(/ (Major|Minor)$/, '')}</button>
+            ))}
+            {!hasChords(chordChart) && <span className="text-[11px] text-amber-400/80 ml-1">No chords entered yet.</span>}
           </div>
         )}
       </div>
