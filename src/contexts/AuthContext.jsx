@@ -9,7 +9,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // MOCK MODE — set to true to bypass login during development
-    const isMockMode = true
+    const isMockMode = false
     if (isMockMode) {
       setUser({ id: 'mock-user-id', email: 'demo@presentgo.app' })
       setLoading(false)
