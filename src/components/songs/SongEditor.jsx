@@ -333,7 +333,8 @@ export default function SongEditor({ song, onClose, onSaved }) {
   const [themeInput, setThemeInput] = useState('')
   const [author, setAuthor]     = useState(song?.metadata?.author || '')
   const [transposedKeys, setTransposedKeys] = useState(song?.metadata?.transposed_keys || [])
-  const [wantTransposed, setWantTransposed] = useState(!!song?.metadata?.transposed_keys?.length)
+  const [wantTransposed, setWantTransposed] = useState(false) // key picker open
+  const [pendingKeys, setPendingKeys] = useState([])
   const [tMode, setTMode] = useState(() => parseKey(song?.metadata?.transposed_keys?.[0])?.mode || '')
   const [lookup, setLookup] = useState({ status: 'idle', filled: [] }) // idle | loading | done | none
   const songKeyRef = useRef(song?.metadata?.key || '')
@@ -589,7 +590,7 @@ export default function SongEditor({ song, onClose, onSaved }) {
         themes,
         author,
         original_key: songKey,
-        transposed_keys: wantTransposed ? transposedKeys : [],
+        transposed_keys: transposedKeys,
       },
     }
 
@@ -990,7 +991,12 @@ export default function SongEditor({ song, onClose, onSaved }) {
       setKeyRoot(k.root); setKeyAccidental(k.accidental)
       setSongKey(formatKey(k.root, k.accidental, k.mode))
     }
-    const toggleKey = k => setTransposedKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
+    const togglePending = k => setPendingKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
+    const commitKeys = () => {
+      setTransposedKeys(prev => [...prev, ...pendingKeys.filter(k => !prev.includes(k))])
+      setPendingKeys([]); setWantTransposed(false)
+    }
+    const removeKey = k => setTransposedKeys(prev => prev.filter(x => x !== k))
     return (
     <div className="space-y-5">
       {lookup.status === 'loading' && (
@@ -1019,26 +1025,47 @@ export default function SongEditor({ song, onClose, onSaved }) {
             <option>Major</option><option>Minor</option>
           </select>
           <span className="h-5 w-px bg-border mx-1" />
-          <span className="text-[10px] uppercase tracking-widest text-muted">Transpose</span>
-          <select className="input !w-[4.5rem] !h-8 !py-0 !px-2 text-sm" value={wantTransposed ? 'yes' : 'no'} disabled={!keyOptions.length}
-            onChange={e => setWantTransposed(e.target.value === 'yes')}>
-            <option value="no">None</option><option value="yes">Add…</option>
-          </select>
-          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={effTMode} disabled={!wantTransposed || !keyOptions.length}
+          <span className="text-[10px] uppercase tracking-widest text-muted">Transpose to</span>
+          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={effTMode} disabled={!keyOptions.length}
             onChange={e => setTMode(e.target.value)}>
             <option>Major</option><option>Minor</option>
           </select>
+          <button type="button" disabled={!keyOptions.length}
+            onClick={() => { setWantTransposed(v => !v); setPendingKeys([]) }}
+            className="h-8 px-3 rounded-lg border border-accent/50 bg-accent/10 text-xs font-medium text-accent-light hover:bg-accent/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1">
+            <Plus size={12} /> {wantTransposed ? 'Close' : 'Add Keys'}
+          </button>
         </div>
         {!songKey && <p className="text-[11px] text-muted">Pick an Original Key to enable transposed keys and chord charts.</p>}
         {wantTransposed && keyOptions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            {keyOptions.map(k => (
-              <button key={k} type="button" onClick={() => toggleKey(k)}
-                className={`px-2 h-7 rounded-md border text-xs font-medium transition-colors ${
-                  transposedKeys.includes(k) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                }`}>{k.replace(/ (Major|Minor)$/, '')}</button>
+          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+            {keyOptions.map(k => {
+              const added = transposedKeys.includes(k)
+              const picked = pendingKeys.includes(k)
+              return (
+                <button key={k} type="button" disabled={added} onClick={() => togglePending(k)}
+                  className={`px-2 h-7 rounded-md border text-xs font-medium transition-colors ${
+                    added ? 'border-border text-muted/40 cursor-default' :
+                    picked ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                  }`}>{added && <Check size={9} className="inline mr-0.5" />}{k.replace(/ (Major|Minor)$/, '')}</button>
+              )
+            })}
+            <button type="button" disabled={!pendingKeys.length} onClick={commitKeys}
+              className="btn-primary !h-7 !py-0 !px-3 text-xs ml-1 disabled:opacity-40">
+              {pendingKeys.length ? `Add ${pendingKeys.length} key${pendingKeys.length > 1 ? 's' : ''} to song` : 'Select keys to add'}
+            </button>
+          </div>
+        )}
+        {transposedKeys.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-widest text-muted">Added keys</span>
+            {transposedKeys.map(k => (
+              <span key={k} className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 rounded-full bg-accent/15 border border-accent/30 text-xs text-accent-light">
+                {k}
+                <button type="button" onClick={() => removeKey(k)} className="hover:text-red-400 transition-colors"><X size={10} /></button>
+              </span>
             ))}
-            {!hasChords(chordChart) && <span className="text-[11px] text-amber-400/80 ml-1">No chords entered yet.</span>}
+            {!hasChords(chordChart) && <span className="text-[11px] text-amber-400/80">No chords entered yet.</span>}
           </div>
         )}
       </div>
