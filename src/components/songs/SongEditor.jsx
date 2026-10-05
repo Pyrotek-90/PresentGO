@@ -929,8 +929,8 @@ export default function SongEditor({ song, onClose, onSaved }) {
       <div className="space-y-3">
         {/* One-line key bar + chord palette */}
         <div className="rounded-xl border border-border bg-card px-3 py-2 flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
-          <span className="text-[10px] uppercase tracking-widest text-muted">Song Key</span>
-          <select className={`input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm ${keyRoot ? '!border-accent' : ''}`} value={keyRoot} onChange={e => handleRoot(e.target.value)}>
+          <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
+          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={keyRoot} onChange={e => handleRoot(e.target.value)}>
             <option value="">—</option>
             {KEY_ROOTS.map(r => <option key={r} value={r}>{r}</option>)}
             <option value="Nashville">Nashville</option>
@@ -958,17 +958,12 @@ export default function SongEditor({ song, onClose, onSaved }) {
               ))}
             </>
           )}
-          {!keyRoot && <span className="text-[11px] text-accent-light/80 ml-1">Choose the key this chart is written in to see its chords.</span>}
-          {isNashville && <span className="text-[11px] text-muted ml-1">Chart uses Nashville numbers.</span>}
         </div>
 
         {/* Chord chart textarea */}
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <label className="label !mb-0">Chord Chart</label>
-              {songKey && <span className="px-2 h-6 inline-flex items-center rounded-md bg-accent/20 border border-accent/40 text-xs font-semibold text-accent-light">in {songKey}</span>}
-            </div>
+            <label className="label !mb-0">Chord Chart</label>
             <p className="text-[11px] text-muted">
               Place chords above lyric lines using spaces to align them.{diatonic.length > 0 && ' Click a chord above to insert at cursor.'}
             </p>
