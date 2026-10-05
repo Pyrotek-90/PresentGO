@@ -44,6 +44,7 @@ const DIATONIC = {
   'Bb':    ['Bb', 'Cm', 'Dm', 'Eb', 'F', 'Gm', 'Adim'],
   'B':     ['B', 'C#m', 'D#m', 'E', 'F#', 'G#m', 'A#dim'],
 }
+const NOTE_OPTIONS = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 const PRESET_THEMES = [
   'Worship', 'Praise', 'Communion', 'Offering', 'Closing', 'Opening',
   'Christmas', 'Easter', 'Baptism', 'Prayer', 'Salvation', 'Healing',
@@ -333,6 +334,7 @@ export default function SongEditor({ song, onClose, onSaved }) {
   const [author, setAuthor]     = useState(song?.metadata?.author || '')
   const [transposedKeys, setTransposedKeys] = useState(song?.metadata?.transposed_keys || [])
   const [wantTransposed, setWantTransposed] = useState(!!song?.metadata?.transposed_keys?.length)
+  const [tMode, setTMode] = useState(() => parseKey(song?.metadata?.transposed_keys?.[0])?.mode || '')
   const [lookup, setLookup] = useState({ status: 'idle', filled: [] }) // idle | loading | done | none
   const songKeyRef = useRef(song?.metadata?.key || '')
   songKeyRef.current = songKey
@@ -1025,7 +1027,16 @@ export default function SongEditor({ song, onClose, onSaved }) {
   }
 
   const renderStep5 = () => {
-    const keyOptions = transposeKeyOptions(songKey)
+    const effTMode = tMode || keyMode
+    const keyOptions = transposeKeyOptions(songKey, effTMode)
+    const origNote = keyRoot && keyRoot !== 'Nashville' ? keyRoot + keyAccidental : ''
+    const setOriginalKey = (note, mode) => {
+      setKeyMode(mode)
+      const k = note ? parseKey(`${note} ${mode}`) : null
+      if (!k) { setKeyRoot(''); setKeyAccidental(''); setSongKey(''); return }
+      setKeyRoot(k.root); setKeyAccidental(k.accidental)
+      setSongKey(formatKey(k.root, k.accidental, k.mode))
+    }
     const toggleKey = k => setTransposedKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
     return (
     <div className="space-y-5">
@@ -1039,20 +1050,57 @@ export default function SongEditor({ song, onClose, onSaved }) {
         </div>
       )}
 
-      {/* BPM + Key summary */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="label">Tempo (BPM)</label>
-          <input className="input" type="number" min="40" max="240" placeholder="75"
-            value={bpm} onChange={e => setBpm(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Original Key</label>
-          <div className="flex gap-2">
-            <input className="input flex-1 text-muted cursor-default" value={songKey} readOnly placeholder="Not set" />
-            <button type="button" onClick={() => setStep(4)} className="btn-secondary px-3 shrink-0 text-xs">Change</button>
+      {/* Tempo + keys — compact */}
+      <div className="rounded-xl border border-border bg-card p-3 space-y-3">
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+          <div className="w-24">
+            <label className="label">Tempo (BPM)</label>
+            <input className="input" type="number" min="40" max="240" placeholder="75"
+              value={bpm} onChange={e => setBpm(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Original Key</label>
+            <div className="flex gap-1.5">
+              <select className="input w-24" value={origNote} onChange={e => setOriginalKey(e.target.value, keyMode)}>
+                <option value="">—</option>
+                {NOTE_OPTIONS.map(n => <option key={n} value={n}>{n.replace('b', '♭')}</option>)}
+              </select>
+              <select className="input w-24" value={keyMode} onChange={e => setOriginalKey(origNote, e.target.value)}>
+                <option>Major</option><option>Minor</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="label">Transposed Keys</label>
+            <div className="flex gap-1.5">
+              <select className="input w-24" value={wantTransposed ? 'yes' : 'no'} disabled={!keyOptions.length}
+                onChange={e => setWantTransposed(e.target.value === 'yes')}>
+                <option value="no">None</option><option value="yes">Add…</option>
+              </select>
+              <select className="input w-24" value={effTMode} disabled={!wantTransposed || !keyOptions.length}
+                onChange={e => setTMode(e.target.value)}>
+                <option>Major</option><option>Minor</option>
+              </select>
+            </div>
           </div>
         </div>
+        {!songKey && <p className="text-[11px] text-muted">Pick an Original Key to enable transposed keys and chord charts.</p>}
+        {wantTransposed && keyOptions.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap gap-1.5">
+              {keyOptions.map(k => (
+                <button key={k} type="button" onClick={() => toggleKey(k)}
+                  className={`px-2 h-7 rounded-md border text-xs font-medium transition-colors ${
+                    transposedKeys.includes(k) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                  }`}>{k.replace(/ (Major|Minor)$/, '')}</button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted">
+              {transposedKeys.length ? `Charts will be available in: ${transposedKeys.join(', ')}.` : 'Select the keys to add to your Song Library.'}
+              {!hasChords(chordChart) && <span className="text-amber-400/80"> No chords entered on the Chords step yet.</span>}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Author */}
@@ -1091,43 +1139,6 @@ export default function SongEditor({ song, onClose, onSaved }) {
               </span>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Transposed keys */}
-      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-        <div>
-          <p className="text-sm font-medium">Add transposed keys to your Song Library?</p>
-          <p className="text-[11px] text-muted mt-0.5">Chord charts for each key you choose will be available from the Song Library.</p>
-        </div>
-        {!keyOptions.length ? (
-          <p className="text-[11px] text-muted">Set the song's Original Key on the Chords step to enable transposed keys.</p>
-        ) : (
-          <>
-            <div className="flex gap-1.5">
-              {[[false, 'No, original key only'], [true, 'Yes, choose keys']].map(([v, label]) => (
-                <button key={label} type="button" onClick={() => setWantTransposed(v)}
-                  className={`px-3 h-8 rounded-lg border text-xs font-medium transition-colors ${
-                    wantTransposed === v ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                  }`}>{label}</button>
-              ))}
-            </div>
-            {wantTransposed && (
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {keyOptions.map(k => (
-                    <button key={k} type="button" onClick={() => toggleKey(k)}
-                      className={`px-2.5 h-8 rounded-lg border text-xs font-medium transition-colors ${
-                        transposedKeys.includes(k) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                      }`}>{k}</button>
-                  ))}
-                </div>
-                {!hasChords(chordChart) && (
-                  <p className="text-[11px] text-amber-400/80">No chords entered yet on the Chords step — transposed charts will be empty until you add some.</p>
-                )}
-              </div>
-            )}
-          </>
         )}
       </div>
 

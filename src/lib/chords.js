@@ -36,16 +36,17 @@ function useFlats(key) {
   return FLAT_MAJOR_PCS.has(majorPc)
 }
 
-export function transposeKeyOptions(originalKey) {
-  const k = parseKey(originalKey)
-  if (!k) return []
+export function transposeKeyOptions(originalKey, mode) {
+  const orig = parseKey(originalKey)
+  if (!orig) return []
+  const k = { ...orig, mode: mode || orig.mode }
   const origPc = tonicPc(originalKey)
   const names = k.mode === 'Minor'
     ? ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B']
     : ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
   return names
     .map((n, pc) => ({ pc, label: `${n.replace('b', '♭')} ${k.mode}` }))
-    .filter(o => o.pc !== origPc)
+    .filter(o => k.mode !== orig.mode || o.pc !== origPc)
     .map(o => o.label)
 }
 
