@@ -927,24 +927,24 @@ export default function SongEditor({ song, onClose, onSaved }) {
     return (
       <div className="space-y-5">
         {/* Key selector */}
-        <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+        <div className="rounded-xl border border-border bg-card p-3 space-y-2.5">
           <p className="text-sm font-medium">
             Song Key
             {songKey && <span className="ml-2 text-accent-light font-semibold">{songKey}</span>}
           </p>
 
-          {/* Root note */}
-          <div className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-widest text-muted">Key</p>
-            <div className="flex flex-wrap gap-1.5">
+          {/* Key */}
+          <div className="flex items-center gap-2">
+            <p className="w-14 shrink-0 text-[10px] uppercase tracking-widest text-muted">Key</p>
+            <div className="flex flex-wrap gap-1">
               {KEY_ROOTS.map(r => (
                 <button key={r} onClick={() => handleRoot(r === keyRoot ? '' : r)}
-                  className={`w-9 h-9 rounded-lg border text-sm font-medium transition-colors ${
+                  className={`w-8 h-8 rounded-lg border text-sm font-medium transition-colors ${
                     keyRoot === r ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                   }`}>{r}</button>
               ))}
               <button onClick={() => { setKeyAccidental(''); setKeyMode('Major'); handleRoot(keyRoot === 'Nashville' ? '' : 'Nashville') }}
-                className={`px-3 h-9 rounded-lg border text-xs font-medium transition-colors ${
+                className={`px-2.5 h-8 rounded-lg border text-xs font-medium transition-colors ${
                   isNashville ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                 }`}>Nashville</button>
             </div>
@@ -952,25 +952,25 @@ export default function SongEditor({ song, onClose, onSaved }) {
 
           {/* Accidental + Mode — only when a note root is selected */}
           {keyRoot && !isNashville && (
-            <div className="flex gap-6">
-              <div className="space-y-1.5">
-                <p className="text-[10px] uppercase tracking-widest text-muted">Accidental</p>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <div className="flex items-center gap-2">
+                <p className="w-14 shrink-0 text-[10px] uppercase tracking-widest text-muted">Accidental</p>
                 <div className="flex gap-1">
                   {[['', '♮'], ['#', '♯'], ['b', '♭']].map(([val, sym]) => (
                     <button key={val} onClick={() => !accidentalDisabled(val) && handleAcc(val)}
                       disabled={accidentalDisabled(val)}
-                      className={`w-10 h-9 rounded-lg border text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed ${
+                      className={`w-9 h-8 rounded-lg border text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed ${
                         keyAccidental === val ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                       }`}>{sym}</button>
                   ))}
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <p className="text-[10px] uppercase tracking-widest text-muted">Mode</p>
+              <div className="flex items-center gap-2">
+                <p className="shrink-0 text-[10px] uppercase tracking-widest text-muted">Mode</p>
                 <div className="flex gap-1">
                   {['Major', 'Minor'].map(m => (
                     <button key={m} onClick={() => handleMode(m)}
-                      className={`px-4 h-9 rounded-lg border text-xs font-medium transition-colors ${
+                      className={`px-3 h-8 rounded-lg border text-xs font-medium transition-colors ${
                         keyMode === m ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                       }`}>{m}</button>
                   ))}
