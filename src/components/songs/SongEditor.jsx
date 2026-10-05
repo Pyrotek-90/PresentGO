@@ -925,102 +925,55 @@ export default function SongEditor({ song, onClose, onSaved }) {
     const accidentalDisabled = a => !DIATONIC_KEY_MAP[keyRoot]?.[a]
 
     return (
-      <div className="space-y-5">
-        {/* Key selector */}
-        <div className="rounded-xl border border-border bg-card p-3 space-y-2.5">
-          <p className="text-sm font-medium">
-            Song Key
-            {songKey && <span className="ml-2 text-accent-light font-semibold">{songKey}</span>}
-          </p>
-
-          {/* Key */}
-          <div className="flex items-center gap-2">
-            <p className="w-14 shrink-0 text-[10px] uppercase tracking-widest text-muted">Key</p>
-            <div className="flex flex-wrap gap-1">
-              {KEY_ROOTS.map(r => (
-                <button key={r} onClick={() => handleRoot(r === keyRoot ? '' : r)}
-                  className={`w-8 h-8 rounded-lg border text-sm font-medium transition-colors ${
-                    keyRoot === r ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                  }`}>{r}</button>
-              ))}
-              <button onClick={() => { setKeyAccidental(''); setKeyMode('Major'); handleRoot(keyRoot === 'Nashville' ? '' : 'Nashville') }}
-                className={`px-2.5 h-8 rounded-lg border text-xs font-medium transition-colors ${
-                  isNashville ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                }`}>Nashville</button>
-            </div>
-          </div>
-
-          {/* Accidental + Mode — only when a note root is selected */}
+      <div className="space-y-3">
+        {/* One-line key bar + chord palette */}
+        <div className="rounded-xl border border-border bg-card px-3 py-2 flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
+          <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
+          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={keyRoot} onChange={e => handleRoot(e.target.value)}>
+            <option value="">—</option>
+            {KEY_ROOTS.map(r => <option key={r} value={r}>{r}</option>)}
+            <option value="Nashville">Nashville</option>
+          </select>
           {keyRoot && !isNashville && (
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              <div className="flex items-center gap-2">
-                <p className="w-14 shrink-0 text-[10px] uppercase tracking-widest text-muted">Accidental</p>
-                <div className="flex gap-1">
-                  {[['', '♮'], ['#', '♯'], ['b', '♭']].map(([val, sym]) => (
-                    <button key={val} onClick={() => !accidentalDisabled(val) && handleAcc(val)}
-                      disabled={accidentalDisabled(val)}
-                      className={`w-9 h-8 rounded-lg border text-sm font-medium transition-colors disabled:opacity-25 disabled:cursor-not-allowed ${
-                        keyAccidental === val ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                      }`}>{sym}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="shrink-0 text-[10px] uppercase tracking-widest text-muted">Mode</p>
-                <div className="flex gap-1">
-                  {['Major', 'Minor'].map(m => (
-                    <button key={m} onClick={() => handleMode(m)}
-                      className={`px-3 h-8 rounded-lg border text-xs font-medium transition-colors ${
-                        keyMode === m ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                      }`}>{m}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <>
+              <select className="input !w-14 !h-8 !py-0 !px-2 text-sm" value={keyAccidental} onChange={e => handleAcc(e.target.value)}>
+                {[['', '♮'], ['#', '♯'], ['b', '♭']].map(([val, sym]) => (
+                  <option key={val} value={val} disabled={accidentalDisabled(val)}>{sym}</option>
+                ))}
+              </select>
+              <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={keyMode} onChange={e => handleMode(e.target.value)}>
+                <option>Major</option><option>Minor</option>
+              </select>
+            </>
+          )}
+          {diatonic.length > 0 && (
+            <>
+              <span className="h-5 w-px bg-border" />
+              {diatonic.map((chord, i) => (
+                <button key={chord} onClick={() => insertChordAtCursor(chord)} title={`Insert ${chord}`}
+                  className="h-8 px-1.5 rounded-lg border border-border bg-surface text-sm font-medium hover:bg-accent/10 hover:border-accent/40 hover:text-accent-light transition-colors">
+                  <span className="text-[9px] text-muted mr-1">{NUMERALS[i]}</span>{chord}
+                </button>
+              ))}
+            </>
           )}
         </div>
 
-        {/* Diatonic chord reference — major keys only */}
-        {diatonic.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Chords in {songKey}</p>
-              <p className="text-[11px] text-muted">Click a chord to insert into the chart below</p>
-            </div>
-            <div className="grid grid-cols-7 gap-2">
-              {diatonic.map((chord, i) => (
-                <div key={chord} className="text-center">
-                  <p className="text-[10px] text-muted mb-1">{NUMERALS[i]}</p>
-                  <button onClick={() => insertChordAtCursor(chord)}
-                    className="w-full py-1.5 rounded-lg border border-border bg-surface text-sm hover:bg-accent/10 hover:border-accent/40 hover:text-accent-light transition-colors font-medium">
-                    {chord}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Chord chart textarea */}
-        <div className="space-y-2">
-          <label className="label">Chord Chart</label>
-          <p className="text-[11px] text-muted -mt-1">
-            Type your chord chart here. Place chords above lyric lines using spaces to align them.
-            {songKey && ' Click a chord above to insert at cursor.'}
-          </p>
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <label className="label !mb-0">Chord Chart</label>
+            <p className="text-[11px] text-muted">
+              Place chords above lyric lines using spaces to align them.{diatonic.length > 0 && ' Click a chord above to insert at cursor.'}
+            </p>
+          </div>
           <textarea id="chord-chart-area"
-            className="input h-64 resize-none font-mono text-sm leading-relaxed"
+            className="input resize-none font-mono text-sm leading-relaxed"
+            style={{ height: 'max(16rem, calc(92vh - 380px))' }}
             placeholder={`[Verse 1]\nG         D      Em    C\nAmazing grace how sweet the sound\nG         D         G\nThat saved a wretch like me\n\n[Chorus]\nC    G      D        Em\nMy chains are gone I've been set free`}
             value={chordChart}
             onChange={e => setChordChart(e.target.value)}
           />
-        </div>
-
-        <div className="rounded-xl border border-border/50 bg-card/50 p-3">
-          <p className="text-[11px] text-muted leading-relaxed">
-            <strong className="text-accent-light">Coming soon:</strong> auto-generated chord charts from your key selection,
-            chord transposition, Nashville number system, and in-line chord positioning by clicking within lyrics.
-          </p>
         </div>
       </div>
     )
