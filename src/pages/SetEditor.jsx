@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { formatModified } from '../lib/sets'
 import Layout from '../components/Layout'
 import AddItemModal from '../components/sets/AddItemModal'
 import { formatLyrics } from '../lib/lyricFormatter'
@@ -148,7 +149,7 @@ export default function SetEditor() {
             </button>
             <div className="min-w-0">
               <h1 className="font-semibold text-base truncate">{set?.name || '…'}</h1>
-              {set?.service_date && <p className="text-xs text-muted">{formatDate(set.service_date)}</p>}
+              <p className="text-xs text-muted">{[set?.service_date && formatDate(set.service_date), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">

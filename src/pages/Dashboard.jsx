@@ -17,10 +17,9 @@ export default function Dashboard() {
   const [loadingSongs, setLoadingSongs] = useState(true)
   const [targetSetId, setTargetSetId] = useState(null)
   const [editing, setEditing] = useState(null) // song, or true for new
-  const [tab, setTab] = useState('sets')       // small screens: one pane at a time
 
   useEffect(() => {
-    supabase.from('sets').select('*, set_items(count)').eq('user_id', user.id)
+    supabase.from('sets').select('*, set_items(type)').eq('user_id', user.id)
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
       .finally(() => setLoadingSets(false))
@@ -57,7 +56,7 @@ export default function Dashboard() {
     })
     if (error) throw error
     setSets(prev => prev.map(s => s.id === targetSetId
-      ? { ...s, set_items: [{ count: (s.set_items?.[0]?.count || 0) + 1 }] } : s))
+      ? { ...s, set_items: [...(s.set_items || []), { type: 'song' }] } : s))
   }
 
   const deleteSong = async song => {
@@ -65,31 +64,14 @@ export default function Dashboard() {
     setSongs(prev => prev.filter(s => s.id !== song.id))
   }
 
-  const tabBtn = (id, label) => (
-    <button onClick={() => setTab(id)}
-      className={`flex-1 py-2 text-sm font-medium transition-colors ${tab === id ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
-      {label}
-    </button>
-  )
-
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-3">
-        <div className="lg:hidden flex rounded-lg overflow-hidden border border-border">
-          {tabBtn('sets', 'Set Lists')}
-          {tabBtn('songs', 'Song Library')}
-        </div>
-        <div className="grid lg:grid-cols-2 gap-4 h-[calc(100dvh-11rem)] lg:h-[calc(100dvh-8rem)]">
-          <div className={`${tab === 'sets' ? 'block' : 'hidden'} lg:block min-h-0`}>
-            <SetsPane sets={sets} loading={loadingSets} targetSetId={targetSetId}
-              onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
-          </div>
-          <div className={`${tab === 'songs' ? 'block' : 'hidden'} lg:block min-h-0`}>
-            <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
-              onTargetChange={setTargetSetId} onAdd={addToSet} onEdit={setEditing}
-              onDelete={deleteSong} onNew={() => setEditing(true)} />
-          </div>
-        </div>
+      <div className="max-w-4xl mx-auto p-4 md:p-6 flex flex-col gap-3 h-[calc(100dvh-4.5rem)]">
+        <SetsPane sets={sets} loading={loadingSets} targetSetId={targetSetId}
+          onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
+        <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
+          onTargetChange={setTargetSetId} onAdd={addToSet} onEdit={setEditing}
+          onDelete={deleteSong} onNew={() => setEditing(true)} />
       </div>
 
       {editing && (
