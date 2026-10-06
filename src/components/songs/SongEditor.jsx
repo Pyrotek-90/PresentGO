@@ -609,13 +609,13 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
   // ── Step content ─────────────────────────────────────────────────────────────
   const renderStep1 = () => (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-3 min-h-full">
       {/* Search */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <button onClick={() => setShowSearch(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#1e1e1e] transition-colors">
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#1e1e1e] transition-colors">
           <div className="flex items-center gap-2.5">
-            <Search size={15} className="text-accent-light" />
+            <Search size={14} className="text-accent-light" />
             <span className="text-sm font-medium">Search Lyrics Online</span>
           </div>
           <ChevronDown size={15} className={`text-muted transition-transform ${showSearch ? 'rotate-180' : ''}`} />
@@ -628,25 +628,21 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       </div>
 
       {/* Song details */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2">
-          <label className="label">Title *</label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="label !mb-1">Title *</label>
           <input className="input" placeholder="Amazing Grace" value={title} onChange={e => setTitle(e.target.value)} />
         </div>
         <div>
-          <label className="label">CCLI #</label>
-          <input className="input" placeholder="1234567" value={ccliNumber} onChange={e => setCcliNumber(e.target.value)} />
-        </div>
-        <div className="md:col-span-3">
-          <label className="label">Artist / Author</label>
+          <label className="label !mb-1">Artist / Author</label>
           <input className="input" placeholder="John Newton" value={artist} onChange={e => setArtist(e.target.value)} />
         </div>
       </div>
 
       {/* Lyrics editor */}
-      <div className="space-y-2">
+      <div className="flex flex-col gap-1.5 flex-1 min-h-0">
         <div className="flex items-center justify-between">
-          <label className="label mb-0">Lyrics</label>
+          <label className="label mb-0" title="Label sections like [Verse 1] and [Chorus], or use Insert Section">Lyrics</label>
           <div className="flex items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowInsertMenu(v => !v)}
@@ -665,7 +661,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
         {cleanupErr && <p className="text-xs text-amber-400">{cleanupErr}</p>}
         <textarea ref={lyricsRef}
-          className="input h-64 resize-none font-mono text-sm leading-relaxed"
+          className="input resize-none font-mono text-sm leading-relaxed flex-1 min-h-[10rem]"
           placeholder={`[Verse 1]\nAmazing grace how sweet the sound\nThat saved a wretch like me\n\n[Chorus]\nMy chains are gone I've been set free`}
           value={rawLyrics}
           onChange={e => {
@@ -673,9 +669,6 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             setShowSlides(false); setSectionsMap({}); setSectionOrder([]); setArrangement([])
           }}
         />
-        <p className="text-[11px] text-muted">
-          Use <code className="bg-card px-1 rounded">[Verse 1]</code>, <code className="bg-card px-1 rounded">[Chorus]</code> etc. to label sections, or use <strong>Insert Section</strong> above.
-        </p>
       </div>
     </div>
   )
@@ -1106,8 +1099,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         <Lock size={13} className="text-muted shrink-0 mt-0.5" />
         <div>
           <p className="text-[11px] text-muted leading-relaxed">
-            CCLI # <strong className="text-[#f5f5f5]">{ccliNumber || 'not set'}</strong> · set this on the <strong>Lyrics</strong> step.
-            Verify your church's license at <a href="https://ccli.com" target="_blank" rel="noreferrer" className="underline hover:text-accent-light">ccli.com</a>.
+            Song lyrics are protected by copyright. Verify your church's license at <a href="https://ccli.com" target="_blank" rel="noreferrer" className="underline hover:text-accent-light">ccli.com</a>.
           </p>
         </div>
       </div>
@@ -1118,7 +1110,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+      <div className={`bg-surface border border-border rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col ${step === 1 ? 'h-[92vh]' : ''}`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -1134,7 +1126,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         <Stepper current={step} maxReached={maxReached} />
 
         {/* Step content */}
-        <div className="overflow-y-auto flex-1 p-6">
+        <div className="overflow-y-auto flex-1 p-4 sm:p-5">
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
@@ -1144,7 +1136,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
 
         {/* Footer navigation */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-border shrink-0 gap-3">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border shrink-0 gap-3">
           <div className="flex items-center gap-2">
             {step > 1 && (
               <button onClick={() => setStep(s => s - 1)} className="btn-secondary flex items-center gap-1.5">
