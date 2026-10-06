@@ -10,6 +10,7 @@ import Controller from './pages/Controller'
 import ContentLibrary from './pages/ContentLibrary'
 import Settings from './pages/Settings'
 import Calendar from './pages/Calendar'
+import Team from './pages/Team'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
               <Route path="/sets/:setId" element={<SetEditor />} />
               <Route path="/sets/:setId/control" element={<Controller />} />
               <Route path="/calendar" element={<Calendar />} />
+              <Route path="/team" element={<Team />} />
               <Route path="/media" element={<ContentLibrary />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

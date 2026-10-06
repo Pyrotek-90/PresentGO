@@ -1,28 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
-const CATEGORIES = ['Band Musicians', 'Presenter', 'Audio', 'Singers', 'Other']
+export const CATEGORIES = ['Band Musicians', 'Presenter', 'Audio', 'Singers', 'Other']
 
-export default function PositionsPanel() {
+export default function PositionsPanel({ positions, setPositions, loading, loadError }) {
   const { user } = useAuth()
-  const [positions, setPositions] = useState([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [name, setName] = useState('')
   const [category, setCategory] = useState('Band Musicians')
   const [level, setLevel] = useState('Lead')
   const [deleting, setDeleting] = useState(null)
-
-  useEffect(() => {
-    supabase.from('positions').select('*').eq('user_id', user.id).order('created_at')
-      .then(({ data, error }) => {
-        if (error) setError('Positions are not set up yet. Run the latest Supabase migration.')
-        else setPositions(data || [])
-      })
-      .finally(() => setLoading(false))
-  }, [user.id])
 
   const add = async () => {
     if (!name.trim()) return
@@ -66,7 +55,7 @@ export default function PositionsPanel() {
             <Plus size={13} /> Add
           </button>
         </div>
-        {error && <p className="text-red-400 text-xs">{error}</p>}
+        {(error || loadError) && <p className="text-red-400 text-xs">{error || loadError}</p>}
       </div>
 
       <div className="px-3 py-2 space-y-3">

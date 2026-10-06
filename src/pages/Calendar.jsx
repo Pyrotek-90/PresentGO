@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import PositionsPanel from '../components/calendar/PositionsPanel'
+import SetTeam from '../components/calendar/SetTeam'
 import { todayISO, formatSetTime, createSet } from '../lib/sets'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -19,6 +20,35 @@ export default function Calendar() {
   const [time, setTime] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
+  const [positions, setPositions] = useState([])
+  const [members, setMembers] = useState([])
+  const [assignments, setAssignments] = useState([])
+  const [teamLoading, setTeamLoading] = useState(true)
+  const [teamError, setTeamError] = useState(null)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('positions').select('*').eq('user_id', user.id).order('created_at'),
+      supabase.from('team_members').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('set_assignments').select('*'),
+    ]).then(([p, m, a]) => {
+      if (p.error || m.error || a.error) setTeamError('Team features are not set up yet. Run the latest Supabase migration.')
+      setPositions(p.data || []); setMembers(m.data || []); setAssignments(a.data || [])
+    }).catch(() => setTeamError('Could not load team data.')).finally(() => setTeamLoading(false))
+  }, [user.id])
+
+  const addAssignment = async (setId, positionId, memberId) => {
+    setError(null)
+    const { data, error } = await supabase.from('set_assignments')
+      .insert({ set_id: setId, position_id: positionId, member_id: memberId }).select().single()
+    if (error) { setError(error.code === '23505' ? 'That person is already assigned to that position.' : 'Could not assign. Make sure the latest Supabase migration has been run.'); return }
+    setAssignments(prev => [...prev, data])
+  }
+
+  const removeAssignment = async a => {
+    await supabase.from('set_assignments').delete().eq('id', a.id)
+    setAssignments(prev => prev.filter(x => x.id !== a.id))
+  }
 
   useEffect(() => {
     supabase.from('sets').select('id, name, service_date, service_time').eq('user_id', user.id)
@@ -109,15 +139,17 @@ export default function Calendar() {
               {selectedSets.length === 0 ? (
                 <p className="text-xs text-muted">No sets on this day.</p>
               ) : (
-                <ul className="space-y-0.5">
+                <ul className="space-y-1">
                   {selectedSets.map(s => (
-                    <li key={s.id}>
+                    <li key={s.id} className="rounded-lg border border-border/60">
                       <button onClick={() => navigate(`/sets/${s.id}`)}
                         className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-[#1a1a1a] text-left">
                         <span className="flex-1 min-w-0 truncate text-sm font-medium">{s.name}</span>
                         <span className="text-xs text-muted">{formatSetTime(s.service_time)}</span>
                         <ChevronRight size={14} className="text-muted" />
                       </button>
+                      <SetTeam assignments={assignments.filter(a => a.set_id === s.id)} positions={positions} members={members}
+                        onAdd={(pid, mid) => addAssignment(s.id, pid, mid)} onRemove={removeAssignment} />
                     </li>
                   ))}
                 </ul>
@@ -135,7 +167,7 @@ export default function Calendar() {
           </section>
         </div>
 
-        <PositionsPanel />
+        <PositionsPanel positions={positions} setPositions={setPositions} loading={teamLoading} loadError={teamError} />
       </div>
     </Layout>
   )

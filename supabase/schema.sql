@@ -202,3 +202,32 @@ create trigger media_items_updated_at before update on public.media_items
 -- alter table public.positions enable row level security;
 -- create policy "Users manage own positions" on public.positions for all
 --   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ────────────────────────────────────────────────────────────
+-- MIGRATION: team members + set assignments
+-- ────────────────────────────────────────────────────────────
+-- create table if not exists public.team_members (
+--   id           uuid primary key default uuid_generate_v4(),
+--   user_id      uuid not null references auth.users(id) on delete cascade,
+--   name         text not null,
+--   email        text,
+--   phone        text,
+--   position_ids uuid[] not null default '{}',   -- positions this person can fill
+--   created_at   timestamptz default now()
+-- );
+-- alter table public.team_members enable row level security;
+-- create policy "Users manage own team" on public.team_members for all
+--   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+--
+-- create table if not exists public.set_assignments (
+--   id          uuid primary key default uuid_generate_v4(),
+--   set_id      uuid not null references public.sets(id) on delete cascade,
+--   position_id uuid not null references public.positions(id) on delete cascade,
+--   member_id   uuid not null references public.team_members(id) on delete cascade,
+--   created_at  timestamptz default now(),
+--   unique (set_id, position_id, member_id)
+-- );
+-- alter table public.set_assignments enable row level security;
+-- create policy "Users manage assignments in own sets" on public.set_assignments for all
+--   using (exists (select 1 from public.sets where sets.id = set_assignments.set_id and sets.user_id = auth.uid()))
+--   with check (exists (select 1 from public.sets where sets.id = set_assignments.set_id and sets.user_id = auth.uid()));
