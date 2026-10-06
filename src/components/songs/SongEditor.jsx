@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
+import { reconcileChart } from '../../lib/chart'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
@@ -542,25 +543,9 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
-  const generateChordChart = () => {
-    if (sectionOrder.length === 0) return
-    const lines = []
-    for (const label of sectionOrder) {
-      lines.push(`[${label}]`)
-      for (const slide of (sectionsMap[label] || [])) {
-        for (const lyricLine of slide.lines) {
-          lines.push('')         // blank chord line above
-          lines.push(lyricLine) // lyric line
-        }
-      }
-      lines.push('') // blank line between sections
-    }
-    setChordChart(lines.join('\n'))
-  }
-
   const goTo = nextStep => {
     if (nextStep === 2 && !showSlides && rawLyrics.trim()) handleFormatSong()
-    if (nextStep === 4 && !chordChart.trim() && sectionOrder.length > 0) generateChordChart()
+    if (nextStep === 4 && slides.length > 0) setChordChart(c => reconcileChart(slides, c))
     setStep(nextStep)
     setMaxReached(m => Math.max(m, nextStep))
   }
@@ -585,7 +570,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       slides,
       metadata: {
         key: songKey,
-        chord_chart: chordChart,
+        chord_chart: slides.length ? reconcileChart(slides, chordChart) : chordChart,
         bpm,
         themes,
         author,

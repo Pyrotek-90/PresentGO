@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2 } from 'lucide-react'
 import { transposeChart, isChordLine } from '../../lib/chords'
+import { reconcileChart } from '../../lib/chart'
 
 const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
@@ -66,10 +67,15 @@ export default function SongViewer({ song, onClose }) {
     return [{ label: '', lines: (song.raw_lyrics || '').split('\n') }]
   }, [song])
 
+  // Same lyric content as Lyrics mode: the chart follows the saved slides, keeping its chords.
+  const baseChart = useMemo(
+    () => (hasChart && song.slides?.length ? reconcileChart(song.slides, meta.chord_chart) : meta.chord_chart || ''),
+    [hasChart, song.slides, meta.chord_chart]
+  )
   const chart = useMemo(() => {
     if (!hasChart) return ''
-    return activeKey && activeKey !== original ? transposeChart(meta.chord_chart, original, activeKey) : meta.chord_chart
-  }, [hasChart, activeKey, original, meta.chord_chart])
+    return activeKey && activeKey !== original ? transposeChart(baseChart, original, activeKey) : baseChart
+  }, [hasChart, activeKey, original, baseChart])
 
   const chartBlocks = useMemo(() => {
     if (!chart) return []
