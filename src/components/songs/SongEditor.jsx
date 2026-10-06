@@ -6,7 +6,7 @@ import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
-  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight,
+  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink,
 } from 'lucide-react'
 
 // ─── Wizard steps ─────────────────────────────────────────────────────────────
@@ -56,26 +56,28 @@ const PRESET_LABELS = [
 ]
 
 // ─── Progress stepper ─────────────────────────────────────────────────────────
-function Stepper({ current, maxReached }) {
+function Stepper({ current, maxReached, isNew, onSelect }) {
+  const canGo = n => !isNew || n <= maxReached
   return (
     <div className="flex items-center px-4 py-3 border-b border-border bg-card/50 shrink-0">
       {STEPS.map((s, i) => (
         <div key={s.num} className="flex items-center flex-1 min-w-0 last:flex-none">
-          <div className="flex flex-col items-center gap-0.5 shrink-0">
+          <button type="button" onClick={() => canGo(s.num) && onSelect(s.num)} disabled={!canGo(s.num)}
+            className="flex flex-col items-center gap-0.5 shrink-0 group disabled:cursor-default">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
-              s.num < current  ? 'bg-accent text-white' :
               s.num === current ? 'bg-accent/20 border-2 border-accent text-accent-light' :
-                                  'bg-transparent border border-border text-muted'
+              (!isNew || s.num < current) && canGo(s.num) ? 'bg-accent text-white group-hover:bg-accent-hover' :
+              'bg-transparent border border-border text-muted'
             }`}>
-              {s.num < current ? <Check size={11} /> : s.num}
+              {s.num !== current && canGo(s.num) && (!isNew ? false : s.num < current) ? <Check size={11} /> : s.num}
             </div>
             <span className={`text-[9px] tracking-wide uppercase font-medium transition-colors ${
               s.num === current ? 'text-accent-light' :
-              s.num < current  ? 'text-[#aaa]' : 'text-muted/50'
+              canGo(s.num) ? 'text-[#aaa] group-hover:text-[#f5f5f5]' : 'text-muted/50'
             }`}>{s.label}</span>
-          </div>
+          </button>
           {i < STEPS.length - 1 && (
-            <div className={`flex-1 h-px mx-1.5 mb-3.5 transition-colors ${s.num < current ? 'bg-accent/60' : 'bg-border'}`} />
+            <div className={`flex-1 h-px mx-1.5 mb-3.5 transition-colors ${canGo(s.num + 1) ? 'bg-accent/60' : 'bg-border'}`} />
           )}
         </div>
       ))}
@@ -335,6 +337,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [themeInput, setThemeInput] = useState('')
   const [author, setAuthor]     = useState(song?.metadata?.author || '')
   const [transposedKeys, setTransposedKeys] = useState(song?.metadata?.transposed_keys || [])
+  const [youtubeUrl, setYoutubeUrl] = useState(song?.metadata?.youtube_url || '')
+  const [yt, setYt] = useState({ status: 'idle', results: [] }) // idle | loading | done | error | unconfigured
   const [wantTransposed, setWantTransposed] = useState(false) // key picker open
   const [pendingKeys, setPendingKeys] = useState([])
   const [tMode, setTMode] = useState(() => parseKey(song?.metadata?.transposed_keys?.[0])?.mode || '')
@@ -350,6 +354,27 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
   useEffect(() => {
     if (song?.slides) setSlides(song.slides)
+  }, [song])
+
+  // Rebuild the Slides/Arrangement working state from a saved song's slides.
+  useEffect(() => {
+    if (!song?.slides?.length) return
+    const occ = []
+    for (const sl of song.slides) {
+      if (sl.label || !occ.length) occ.push({ label: sl.label || 'Song', slides: [] })
+      occ[occ.length - 1].slides.push(sl)
+    }
+    const map = {}, order = [], raw = {}, lpsMap = {}
+    for (const o of occ) {
+      if (map[o.label]) continue
+      order.push(o.label)
+      map[o.label] = o.slides.map((sl, i) => ({ ...sl, label: i === 0 ? o.label : null }))
+      raw[o.label] = o.slides.flatMap(sl => sl.lines)
+      lpsMap[o.label] = song.lines_per_slide || 2
+    }
+    setSectionsMap(map); setSectionOrder(order); setSectionsRaw(raw); setSectionLPS(lpsMap)
+    setArrangement(occ.map(o => ({ id: crypto.randomUUID(), label: o.label })))
+    setShowSlides(true)
   }, [song])
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -556,6 +581,12 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     setMaxReached(m => Math.max(m, nextStep))
   }
 
+  const jumpTo = n => {
+    if (n === step) return
+    if (n > 1 && !rawLyrics.trim()) return
+    goTo(n)
+  }
+
   const canAdvance = () => {
     if (step === 1) return !!rawLyrics.trim()
     return true
@@ -580,6 +611,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         bpm,
         themes,
         author,
+        youtube_url: youtubeUrl.trim(),
         original_key: songKey,
         transposed_keys: transposedKeys,
       },
@@ -602,6 +634,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const renderStep1 = () => (
     <div className="flex flex-col gap-3 min-h-full">
       {/* Search */}
+      {isNew && (
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <button onClick={() => setShowSearch(v => !v)}
           className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#1e1e1e] transition-colors">
@@ -617,6 +650,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Song details */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -961,6 +995,26 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     )
   }
 
+  const youtubeId = (url => url.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/)?.[1])(youtubeUrl)
+  const ytSearchPage = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${title} ${artist}`.trim())}`
+
+  const findOnYoutube = async () => {
+    setYt({ status: 'loading', results: [] })
+    try {
+      const res = await fetch('/api/youtube-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: `${title} ${artist}`.trim() }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.status === 501 || res.status === 404) { setYt({ status: 'unconfigured', results: [] }); return }
+      if (!res.ok) throw new Error(json.error)
+      setYt({ status: json.results?.length ? 'done' : 'error', results: json.results || [] })
+    } catch {
+      setYt({ status: 'error', results: [] })
+    }
+  }
+
   const renderStep5 = () => {
     const effTMode = tMode || keyMode
     const keyOptions = transposeKeyOptions(songKey, effTMode)
@@ -1082,6 +1136,55 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         )}
       </div>
 
+      {/* YouTube link */}
+      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <Youtube size={15} className="text-red-400" />
+          <p className="text-sm font-medium">YouTube link</p>
+          <span className="text-[11px] text-muted truncate">{[title, artist].filter(Boolean).join(' · ')}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input className="input flex-1 min-w-[12rem] !h-9 text-sm" placeholder="Paste a YouTube link, or find one →"
+            value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} />
+          <button type="button" onClick={findOnYoutube} disabled={!title.trim() || yt.status === 'loading'}
+            className="btn-secondary flex items-center gap-1.5 !h-9 !py-0 text-sm shrink-0 disabled:opacity-40">
+            {yt.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Find on YouTube
+          </button>
+        </div>
+        {(yt.status === 'unconfigured' || yt.status === 'error') && (
+          <p className="text-[11px] text-amber-400/90">
+            {yt.status === 'unconfigured' ? 'Automatic search isn\'t set up on this server yet.' : 'No results, or the search failed.'}{' '}
+            <a href={ytSearchPage} target="_blank" rel="noreferrer" className="underline hover:text-accent-light">Search YouTube</a> and paste the link above.
+          </p>
+        )}
+        {yt.status === 'done' && (
+          <ul className="space-y-1">
+            {yt.results.map(v => (
+              <li key={v.id}>
+                <button type="button" onClick={() => { setYoutubeUrl(`https://www.youtube.com/watch?v=${v.id}`); setYt({ status: 'idle', results: [] }) }}
+                  className="w-full flex items-center gap-2.5 p-1.5 rounded-lg border border-border hover:border-accent/50 hover:bg-[#1a1a1a] text-left transition-colors">
+                  {v.thumbnail && <img src={v.thumbnail} alt="" className="w-16 h-9 rounded object-cover shrink-0" />}
+                  <span className="min-w-0">
+                    <span className="block text-sm truncate">{v.title}</span>
+                    <span className="block text-[11px] text-muted truncate">{v.channel}</span>
+                  </span>
+                  <span className="ml-auto text-xs text-accent-light shrink-0">Select</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {youtubeId && (
+          <div className="flex items-center gap-2.5 pt-1">
+            <img src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`} alt="" className="w-24 h-14 rounded object-cover" />
+            <a href={youtubeUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-accent-light hover:underline">
+              <ExternalLink size={12} /> Open on YouTube
+            </a>
+            <button type="button" onClick={() => setYoutubeUrl('')} className="text-xs text-muted hover:text-red-400 ml-auto">Remove</button>
+          </div>
+        )}
+      </div>
+
       {/* CCLI reminder */}
       <div className="rounded-xl border border-border/50 bg-card/50 p-3 flex items-start gap-3">
         <Lock size={13} className="text-muted shrink-0 mt-0.5" />
@@ -1111,7 +1214,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
 
         {/* Progress stepper */}
-        <Stepper current={step} maxReached={maxReached} />
+        <Stepper current={step} maxReached={maxReached} isNew={isNew} onSelect={jumpTo} />
 
         {/* Step content */}
         <div className="overflow-y-auto flex-1 p-4 sm:p-5">
