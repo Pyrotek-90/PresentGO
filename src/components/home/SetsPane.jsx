@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, ChevronRight, ChevronDown } from 'lucide-react'
-import { groupSets, formatSetDate, songCount } from '../../lib/sets'
+import { groupSets, formatSetWhen, songCount, todayISO } from '../../lib/sets'
 
 const PAST_PREVIEW = 5
 const COLLAPSE_KEY = 'presentgo.setsCollapsed'
@@ -13,7 +13,7 @@ function SetRow({ set, isTarget, onOpen }) {
         isTarget ? 'border-accent/50 bg-accent/5' : 'border-transparent hover:bg-[#1a1a1a] hover:border-border'
       }`}>
       <span className="flex-1 min-w-0 text-sm font-medium truncate">{set.name}</span>
-      <span className="text-xs text-muted shrink-0">{set.service_date ? formatSetDate(set.service_date) : ''}</span>
+      <span className="text-xs text-muted shrink-0">{formatSetWhen(set)}</span>
       <span className="text-xs text-muted shrink-0 w-14 text-right">{n} song{n !== 1 ? 's' : ''}</span>
       <ChevronRight size={14} className="text-muted group-hover:text-[#f5f5f5] shrink-0" />
     </button>
@@ -26,6 +26,8 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
   })
   const [showNew, setShowNew] = useState(false)
   const [name, setName] = useState('')
+  const [date, setDate] = useState(todayISO)
+  const [time, setTime] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
   const [showAllPast, setShowAllPast] = useState(false)
@@ -40,7 +42,7 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
   const submit = async () => {
     if (!name.trim()) return
     setCreating(true); setError(null)
-    const err = await onCreate(name.trim())
+    const err = await onCreate({ name: name.trim(), date, time })
     setCreating(false)
     if (err) setError(err)
   }
@@ -63,11 +65,13 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
           {showNew && (
             <div className="px-3 pb-2 space-y-2 shrink-0">
               {error && <p className="text-red-400 text-xs">{error}</p>}
-              <div className="flex gap-2">
-                <input className="input flex-1 !h-9" placeholder="e.g. Sunday Morning — March 23" autoFocus
+              <div className="flex flex-wrap gap-2">
+                <input className="input flex-1 min-w-[12rem] !h-9" placeholder="Set name, e.g. Sunday Morning Worship" autoFocus
                   value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
-                <button onClick={submit} disabled={creating} className="btn-primary shrink-0">{creating ? 'Creating…' : 'Create'}</button>
-                <button onClick={() => { setShowNew(false); setName(''); setError(null) }} className="btn-ghost shrink-0">Cancel</button>
+                <input type="date" className="input !h-9 !w-auto" value={date} onChange={e => setDate(e.target.value)} aria-label="Service date" />
+                <input type="time" className="input !h-9 !w-auto" value={time} onChange={e => setTime(e.target.value)} aria-label="Service time" />
+                <button onClick={submit} disabled={creating || !name.trim()} className="btn-primary shrink-0">{creating ? 'Creating…' : 'Create'}</button>
+                <button onClick={() => { setShowNew(false); setName(''); setTime(''); setDate(todayISO()); setError(null) }} className="btn-ghost shrink-0">Cancel</button>
               </div>
             </div>
           )}

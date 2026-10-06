@@ -6,10 +6,10 @@ export function groupSets(sets) {
   const today = todayISO()
   const upcoming = sets
     .filter(s => s.service_date && s.service_date >= today)
-    .sort((a, b) => a.service_date.localeCompare(b.service_date))
+    .sort((a, b) => (a.service_date + (a.service_time || '')).localeCompare(b.service_date + (b.service_time || '')))
   const past = sets
     .filter(s => !(s.service_date && s.service_date >= today))
-    .sort((a, b) => keyDate(b).localeCompare(keyDate(a)))
+    .sort((a, b) => (keyDate(b) + (b.service_time || '')).localeCompare(keyDate(a) + (a.service_time || '')))
   return { upcoming, past }
 }
 
@@ -32,3 +32,19 @@ export function formatModified(ts) {
 }
 
 export const songCount = set => (set.set_items || []).filter(i => i.type === 'song').length
+
+export function formatSetTime(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':')
+  const d = new Date(1970, 0, 1, Number(h), Number(m))
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+export const formatSetWhen = set => [formatSetDate(set.service_date), formatSetTime(set.service_time)].filter(Boolean).join(' · ')
+
+export async function createSet(supabase, userId, { name, date, time }) {
+  return supabase
+    .from('sets')
+    .insert({ user_id: userId, name, service_date: date || todayISO(), service_time: time || null })
+    .select().single()
+}

@@ -9,6 +9,7 @@ import PresentMode from './pages/PresentMode'
 import Controller from './pages/Controller'
 import ContentLibrary from './pages/ContentLibrary'
 import Settings from './pages/Settings'
+import Calendar from './pages/Calendar'
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
               <Route path="/library" element={<Navigate to="/" replace />} />
               <Route path="/sets/:setId" element={<SetEditor />} />
               <Route path="/sets/:setId/control" element={<Controller />} />
+              <Route path="/calendar" element={<Calendar />} />
               <Route path="/media" element={<ContentLibrary />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

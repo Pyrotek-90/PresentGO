@@ -1,11 +1,12 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { Home, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown } from 'lucide-react'
+import { Home, CalendarDays, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 
 const navItems = [
   { to: '/',        label: 'Home',            icon: Home       },
+  { to: '/calendar', label: 'Calendar',        icon: CalendarDays },
   { to: '/media',   label: 'Content Library', icon: FolderOpen },
 ]
 

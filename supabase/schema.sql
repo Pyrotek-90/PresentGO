@@ -38,6 +38,7 @@ create table public.sets (
   user_id      uuid not null references auth.users(id) on delete cascade,
   name         text not null,
   service_date date,
+  service_time time,
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );
@@ -184,3 +185,20 @@ create trigger media_items_updated_at before update on public.media_items
 -- MIGRATION: add song metadata (run if songs table already exists)
 -- ────────────────────────────────────────────────────────────
 -- alter table public.songs add column if not exists metadata jsonb default '{}'::jsonb;
+
+-- ────────────────────────────────────────────────────────────
+-- MIGRATION: set time + team positions (run if tables already exist)
+-- ────────────────────────────────────────────────────────────
+-- alter table public.sets add column if not exists service_time time;
+--
+-- create table if not exists public.positions (
+--   id         uuid primary key default uuid_generate_v4(),
+--   user_id    uuid not null references auth.users(id) on delete cascade,
+--   name       text not null,
+--   category   text not null check (category in ('Band Musicians','Presenter','Audio','Singers','Other')),
+--   level      text check (level in ('Lead','Supporting')),
+--   created_at timestamptz default now()
+-- );
+-- alter table public.positions enable row level security;
+-- create policy "Users manage own positions" on public.positions for all
+--   using (auth.uid() = user_id) with check (auth.uid() = user_id);
