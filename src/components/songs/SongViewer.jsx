@@ -101,8 +101,9 @@ export default function SongViewer({ song, onClose }) {
     return () => ro.disconnect()
   }, [])
 
-  const canTwoCol = mode === 'chords' && box.w >= TWO_COL_MIN_WIDTH
-  const colCount = canTwoCol && cols === 2 ? 2 : 1
+  const showCols = mode === 'chords'
+  const widthOk = box.w >= TWO_COL_MIN_WIDTH
+  const colCount = showCols && widthOk && cols === 2 ? 2 : 1
 
   // Pick the largest font that fits on one page; otherwise paginate at the minimum size.
   useLayoutEffect(() => {
@@ -192,15 +193,15 @@ export default function SongViewer({ song, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black text-[#f5f5f5]"
       style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <header className="shrink-0 border-b border-border bg-surface px-3 py-2 flex flex-nowrap items-center gap-2 sm:gap-3">
-        <div className="flex-1 min-w-0">
+      <header className="shrink-0 border-b border-border bg-surface px-3 py-2 flex items-center gap-2 sm:gap-3">
+        <div className="flex-1 min-w-0 basis-14">
           <p className="truncate font-semibold leading-tight">{song.title}</p>
           {song.artist && <p className="truncate text-xs text-muted">{song.artist}</p>}
         </div>
 
-        {/* Center: view controls */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex rounded-lg overflow-hidden border border-border" role="group" aria-label="View">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+          {/* View controls */}
+          <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="View">
             {[['lyrics', Mic, 'Lyrics'], ['chords', Music, 'Chord Chart']].map(([id, Icon, label]) => (
               <button key={id} onClick={() => setMode(id)} title={label} aria-label={label} aria-pressed={mode === id}
                 className={`w-10 h-8 flex items-center justify-center transition-colors ${mode === id ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
@@ -209,18 +210,18 @@ export default function SongViewer({ song, onClose }) {
             ))}
           </div>
 
-          {canTwoCol && (
-            <div className="flex rounded-lg overflow-hidden border border-border" role="group" aria-label="Columns">
-              {[[1, Square, 'Single column'], [2, Columns2, 'Two columns']].map(([n, Icon, label]) => (
-                <button key={n} onClick={() => pickCols(n)} title={label} aria-label={label}
-                  className={`w-9 h-8 flex items-center justify-center transition-colors ${colCount === n ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
+          {showCols && (
+            <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Columns">
+              {[[1, Square, 'Single column'], [2, Columns2, widthOk ? 'Two columns' : 'Two columns (needs a wider screen — try landscape)']].map(([n, Icon, label]) => (
+                <button key={n} onClick={() => pickCols(n)} title={label} aria-label={label} disabled={n === 2 && !widthOk}
+                  className={`w-9 h-8 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${colCount === n ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
                   <Icon size={15} />
                 </button>
               ))}
             </div>
           )}
 
-          <div className="hidden sm:flex items-center rounded-lg border border-border overflow-hidden" role="group" aria-label="Text size">
+          <div className="flex items-center rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label="Text size">
             <button onClick={() => bump(-2)} className="w-8 h-8 flex items-center justify-center text-muted hover:text-[#f5f5f5] hover:bg-card" aria-label="Smaller text"><Minus size={14} /></button>
             <button onClick={resetSize} title={manual[mode] ? 'Back to auto-fit' : 'Auto-fit text size'}
               className={`px-2 h-8 text-xs font-semibold border-x border-border ${manual[mode] ? 'text-muted hover:text-[#f5f5f5]' : 'text-accent-light'}`}>
@@ -228,34 +229,28 @@ export default function SongViewer({ song, onClose }) {
             </button>
             <button onClick={() => bump(2)} className="w-8 h-8 flex items-center justify-center text-muted hover:text-[#f5f5f5] hover:bg-card" aria-label="Larger text"><Plus size={14} /></button>
           </div>
-        </div>
 
-        {/* Right: key, BPM, close */}
-        <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0">
-          {mode === 'chords' && keys.length > 0 && (
-            <>
-              <div className="hidden sm:flex items-center gap-1">
-                <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
-                {keys.map(k => (
-                  <button key={k} onClick={() => setActiveKey(k)} title={k}
-                    className={`shrink-0 min-w-[2.25rem] px-2 h-8 rounded-md border text-sm font-semibold transition-colors ${
-                      activeKey === k ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
-                    }`}>{shortKey(k)}</button>
-                ))}
-              </div>
-              <select className="sm:hidden input !h-8 !py-0 !pl-2 !pr-5 !w-[3.75rem] text-sm font-semibold shrink-0" value={activeKey} onChange={e => setActiveKey(e.target.value)} aria-label="Key">
-                {keys.map(k => <option key={k} value={k}>{shortKey(k)}</option>)}
-              </select>
-            </>
-          )}
+          {/* BPM and Key */}
           {mode === 'chords' && meta.bpm && (
             <span className="flex items-baseline gap-1 shrink-0">
-              <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-muted">BPM</span>
+              <span className="text-[10px] uppercase tracking-widest text-muted">BPM</span>
               <span className="text-base font-bold">{meta.bpm}</span>
             </span>
           )}
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-card text-muted hover:text-[#f5f5f5] shrink-0" aria-label="Close"><X size={18} /></button>
+          {mode === 'chords' && keys.length > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
+              {keys.map(k => (
+                <button key={k} onClick={() => setActiveKey(k)} title={k}
+                  className={`shrink-0 min-w-[2.25rem] px-2 h-8 rounded-md border text-sm font-semibold transition-colors ${
+                    activeKey === k ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+                  }`}>{shortKey(k)}</button>
+              ))}
+            </div>
+          )}
         </div>
+
+        <button onClick={onClose} className="p-2 rounded-lg hover:bg-card text-muted hover:text-[#f5f5f5] shrink-0" aria-label="Close"><X size={18} /></button>
       </header>
 
       <div ref={viewportRef} className="relative flex-1 min-h-0 overflow-hidden select-none"
