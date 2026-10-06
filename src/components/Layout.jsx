@@ -21,6 +21,7 @@ export default function Layout({ children }) {
 
   const handleSignOut = async () => {
     setProfileOpen(false)
+    setMenuOpen(false)
     await signOut()
     navigate('/auth')
   }
@@ -67,7 +68,7 @@ export default function Layout({ children }) {
 
         <div className="flex items-center gap-2">
           {/* Profile dropdown */}
-          <div className="relative" ref={profileRef}>
+          <div className="relative hidden md:block" ref={profileRef}>
             <button
               onClick={() => setProfileOpen(o => !o)}
               className="btn-ghost flex items-center gap-2 text-sm px-3 py-2"
@@ -154,6 +155,15 @@ export default function Layout({ children }) {
           ))}
           {/* Mobile profile section */}
           <div className="border-t border-border mt-1 pt-1">
+            <div className="flex items-center gap-2 px-3 py-2">
+              <div className="w-7 h-7 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-xs font-semibold shrink-0">
+                {displayName[0]?.toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-primary truncate">{displayName}</p>
+                <p className="text-xs text-muted truncate">{user?.email}</p>
+              </div>
+            </div>
             <button
               onClick={toggleTheme}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:text-primary hover:bg-card transition-colors"
