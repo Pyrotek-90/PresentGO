@@ -55,7 +55,7 @@ function transposeNote(note, semis, flats) {
   return (flats ? FLAT : SHARP)[(pc + semis + 120) % 12]
 }
 
-function isChordLine(line) {
+export function isChordLine(line) {
   const t = line.trim()
   if (!t || t.startsWith('[')) return false
   return t.split(/\s+/).every(tok => CHORD_RE.test(tok))
