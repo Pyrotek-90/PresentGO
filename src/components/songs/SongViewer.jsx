@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2 } from 'lucide-react'
 import { transposeChart, isChordLine } from '../../lib/chords'
-import { reconcileChart } from '../../lib/chart'
+import { reconcileChart, lyricSections } from '../../lib/chart'
 
 const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
@@ -55,22 +55,22 @@ export default function SongViewer({ song, onClose }) {
   const touch = useRef(null)
   const swiped = useRef(false)
 
+  // Lyrics text is the single source for both modes (slides/arrangement are presentation-only).
   const sections = useMemo(() => {
-    if (song.slides?.length) {
-      const out = []
-      for (const s of song.slides) {
-        if (s.label || !out.length) out.push({ label: s.label || '', lines: [] })
-        out[out.length - 1].lines.push(...(s.lines || []))
-      }
-      return out
+    const fromRaw = lyricSections(song.raw_lyrics)
+    if (fromRaw.length) return fromRaw
+    const out = []
+    for (const sl of song.slides || []) {
+      if (sl.label || !out.length) out.push({ label: sl.label || '', lines: [] })
+      out[out.length - 1].lines.push(...(sl.lines || []))
     }
-    return [{ label: '', lines: (song.raw_lyrics || '').split('\n') }]
+    return out
   }, [song])
 
-  // Same lyric content as Lyrics mode: the chart follows the saved slides, keeping its chords.
+  // Same lyric content as Lyrics mode: the chart follows the saved lyrics, keeping its chords.
   const baseChart = useMemo(
-    () => (hasChart && song.slides?.length ? reconcileChart(song.slides, meta.chord_chart) : meta.chord_chart || ''),
-    [hasChart, song.slides, meta.chord_chart]
+    () => (hasChart && song.raw_lyrics?.trim() ? reconcileChart(song.raw_lyrics, meta.chord_chart) : meta.chord_chart || ''),
+    [hasChart, song.raw_lyrics, meta.chord_chart]
   )
   const chart = useMemo(() => {
     if (!hasChart) return ''

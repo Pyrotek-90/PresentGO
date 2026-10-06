@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
-import { reconcileChart } from '../../lib/chart'
+import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
@@ -496,6 +496,15 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     setSlides(buildSlidesFromArrangement(newMap, arrangement))
   }
 
+  // Edits made on the Slides step flow back into the saved lyrics text (the single source for the
+  // song viewer). Arrangement order/repeats are presentation-only and never touch the lyrics.
+  const applySections = (label, newMap) => {
+    applySections(label, newMap)
+    const lines = newMap[label].flatMap(sl => sl.lines)
+    setSectionsRaw(prev => ({ ...prev, [label]: lines }))
+    setRawLyrics(raw => replaceSectionInRaw(raw, label, lines))
+  }
+
   // Edit a line in sectionsMap directly
   const updateSecLine = (label, si, li, value) => {
     const newMap = {
@@ -504,16 +513,14 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         idx === si ? { ...s, lines: s.lines.map((l, li2) => li2 === li ? value : l) } : s
       ),
     }
-    setSectionsMap(newMap)
-    setSlides(buildSlidesFromArrangement(newMap, arrangement))
+    applySections(label, newMap)
   }
 
   // Remove a slide from a section
   const removeSecSlide = (label, si) => {
     const kept = sectionsMap[label].filter((_, idx) => idx !== si)
     const newMap = { ...sectionsMap, [label]: kept }
-    setSectionsMap(newMap)
-    setSlides(buildSlidesFromArrangement(newMap, arrangement))
+    applySections(label, newMap)
   }
 
   // Reorder slides within a section
@@ -523,8 +530,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     if (target < 0 || target >= arr.length) return
     ;[arr[si], arr[target]] = [arr[target], arr[si]]
     const newMap = { ...sectionsMap, [label]: arr }
-    setSectionsMap(newMap)
-    setSlides(buildSlidesFromArrangement(newMap, arrangement))
+    applySections(label, newMap)
   }
 
   const insertChordAtCursor = chord => {
@@ -545,7 +551,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   // ── Navigation ───────────────────────────────────────────────────────────────
   const goTo = nextStep => {
     if (nextStep === 2 && !showSlides && rawLyrics.trim()) handleFormatSong()
-    if (nextStep === 4 && slides.length > 0) setChordChart(c => reconcileChart(slides, c))
+    if (nextStep === 4 && rawLyrics.trim()) setChordChart(c => reconcileChart(rawLyrics, c))
     setStep(nextStep)
     setMaxReached(m => Math.max(m, nextStep))
   }
@@ -570,7 +576,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       slides,
       metadata: {
         key: songKey,
-        chord_chart: slides.length ? reconcileChart(slides, chordChart) : chordChart,
+        chord_chart: rawLyrics.trim() ? reconcileChart(rawLyrics, chordChart) : chordChart,
         bpm,
         themes,
         author,
@@ -749,8 +755,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
                                   ...sectionsMap,
                                   [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: newLines } : s),
                                 }
-                                setSectionsMap(newMap)
-                                setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                                applySections(label, newMap)
                                 setTimeout(() => document.getElementById(`line-${label}-${si}-${li + 1}`)?.focus(), 0)
                               }
                             }}
@@ -763,8 +768,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
                                 ...sectionsMap,
                                 [label]: sectionsMap[label].map((s, idx) => idx === si ? { ...s, lines: newLines } : s),
                               }
-                              setSectionsMap(newMap)
-                              setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                              applySections(label, newMap)
                             }}
                             className="opacity-0 group-hover/line:opacity-100 p-0.5 rounded hover:bg-red-700/30 text-muted hover:text-red-400 shrink-0 transition-opacity">
                             <X size={9} />
@@ -783,8 +787,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
                     ...sectionsMap,
                     [label]: [...sectionsMap[label], { lines: [''], label: null }],
                   }
-                  setSectionsMap(newMap)
-                  setSlides(buildSlidesFromArrangement(newMap, arrangement))
+                  applySections(label, newMap)
                 }}
                 className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted hover:text-accent-light hover:bg-accent/5 transition-colors border-t border-border/50">
                 <Plus size={11} /> Add slide to {label}
