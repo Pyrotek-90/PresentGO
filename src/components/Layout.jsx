@@ -1,12 +1,11 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { LayoutList, Library, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown } from 'lucide-react'
+import { Home, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 
 const navItems = [
-  { to: '/',        label: 'Sets',            icon: LayoutList },
-  { to: '/library', label: 'Song Library',    icon: Library    },
+  { to: '/',        label: 'Home',            icon: Home       },
   { to: '/media',   label: 'Content Library', icon: FolderOpen },
 ]
 
@@ -37,6 +36,8 @@ export default function Layout({ children }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  const isActive = to => (to === '/' ? location.pathname === '/' || location.pathname.startsWith('/sets') : location.pathname === to)
+
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Account'
 
   return (
@@ -55,7 +56,7 @@ export default function Layout({ children }) {
               key={to}
               to={to}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname === to
+                isActive(to)
                   ? 'bg-accent/20 text-accent-light'
                   : 'text-muted hover:text-primary hover:bg-card'
               }`}
@@ -144,7 +145,7 @@ export default function Layout({ children }) {
               to={to}
               onClick={() => setMenuOpen(false)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname === to
+                isActive(to)
                   ? 'bg-accent/20 text-accent-light'
                   : 'text-muted hover:text-primary hover:bg-card'
               }`}

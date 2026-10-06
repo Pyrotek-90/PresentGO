@@ -4,7 +4,6 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
-import Library from './pages/Library'
 import SetEditor from './pages/SetEditor'
 import PresentMode from './pages/PresentMode'
 import Controller from './pages/Controller'
@@ -27,7 +26,7 @@ export default function App() {
             {/* Protected app routes */}
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/library" element={<Library />} />
+              <Route path="/library" element={<Navigate to="/" replace />} />
               <Route path="/sets/:setId" element={<SetEditor />} />
               <Route path="/sets/:setId/control" element={<Controller />} />
               <Route path="/media" element={<ContentLibrary />} />
