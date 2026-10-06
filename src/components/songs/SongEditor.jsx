@@ -274,7 +274,8 @@ function LyricsSearch({ onSongFound }) {
 }
 
 // ─── Main editor ──────────────────────────────────────────────────────────────
-export default function SongEditor({ song, onClose, onSaved }) {
+export default function SongEditor({ song, onClose, onSaved, onDelete }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const { user } = useAuth()
   const isNew = !song
 
@@ -1157,6 +1158,15 @@ export default function SongEditor({ song, onClose, onSaved }) {
             {step > 1 && (
               <button onClick={() => setStep(s => s - 1)} className="btn-secondary flex items-center gap-1.5">
                 <ArrowLeft size={14} /> Back
+              </button>
+            )}
+            {song?.id && onDelete && (
+              <button onClick={() => { if (confirmDelete) { onDelete(song); onClose() } else setConfirmDelete(true) }}
+                onBlur={() => setConfirmDelete(false)}
+                className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm transition-colors ${
+                  confirmDelete ? 'border-red-600 bg-red-700 text-white' : 'border-border text-muted hover:text-red-400 hover:border-red-500/50'
+                }`}>
+                <Trash2 size={14} /> {confirmDelete ? 'Click again to delete' : 'Delete'}
               </button>
             )}
           </div>

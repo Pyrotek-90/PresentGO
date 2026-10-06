@@ -6,6 +6,7 @@ import Layout from '../components/Layout'
 import SetsPane from '../components/home/SetsPane'
 import SongsPane from '../components/home/SongsPane'
 import SongEditor from '../components/songs/SongEditor'
+import SongViewer from '../components/songs/SongViewer'
 import { groupSets, createSet as insertSet } from '../lib/sets'
 
 export default function Dashboard() {
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [loadingSongs, setLoadingSongs] = useState(true)
   const [targetSetId, setTargetSetId] = useState(null)
   const [editing, setEditing] = useState(null) // song, or true for new
+  const [viewing, setViewing] = useState(null)
 
   useEffect(() => {
     supabase.from('sets').select('*, set_items(type)').eq('user_id', user.id)
@@ -68,16 +70,19 @@ export default function Dashboard() {
           onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
         <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
           onTargetChange={setTargetSetId} onAdd={addToSet} onEdit={setEditing}
-          onDelete={deleteSong} onNew={() => setEditing(true)} />
+          onView={setViewing} onNew={() => setEditing(true)} />
       </div>
+
+      {viewing && <SongViewer song={viewing} onClose={() => setViewing(null)} />}
 
       {editing && (
         <SongEditor
           song={editing === true ? null : editing}
           onClose={() => setEditing(null)}
-          onSaved={saved => setSongs(prev =>
+          onDelete={deleteSong}
+          onSaved={saved => { setViewing(v => (v && v.id === saved.id ? saved : v)); setSongs(prev =>
             prev.find(s => s.id === saved.id) ? prev.map(s => s.id === saved.id ? saved : s) : [...prev, saved]
-          )}
+          ) }}
         />
       )}
     </Layout>

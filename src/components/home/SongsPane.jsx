@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, Music, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Plus, Search, Music, ChevronRight, Check, X, ListPlus } from 'lucide-react'
 import { formatSetDate } from '../../lib/sets'
 
-export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onAdd, onEdit, onDelete, onNew }) {
+export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onAdd, onEdit, onView, onNew }) {
   const [query, setQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState([])
-  const [deleting, setDeleting] = useState(null)
+  const [addMode, setAddMode] = useState(false)
   const [justAdded, setJustAdded] = useState(null)
   const [addError, setAddError] = useState(null)
 
@@ -36,10 +36,6 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
     }
   }
 
-  const handleDelete = song => {
-    if (deleting === song.id) { onDelete(song); setDeleting(null) } else setDeleting(song.id)
-  }
-
   const noSets = sets.length === 0
 
   return (
@@ -49,9 +45,17 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
           <h2 className="font-semibold">Song Library</h2>
           <span className="text-xs text-muted">{songs.length}</span>
         </div>
-        <button onClick={onNew} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-          <Plus size={14} /> New Song
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setAddMode(v => !v)}
+            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border text-sm font-medium transition-colors ${
+              addMode ? 'border-accent bg-accent/20 text-accent-light' : 'border-accent/50 text-accent-light hover:bg-accent/10'
+            }`}>
+            {addMode ? <><Check size={14} /> Done</> : <><ListPlus size={14} /> Add Songs to Set</>}
+          </button>
+          <button onClick={onNew} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
+            <Plus size={14} /> New Song
+          </button>
+        </div>
       </div>
 
       <div className="px-3 py-2 border-b border-border space-y-2 shrink-0">
@@ -60,12 +64,12 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input className="input !pl-9 !h-8 text-sm" placeholder="Search title, artist, or CCLI #…" value={query} onChange={e => setQuery(e.target.value)} />
           </div>
-          <span className="text-[10px] uppercase tracking-widest text-muted">Add to</span>
-          <select className="input !h-8 !py-0 !px-2 text-sm !w-auto max-w-[14rem]" value={targetSetId || ''} disabled={noSets}
+          {addMode && <span className="text-[10px] uppercase tracking-widest text-muted">Add to</span>}
+          {addMode && <select className="input !h-8 !py-0 !px-2 text-sm !w-auto max-w-[14rem]" value={targetSetId || ''} disabled={noSets}
             onChange={e => onTargetChange(e.target.value)}>
             {noSets && <option value="">Create a set first</option>}
             {sets.map(s => <option key={s.id} value={s.id}>{s.name}{s.service_date ? ` · ${formatSetDate(s.service_date)}` : ''}</option>)}
-          </select>
+          </select>}
         </div>
         {themeCounts.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
@@ -96,21 +100,21 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
         ) : (
           <ul className="space-y-0.5">
             {filtered.map(song => (
-              <li key={song.id} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[#1a1a1a] group">
-                <p className="flex-1 min-w-0 truncate text-sm">
+              <li key={song.id} className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-[#1a1a1a] group">
+                <button onClick={() => onView(song)} className="flex-1 min-w-0 py-1 text-left truncate text-sm">
                   <span className="font-medium">{song.title}</span>
                   {song.artist && <span className="text-xs text-muted"> · {song.artist}</span>}
-                </p>
-                <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => onEdit(song)} className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Edit"><Pencil size={13} /></button>
-                  <button onClick={() => handleDelete(song)} title={deleting === song.id ? 'Click again to confirm delete' : 'Delete'}
-                    className={`p-1.5 rounded-lg transition-colors ${deleting === song.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={13} /></button>
-                </div>
-                <button onClick={() => handleAdd(song)} disabled={noSets || !targetSetId}
-                  className={`shrink-0 h-7 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                    justAdded === song.id ? 'border-green-500/50 bg-green-500/15 text-green-400' : 'border-accent/50 bg-accent/10 text-accent-light hover:bg-accent/20'
-                  }`}>
-                  {justAdded === song.id ? <><Check size={11} /> Added</> : <><Plus size={11} /> Add</>}
+                </button>
+                {addMode && (
+                  <button onClick={() => handleAdd(song)} disabled={noSets || !targetSetId}
+                    className={`shrink-0 h-7 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                      justAdded === song.id ? 'border-green-500/50 bg-green-500/15 text-green-400' : 'border-accent/50 bg-accent/10 text-accent-light hover:bg-accent/20'
+                    }`}>
+                    {justAdded === song.id ? <><Check size={11} /> Added</> : <><Plus size={11} /> Add</>}
+                  </button>
+                )}
+                <button onClick={() => onEdit(song)} className="p-1.5 rounded-lg text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0" title="Edit song" aria-label={`Edit ${song.title}`}>
+                  <ChevronRight size={15} />
                 </button>
               </li>
             ))}
