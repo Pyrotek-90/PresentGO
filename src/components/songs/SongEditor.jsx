@@ -381,7 +381,6 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       if (!res.ok || json.error) throw new Error(json.error)
       const filled = []
       if (json.bpm) { setBpm(prev => prev || String(json.bpm)); filled.push('Tempo') }
-      if (json.songwriters) { setAuthor(prev => prev || json.songwriters); filled.push('Songwriter(s)') }
       const k = parseKey(json.key)
       if (k && !songKeyRef.current) {
         setKeyRoot(k.root); setKeyAccidental(k.accidental); setKeyMode(k.mode)
@@ -1069,14 +1068,6 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             {!hasChords(chordChart) && <span className="text-[11px] text-amber-400/80">No chords entered yet.</span>}
           </div>
         )}
-      </div>
-
-      {/* Author */}
-      <div>
-        <label className="label">Songwriter(s)</label>
-        <input className="input" placeholder="Chris Tomlin, John Newton…"
-          value={author} onChange={e => setAuthor(e.target.value)} />
-        <p className="text-[11px] text-muted mt-1">Original composers or lyricists — separate from the performing artist.</p>
       </div>
 
       {/* Themes / categories */}
