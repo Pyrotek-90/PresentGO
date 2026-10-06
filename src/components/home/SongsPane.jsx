@@ -50,7 +50,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border text-sm font-medium transition-colors ${
               addMode ? 'border-accent bg-accent/20 text-accent-light' : 'border-accent/50 text-accent-light hover:bg-accent/10'
             }`}>
-            {addMode ? <><Check size={14} /> Done</> : <><ListPlus size={14} /> Add Songs to Set</>}
+            {addMode ? <><Check size={14} /> Done</> : <><ListPlus size={14} /> + To Set</>}
           </button>
           <button onClick={onNew} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
             <Plus size={14} /> New Song
