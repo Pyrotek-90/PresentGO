@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { openControlChannel } from '../lib/controlChannel'
+import TitleSlide from '../components/TitleSlide'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import { ChevronLeft, ChevronRight, Square } from 'lucide-react'
 
@@ -183,7 +184,10 @@ export default function PresentMode() {
       {loaded && !blank && slide?.image && (
         <img src={slide.image} alt="" className="absolute inset-0 w-full h-full object-contain bg-black" draggable={false} />
       )}
-      {loaded && !blank && slide && !slide.image && (
+      {loaded && !blank && slide?.type === 'welcome' && (
+        <TitleSlide title={slide.title} subtitle={slide.subtitle} />
+      )}
+      {loaded && !blank && slide && !slide.image && slide.type !== 'welcome' && (
         <div className="w-full max-w-5xl px-16 text-center">
           <div className="space-y-4">
             {slide.lines.map((line, i) => (

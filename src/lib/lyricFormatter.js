@@ -91,6 +91,8 @@ export function buildPresentationSlides(setItems, songs) {
         type: 'welcome',
         itemId: item.id,
         itemTitle: item.content.title || 'Welcome',
+        title: item.content.title || 'Welcome',
+        subtitle: item.content.subtitle || '',
         lines: [item.content.title, item.content.subtitle].filter(Boolean),
         label: null,
         sectionLabel: null,

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { openControlChannel } from '../lib/controlChannel'
+import TitleSlide from '../components/TitleSlide'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import {
   ChevronLeft, ChevronRight, XSquare, X, Tv, ArrowLeft,
@@ -150,12 +151,15 @@ function SlideThumb({ slide, live, onClick, className = '', large = false, group
   return (
     <button
       onClick={onClick}
+      style={{ containerType: 'inline-size' }}
       className={`w-full h-full rounded-xl bg-black border-2 flex flex-col items-center justify-center p-3 transition-all ${
         live ? 'border-red-500/70 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'border-border hover:border-[#555]'
       } ${className}`}
     >
       {slide?.image ? (
         <img src={slide.image} alt="" className="w-full h-full object-contain" draggable={false} />
+      ) : slide?.type === 'welcome' ? (
+        <TitleSlide title={slide.title} subtitle={slide.subtitle} unit="cqw" />
       ) : slide ? (
         <div className="text-center w-full">
           {slide.label && !large && (
