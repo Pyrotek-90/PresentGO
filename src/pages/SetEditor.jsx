@@ -5,10 +5,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatModified, formatSetTime } from '../lib/sets'
 import Layout from '../components/Layout'
 import AddItemModal from '../components/sets/AddItemModal'
+import SongEditor from '../components/songs/SongEditor'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
-  Plus, Play, Music, Star, Megaphone, Square,
-  Trash2, ChevronUp, ChevronDown, ArrowLeft, Layers, FolderOpen,
+  Plus, MonitorPlay, Music, Star, Megaphone, Square,
+  Trash2, ChevronUp, ChevronDown, ArrowLeft, Layers, FolderOpen, Pencil,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
@@ -28,7 +29,9 @@ export default function SetEditor() {
   const [set, setSet]       = useState(null)
   const [items, setItems]   = useState([])
   const [songs, setSongs]   = useState({})
-  const [selected, setSelected] = useState(0)
+  const [editItem, setEditItem] = useState(null)
+  const [editSong, setEditSong] = useState(null)
+  const [deleting, setDeleting] = useState(null)
   const [showAdd, setShowAdd]   = useState(false)
   const [loading, setLoading]   = useState(true)
 
@@ -83,7 +86,6 @@ export default function SetEditor() {
       .select().single()
     if (data) {
       setItems(prev => [...prev, data])
-      setSelected(items.length)
       if (item.type === 'song' && item.content.song_id) {
         const { data: song } = await supabase.from('songs').select('*').eq('id', item.content.song_id).single()
         if (song) setSongs(prev => ({ ...prev, [song.id]: song }))
@@ -91,13 +93,33 @@ export default function SetEditor() {
     }
   }
 
-  const handleDelete = async (item, idx) => {
+  const handleDelete = async item => {
+    if (deleting !== item.id) { setDeleting(item.id); return }
     if (setId !== 'mock') await supabase.from('set_items').delete().eq('id', item.id)
-    setItems(prev => {
-      const next = prev.filter(i => i.id !== item.id)
-      setSelected(s => Math.min(s, Math.max(0, next.length - 1)))
-      return next
-    })
+    setItems(prev => prev.filter(i => i.id !== item.id))
+    setDeleting(null)
+  }
+
+  const handleEdit = item => {
+    if (item.type === 'song') {
+      const song = songs[item.content?.song_id]
+      if (song) setEditSong(song)
+    } else if (item.type !== 'blank') {
+      setEditItem(item)
+    }
+  }
+
+  const handleSaveEdit = async ({ content }) => {
+    if (setId !== 'mock') await supabase.from('set_items').update({ content }).eq('id', editItem.id)
+    setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, content } : i))
+  }
+
+  const handleSongSaved = async saved => {
+    setSongs(prev => ({ ...prev, [saved.id]: saved }))
+    const touched = items.filter(i => i.type === 'song' && i.content?.song_id === saved.id)
+    const content = i => ({ ...i.content, song_title: saved.title, song_artist: saved.artist })
+    setItems(prev => prev.map(i => touched.includes(i) ? { ...i, content: content(i) } : i))
+    if (setId !== 'mock') await Promise.all(touched.map(i => supabase.from('set_items').update({ content: content(i) }).eq('id', i.id)))
   }
 
   const moveItem = async (idx, dir) => {
@@ -106,7 +128,6 @@ export default function SetEditor() {
     if (swap < 0 || swap >= next.length) return
     ;[next[idx], next[swap]] = [next[swap], next[idx]]
     setItems(next)
-    setSelected(swap)
     if (setId !== 'mock') {
       await Promise.all([
         supabase.from('set_items').update({ position: swap }).eq('id', next[swap].id),
@@ -132,178 +153,102 @@ export default function SetEditor() {
     navigate(`/sets/${setId}/control`)
   }
 
-  const selectedItem = items[selected]
-  const slides = selectedItem ? getSlidesForItem(selectedItem) : []
-
   const formatDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''
+
+  const itemTitle = item =>
+    item.type === 'song'  ? item.content?.song_title :
+    item.type === 'media' ? item.content?.media_name :
+    item.content?.title || ITEM_LABELS[item.type]
 
   return (
     <Layout>
-      <div className="flex h-full flex-col">
+      <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-3">
 
-        {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => navigate('/')} className="btn-ghost p-1.5 rounded-lg shrink-0">
-              <ArrowLeft size={18} />
-            </button>
-            <div className="min-w-0">
-              <h1 className="font-semibold text-base truncate">{set?.name || '…'}</h1>
-              <p className="text-xs text-muted">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => setShowAdd(true)} className="btn-secondary flex items-center gap-1.5 text-sm">
-              <Plus size={15} /> Add Item
-            </button>
-            <button
-              onClick={openPresent}
-              disabled={items.length === 0}
-              className="btn-primary flex items-center gap-1.5 text-sm"
-            >
-              <Play size={15} fill="currentColor" /> Present
-            </button>
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/')} className="btn-ghost p-1.5 rounded-lg shrink-0" aria-label="Back to Home">
+            <ArrowLeft size={18} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-semibold text-lg truncate">{set?.name || '…'}</h1>
+            <p className="text-xs text-muted">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</p>
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-
-          {/* Left: Set item list */}
-          <aside className="w-60 border-r border-border flex flex-col shrink-0 overflow-hidden">
-            <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-              <span className="text-xs font-medium text-muted uppercase tracking-wider">Run Order</span>
+        {/* Program card */}
+        <section className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border">
+            <div className="flex items-baseline gap-2">
+              <h2 className="font-semibold">Set Program</h2>
               <span className="text-xs text-muted">{items.length} item{items.length !== 1 ? 's' : ''}</span>
             </div>
-
-            <div className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
-              {loading ? (
-                <div className="flex justify-center pt-8">
-                  <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : items.length === 0 ? (
-                <div className="text-center py-10 space-y-3 px-4">
-                  <Layers size={28} className="text-muted mx-auto" />
-                  <p className="text-muted text-sm">No items yet</p>
-                  <button onClick={() => setShowAdd(true)} className="btn-primary text-sm w-full">
-                    <Plus size={14} className="inline mr-1" />Add Item
-                  </button>
-                </div>
-              ) : items.map((item, idx) => {
-                const ItemIcon = ITEM_ICONS[item.type] || Square
-                const colorClass = ITEM_COLORS[item.type] || ITEM_COLORS.blank
-                const slideCount = getSlidesForItem(item).length
-                const isSelected = selected === idx
-
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => setSelected(idx)}
-                    className={`flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer group transition-all ${
-                      isSelected ? 'bg-accent/15 border border-accent/30' : 'hover:bg-card border border-transparent'
-                    }`}
-                  >
-                    {/* Position number */}
-                    <span className="text-xs text-muted w-4 shrink-0 text-center">{idx + 1}</span>
-
-                    {/* Type icon */}
-                    <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}>
-                      <ItemIcon size={13} />
-                    </div>
-
-                    {/* Title + type */}
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${isSelected ? 'text-[#f5f5f5]' : ''}`}>
-                        {item.type === 'song'  ? item.content?.song_title  :
-                         item.type === 'media' ? item.content?.media_name  :
-                         item.content?.title || ITEM_LABELS[item.type]}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {ITEM_LABELS[item.type]}{slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}
-                      </p>
-                    </div>
-
-                    {/* Actions — show on hover */}
-                    <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        onClick={e => { e.stopPropagation(); moveItem(idx, -1) }}
-                        disabled={idx === 0}
-                        className="p-0.5 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20"
-                      ><ChevronUp size={12} /></button>
-                      <button
-                        onClick={e => { e.stopPropagation(); moveItem(idx, 1) }}
-                        disabled={idx === items.length - 1}
-                        className="p-0.5 rounded hover:bg-[#333] text-muted hover:text-[#f5f5f5] disabled:opacity-20"
-                      ><ChevronDown size={12} /></button>
-                    </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDelete(item, idx) }}
-                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-700/30 hover:text-red-400 text-muted transition-all shrink-0"
-                    ><Trash2 size={12} /></button>
-                  </div>
-                )
-              })}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowAdd(true)} className="btn-secondary flex items-center gap-1.5 !py-1 !px-3 text-sm">
+                <Plus size={14} /> Add Item
+              </button>
+              <button onClick={openPresent} disabled={items.length === 0}
+                className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm disabled:opacity-40">
+                <MonitorPlay size={14} /> Presentation Mode
+              </button>
             </div>
-          </aside>
+          </div>
 
-          {/* Right: Slide preview grid */}
-          <div className="flex-1 overflow-y-auto bg-[#0a0a0a]">
-            {!selectedItem ? (
-              <div className="flex h-full items-center justify-center flex-col gap-3 text-muted">
-                <Layers size={36} />
-                <p className="text-sm">Select an item to preview slides</p>
+          <div className="p-2">
+            {loading ? (
+              <div className="flex justify-center py-10"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
+            ) : items.length === 0 ? (
+              <div className="text-center py-12 space-y-3 px-4">
+                <Layers size={32} className="text-muted mx-auto" />
+                <p className="text-muted text-sm">Build your program: add songs, title slides, announcements and content in the order they'll run.</p>
+                <button onClick={() => setShowAdd(true)} className="btn-primary mx-auto flex items-center gap-1.5 text-sm">
+                  <Plus size={14} /> Add Item
+                </button>
               </div>
             ) : (
-              <div className="p-5 space-y-4 max-w-3xl">
-                {/* Item header */}
-                <div className="flex items-center gap-2">
-                  {(() => { const Icon = ITEM_ICONS[selectedItem.type] || Square; return <Icon size={15} className="text-muted" /> })()}
-                  <span className="text-sm font-medium">
-                    {selectedItem.type === 'song'  ? selectedItem.content?.song_title  :
-                   selectedItem.type === 'media' ? selectedItem.content?.media_name  :
-                   selectedItem.content?.title || ITEM_LABELS[selectedItem.type]}
-                  </span>
-                  {selectedItem.type === 'song' && selectedItem.content?.song_artist && (
-                    <span className="text-xs text-muted">— {selectedItem.content.song_artist}</span>
-                  )}
-                  <span className="text-xs text-muted ml-auto">{slides.length} slide{slides.length !== 1 ? 's' : ''}</span>
-                </div>
-
-                {/* Slide grid */}
-                <div className="grid grid-cols-3 gap-3">
-                  {slides.map((slide, i) => (
-                    <div
-                      key={i}
-                      className="aspect-video rounded-xl bg-black border border-[#1e1e1e] hover:border-[#333] flex flex-col items-center justify-center p-3 relative transition-colors group cursor-default"
-                    >
-                      {slide.label && (
-                        <span className="absolute top-2 left-3 text-[9px] text-gray-700 uppercase tracking-widest font-medium">
-                          {slide.label}
-                        </span>
-                      )}
-                      <div className="text-center w-full">
-                        {slide.lines?.map((line, j) => (
-                          <p key={j} className="text-white text-xs leading-snug">{line}</p>
-                        ))}
-                        {(!slide.lines || slide.lines.length === 0) && (
-                          <p className="text-gray-800 text-xs italic">Blank</p>
-                        )}
+              <ul className="space-y-0.5">
+                {items.map((item, idx) => {
+                  const ItemIcon = ITEM_ICONS[item.type] || Square
+                  const colorClass = ITEM_COLORS[item.type] || ITEM_COLORS.blank
+                  const slideCount = getSlidesForItem(item).length
+                  const editable = item.type !== 'blank' && !(item.type === 'song' && !songs[item.content?.song_id])
+                  return (
+                    <li key={item.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#1a1a1a] group">
+                      <span className="text-xs text-muted w-5 shrink-0 text-center">{idx + 1}</span>
+                      <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}><ItemIcon size={13} /></div>
+                      <button onClick={() => editable && handleEdit(item)} className="flex-1 min-w-0 text-left" disabled={!editable}>
+                        <p className="text-sm font-medium truncate">{itemTitle(item)}</p>
+                        <p className="text-xs text-muted truncate">
+                          {ITEM_LABELS[item.type]}
+                          {item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}
+                          {slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}
+                        </p>
+                      </button>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} aria-label="Move up"
+                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ChevronUp size={14} /></button>
+                        <button onClick={() => moveItem(idx, 1)} disabled={idx === items.length - 1} aria-label="Move down"
+                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ChevronDown size={14} /></button>
+                        <button onClick={() => handleEdit(item)} disabled={!editable} aria-label="Edit item" title={editable ? 'Edit' : 'Nothing to edit'}
+                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><Pencil size={14} /></button>
+                        <button onClick={() => handleDelete(item)} aria-label="Delete item" title={deleting === item.id ? 'Click again to confirm delete' : 'Delete'}
+                          className={`p-1.5 rounded-lg transition-colors ${deleting === item.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={14} /></button>
                       </div>
-                      <span className="absolute bottom-1.5 right-2.5 text-[9px] text-gray-800 group-hover:text-gray-600 transition-colors">{i + 1}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                    </li>
+                  )
+                })}
+              </ul>
             )}
           </div>
-        </div>
+        </section>
+
+        {items.length > 0 && (
+          <p className="text-xs text-muted text-center">When your program is ready, open <strong className="text-[#f5f5f5]">Presentation Mode</strong> to connect a TV and run the slides.</p>
+        )}
       </div>
 
-      {showAdd && (
-        <AddItemModal
-          onClose={() => setShowAdd(false)}
-          onAdd={handleAddItem}
-        />
-      )}
+      {showAdd && <AddItemModal onClose={() => setShowAdd(false)} onAdd={handleAddItem} />}
+      {editItem && <AddItemModal item={editItem} onClose={() => setEditItem(null)} onAdd={handleSaveEdit} />}
+      {editSong && <SongEditor song={editSong} onClose={() => setEditSong(null)} onSaved={handleSongSaved} />}
     </Layout>
   )
 }

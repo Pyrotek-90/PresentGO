@@ -3,14 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import {
-  ChevronLeft, ChevronRight, XSquare, X, Tv,
+  ChevronLeft, ChevronRight, XSquare, X, Tv, ArrowLeft,
   MonitorPlay, ArrowRight, Radio, Wifi,
   Music, Star, Megaphone, FolderOpen, Layers,
 } from 'lucide-react'
 
 // ─── Connect step — open presentation then AirPlay ───────────────────────────
 
-function ConnectStep({ setId, setName, onContinue }) {
+function ConnectStep({ setId, setName, onContinue, onBack }) {
   const [opened, setOpened] = useState(false)
 
   const openPresent = () => {
@@ -98,8 +98,12 @@ function ConnectStep({ setId, setName, onContinue }) {
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
       <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
+        <button onClick={onBack} className="btn-ghost flex items-center gap-1.5 text-sm !px-2 !py-1.5 shrink-0">
+          <ArrowLeft size={16} /> Program
+        </button>
         <Tv size={18} className="text-accent" />
         <span className="font-medium text-sm truncate">{setName || 'Loading…'}</span>
+        <span className="text-xs text-muted shrink-0">· Presentation Mode</span>
       </div>
       <div className="flex-1 overflow-y-auto flex items-center justify-center p-6">
         <div className="w-full max-w-lg space-y-5">
@@ -107,8 +111,8 @@ function ConnectStep({ setId, setName, onContinue }) {
             <div className="w-14 h-14 rounded-2xl bg-accent/20 flex items-center justify-center mx-auto">
               <Wifi size={26} className="text-accent-light" />
             </div>
-            <h2 className="text-xl font-semibold">Set up your display</h2>
-            <p className="text-muted text-sm">Follow these steps to get your TV showing the presentation.</p>
+            <h2 className="text-xl font-semibold">Presentation Mode</h2>
+            <p className="text-muted text-sm">Your program is ready. Follow these steps to get your TV showing the slides.</p>
           </div>
 
           {steps.map(({ n, title, body, note }) => (
@@ -441,7 +445,7 @@ export default function Controller() {
 
 
   if (!connected) {
-    return <ConnectStep setId={setId} setName={setName} onContinue={() => setConnected(true)} />
+    return <ConnectStep setId={setId} setName={setName} onContinue={() => setConnected(true)} onBack={() => navigate(`/sets/${setId}`)} />
   }
 
   const curr = slides[current]

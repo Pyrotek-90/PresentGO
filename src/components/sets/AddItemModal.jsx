@@ -17,9 +17,10 @@ const MEDIA_COLORS = {
   image:        'text-green-400 bg-green-400/10',
 }
 
-export default function AddItemModal({ onClose, onAdd }) {
+export default function AddItemModal({ onClose, onAdd, item }) {
+  const editing = !!item
   const { user } = useAuth()
-  const [type, setType] = useState('welcome')
+  const [type, setType] = useState(item ? (item.type === 'media' ? 'content' : item.type) : 'welcome')
   const [songs, setSongs] = useState([])
   const [query, setQuery] = useState('')
   const [showNewSong, setShowNewSong] = useState(false)
@@ -30,12 +31,14 @@ export default function AddItemModal({ onClose, onAdd }) {
   const [mediaLoaded, setMediaLoaded] = useState(false)
 
   // Welcome slide state
-  const [welcomeTitle, setWelcomeTitle] = useState('Welcome')
-  const [welcomeSubtitle, setWelcomeSubtitle] = useState('')
+  const [welcomeTitle, setWelcomeTitle] = useState(item?.type === 'welcome' ? item.content?.title || '' : 'Welcome')
+  const [welcomeSubtitle, setWelcomeSubtitle] = useState(item?.type === 'welcome' ? item.content?.subtitle || '' : '')
 
   // Announcement state
-  const [announcementTitle, setAnnouncementTitle] = useState('Announcements')
-  const [announcementSlides, setAnnouncementSlides] = useState([{ lines: [''] }])
+  const [announcementTitle, setAnnouncementTitle] = useState(item?.type === 'announcement' ? item.content?.title || '' : 'Announcements')
+  const [announcementSlides, setAnnouncementSlides] = useState(
+    item?.type === 'announcement' && item.content?.slides?.length ? item.content.slides.map(sl => ({ lines: [...sl.lines] })) : [{ lines: [''] }]
+  )
 
   useEffect(() => {
     supabase
@@ -122,12 +125,12 @@ export default function AddItemModal({ onClose, onAdd }) {
       <div className="bg-surface border border-border rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <h2 className="text-lg font-semibold">Add to Set</h2>
+          <h2 className="text-lg font-semibold">{editing ? 'Edit Item' : 'Add to Set'}</h2>
           <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg"><X size={18} /></button>
         </div>
 
         {/* Type tabs */}
-        <div className="flex gap-1 px-4 pt-4 shrink-0 flex-wrap">
+        {!editing && <div className="flex gap-1 px-4 pt-4 shrink-0 flex-wrap">
           {ITEM_TYPES.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -142,7 +145,7 @@ export default function AddItemModal({ onClose, onAdd }) {
               {label}
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -199,7 +202,7 @@ export default function AddItemModal({ onClose, onAdd }) {
                 <p className="text-white text-2xl font-bold text-center">{welcomeTitle || 'Welcome'}</p>
                 {welcomeSubtitle && <p className="text-gray-400 text-base mt-2 text-center">{welcomeSubtitle}</p>}
               </div>
-              <button onClick={handleAddWelcome} className="btn-primary w-full">Add Welcome Slide</button>
+              <button onClick={handleAddWelcome} className="btn-primary w-full">{editing ? 'Save Changes' : 'Add Welcome Slide'}</button>
             </div>
           )}
 
@@ -240,13 +243,14 @@ export default function AddItemModal({ onClose, onAdd }) {
               >
                 + Add slide
               </button>
-              <button onClick={handleAddAnnouncement} className="btn-primary w-full">Add Announcement</button>
+              <button onClick={handleAddAnnouncement} className="btn-primary w-full">{editing ? 'Save Changes' : 'Add Announcement'}</button>
             </div>
           )}
 
           {/* Content library picker */}
           {type === 'content' && (
             <>
+              {editing && <p className="text-xs text-muted">Choose a different file to replace <strong className="text-[#f5f5f5]">{item.content?.media_name}</strong>.</p>}
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <input
