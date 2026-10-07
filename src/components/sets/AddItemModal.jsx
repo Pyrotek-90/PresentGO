@@ -6,9 +6,9 @@ import SongEditor from '../songs/SongEditor'
 
 const ITEM_TYPES = [
   { id: 'welcome',      label: 'Title Slide',   icon: Star },
+  { id: 'announcement', label: 'Presentation',  icon: Megaphone },
   { id: 'song',         label: 'Song',          icon: Music },
   { id: 'content',      label: 'Content',       icon: FolderOpen },
-  { id: 'announcement', label: 'Presentation',  icon: Megaphone },
 ]
 
 const MEDIA_ICONS  = { presentation: Monitor, image: Image }
