@@ -1,8 +1,10 @@
 import Layout from '../components/Layout'
+import CalendarSync from '../components/settings/CalendarSync'
+import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
   Sun, Moon, Shield, Check, ExternalLink,
-  Church, Zap, Bell, Star,
+  Church, Zap, Bell, Star, Mic, Music,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -150,6 +152,8 @@ function PlanCard({ plan }) {
 
 export default function Settings() {
   const { isDark, toggleTheme } = useTheme()
+  const [viewerMode, setViewerMode] = useState(() => getPref('viewerMode', 'lyrics'))
+  const pickViewerMode = m => { setViewerMode(m); setPref('viewerMode', m) }
 
   return (
     <Layout>
@@ -186,6 +190,31 @@ export default function Settings() {
               />
             </button>
           </div>
+        </section>
+
+        {/* ── Preferences ───────────────────────────────────────────────── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Preferences</h2>
+
+          <div className="card flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Music size={18} className="text-accent-light shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-primary">Song viewer opens in</p>
+                <p className="text-xs text-muted">Singers usually want Lyrics, musicians the Chord Chart. Saved on this device.</p>
+              </div>
+            </div>
+            <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Default song view">
+              {[['lyrics', Mic, 'Lyrics'], ['chords', Music, 'Chord Chart']].map(([id, Icon, label]) => (
+                <button key={id} onClick={() => pickViewerMode(id)} aria-pressed={viewerMode === id}
+                  className={`flex items-center gap-1.5 px-3 h-9 text-xs font-medium transition-colors ${viewerMode === id ? 'bg-accent text-white' : 'bg-card text-muted hover:text-primary'}`}>
+                  <Icon size={14} /> {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <CalendarSync />
         </section>
 
         {/* ── Licensing & Copyright ─────────────────────────────────────── */}

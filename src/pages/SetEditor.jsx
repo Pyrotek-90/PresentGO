@@ -3,13 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatModified, formatSetTime } from '../lib/sets'
+import { buildIcs } from '../lib/ics'
 import Layout from '../components/Layout'
 import AddItemModal from '../components/sets/AddItemModal'
 import SongEditor from '../components/songs/SongEditor'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  Trash2, ChevronUp, ChevronDown, ArrowLeft, Layers, FolderOpen, Pencil,
+  Trash2, ChevronUp, ChevronDown, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
@@ -32,6 +33,9 @@ export default function SetEditor() {
   const [editItem, setEditItem] = useState(null)
   const [editSong, setEditSong] = useState(null)
   const [deleting, setDeleting] = useState(null)
+  const [details, setDetails] = useState(null)   // form state while editing set details
+  const [detailsSaving, setDetailsSaving] = useState(false)
+  const [detailsError, setDetailsError] = useState(null)
   const [showAdd, setShowAdd]   = useState(false)
   const [loading, setLoading]   = useState(true)
 
@@ -98,6 +102,53 @@ export default function SetEditor() {
     if (setId !== 'mock') await supabase.from('set_items').delete().eq('id', item.id)
     setItems(prev => prev.filter(i => i.id !== item.id))
     setDeleting(null)
+  }
+
+  const DURATIONS = [30, 45, 60, 75, 90, 105, 120, 150, 180, 240]
+  const durationLabel = m => (m % 60 === 0 ? `${m / 60} hr` : m > 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`)
+
+  const openDetails = () => {
+    setDetailsError(null)
+    setDetails({
+      name: set?.name || '',
+      date: set?.service_date || '',
+      time: set?.service_time ? set.service_time.slice(0, 5) : '',
+      duration: set?.duration_min || 90,
+      venue: set?.venue_name || '',
+      address: set?.location_address || '',
+      room: set?.location_details || '',
+    })
+  }
+
+  const saveDetails = async () => {
+    if (!details.name.trim()) { setDetailsError('Set name is required.'); return }
+    setDetailsSaving(true); setDetailsError(null)
+    const patch = {
+      name: details.name.trim(),
+      service_date: details.date || null,
+      service_time: details.time || null,
+      duration_min: Number(details.duration) || 90,
+      venue_name: details.venue.trim() || null,
+      location_address: details.address.trim() || null,
+      location_details: details.room.trim() || null,
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+    }
+    if (setId !== 'mock') {
+      const { error } = await supabase.from('sets').update(patch).eq('id', setId)
+      if (error) { setDetailsSaving(false); setDetailsError('Could not save. Make sure the latest Supabase migration has been run.'); return }
+    }
+    setSet(prev => ({ ...prev, ...patch, updated_at: new Date().toISOString() }))
+    setDetailsSaving(false); setDetails(null)
+  }
+
+  const downloadIcs = () => {
+    const ics = buildIcs([{ ...set, id: set.id }], { baseUrl: window.location.origin, calendarName: set.name })
+    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(set.name || 'set').replace(/[^\w-]+/g, '_')}.ics`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   const handleEdit = item => {
@@ -173,8 +224,59 @@ export default function SetEditor() {
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold text-lg truncate">{set?.name || '…'}</h1>
             <p className="text-xs text-muted">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</p>
+            {(set?.venue_name || set?.location_address) && (
+              <p className="text-xs text-muted flex items-center gap-1 truncate"><MapPin size={11} className="shrink-0" />{[set.venue_name, set.location_address].filter(Boolean).join(', ')}{set.location_details ? ` · ${set.location_details}` : ''}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={openDetails} className="btn-ghost flex items-center gap-1.5 text-sm !px-2.5 !py-1.5"><Pencil size={13} /> Edit details</button>
+            <button onClick={downloadIcs} disabled={!set?.service_date} title={set?.service_date ? 'Download an event file for Apple, Google or Outlook calendar' : 'Add a date first'}
+              className="btn-ghost flex items-center gap-1.5 text-sm !px-2.5 !py-1.5 disabled:opacity-40"><CalendarPlus size={14} /> Add to calendar</button>
           </div>
         </div>
+
+        {details && (
+          <section className="rounded-xl border border-border bg-card p-3 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="col-span-2 sm:col-span-4">
+                <label className="label !mb-1">Set name</label>
+                <input className="input" value={details.name} onChange={e => setDetails(d => ({ ...d, name: e.target.value }))} />
+              </div>
+              <div className="col-span-1 sm:col-span-2">
+                <label className="label !mb-1">Date</label>
+                <input type="date" className="input" value={details.date} onChange={e => setDetails(d => ({ ...d, date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label !mb-1">Start time</label>
+                <input type="time" className="input" value={details.time} onChange={e => setDetails(d => ({ ...d, time: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label !mb-1">Length</label>
+                <select className="input" value={details.duration} onChange={e => setDetails(d => ({ ...d, duration: e.target.value }))}>
+                  {(DURATIONS.includes(Number(details.duration)) ? DURATIONS : [...DURATIONS, Number(details.duration)].sort((a, b) => a - b)).map(m => <option key={m} value={m}>{durationLabel(m)}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="label !mb-1">Venue name</label>
+                <input className="input" placeholder="First Baptist Church" value={details.venue} onChange={e => setDetails(d => ({ ...d, venue: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <label className="label !mb-1">Address</label>
+                <input className="input" placeholder="123 Main St, Dallas, TX 75201" value={details.address} onChange={e => setDetails(d => ({ ...d, address: e.target.value }))} />
+              </div>
+              <div className="col-span-2 sm:col-span-4">
+                <label className="label !mb-1">Room / details (optional)</label>
+                <input className="input" placeholder="Main Sanctuary" value={details.room} onChange={e => setDetails(d => ({ ...d, room: e.target.value }))} />
+              </div>
+            </div>
+            {detailsError && <p className="text-red-400 text-xs">{detailsError}</p>}
+            <div className="flex items-center gap-2">
+              <button onClick={saveDetails} disabled={detailsSaving} className="btn-primary !py-1.5 !px-4 text-sm">{detailsSaving ? 'Saving…' : 'Save details'}</button>
+              <button onClick={() => setDetails(null)} className="btn-ghost text-sm">Cancel</button>
+              <span className="ml-auto text-[11px] text-muted hidden sm:block">Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+            </div>
+          </section>
+        )}
 
         {/* Program card */}
         <section className="rounded-xl border border-border bg-card overflow-hidden">

@@ -231,3 +231,33 @@ create trigger media_items_updated_at before update on public.media_items
 -- create policy "Users manage assignments in own sets" on public.set_assignments for all
 --   using (exists (select 1 from public.sets where sets.id = set_assignments.set_id and sets.user_id = auth.uid()))
 --   with check (exists (select 1 from public.sets where sets.id = set_assignments.set_id and sets.user_id = auth.uid()));
+
+-- ────────────────────────────────────────────────────────────
+-- MIGRATION: set details (location, duration) + calendar subscription feed
+-- ────────────────────────────────────────────────────────────
+-- alter table public.sets
+--   add column if not exists duration_min      int default 90,
+--   add column if not exists venue_name        text,
+--   add column if not exists location_address  text,
+--   add column if not exists location_details  text,
+--   add column if not exists time_zone         text;
+--
+-- create table if not exists public.calendar_tokens (
+--   user_id    uuid primary key references auth.users(id) on delete cascade,
+--   token      text not null unique default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
+--   created_at timestamptz default now()
+-- );
+-- alter table public.calendar_tokens enable row level security;
+-- create policy "Users manage own calendar token" on public.calendar_tokens for all
+--   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+--
+-- create or replace function public.calendar_feed(p_token text)
+-- returns table (id uuid, name text, service_date date, service_time time, duration_min int,
+--                venue_name text, location_address text, location_details text, time_zone text, updated_at timestamptz)
+-- language sql security definer set search_path = public as $$
+--   select s.id, s.name, s.service_date, s.service_time, s.duration_min,
+--          s.venue_name, s.location_address, s.location_details, s.time_zone, s.updated_at
+--   from public.sets s join public.calendar_tokens t on t.user_id = s.user_id
+--   where t.token = p_token and s.service_date is not null;
+-- $$;
+-- grant execute on function public.calendar_feed(text) to anon, authenticated;

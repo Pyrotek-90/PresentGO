@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2 } from 'lucide-react'
 import { transposeChart, isChordLine } from '../../lib/chords'
 import { reconcileChart, lyricSections } from '../../lib/chart'
+import { getPref } from '../../lib/prefs'
 
 const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
@@ -42,7 +43,7 @@ export default function SongViewer({ song, onClose }) {
   const keys = [original, ...(meta.transposed_keys || [])].filter(Boolean)
   const hasChart = !!meta.chord_chart?.trim()
 
-  const [mode, setMode] = useState('lyrics')
+  const [mode, setMode] = useState(() => (getPref('viewerMode', 'lyrics') === 'chords' ? 'chords' : 'lyrics'))
   const [activeKey, setActiveKey] = useState(keys[0] || '')
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
