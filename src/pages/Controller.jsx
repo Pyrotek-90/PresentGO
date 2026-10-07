@@ -159,7 +159,7 @@ function SlideThumb({ slide, live, onClick, className = '', large = false, group
       {slide?.image ? (
         <img src={slide.image} alt="" className="w-full h-full object-contain" draggable={false} />
       ) : slide?.type === 'welcome' ? (
-        <TitleSlide title={slide.title} subtitle={slide.subtitle} unit="cqw" />
+        <TitleSlide title={slide.title} subtitle={slide.subtitle} style={slide.style} unit="cqw" />
       ) : slide ? (
         <div className="text-center w-full">
           {slide.label && !large && (

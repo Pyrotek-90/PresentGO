@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2 } from 'lucide-react'
 import { filesToSlideImages } from '../../lib/importSlides'
 import TitleSlide from '../TitleSlide'
+import TitleSlideToolbar from '../TitleSlideToolbar'
 import SongEditor from '../songs/SongEditor'
 
 const ITEM_TYPES = [
@@ -35,6 +36,7 @@ export default function AddItemModal({ onClose, onAdd, item }) {
   // Welcome slide state
   const [welcomeTitle, setWelcomeTitle] = useState(item?.type === 'welcome' ? item.content?.title || '' : 'Welcome')
   const [welcomeSubtitle, setWelcomeSubtitle] = useState(item?.type === 'welcome' ? item.content?.subtitle || '' : '')
+  const [welcomeStyle, setWelcomeStyle] = useState(item?.type === 'welcome' ? item.content?.style || null : null)
 
   // Presentation import state (PDF / images → slide images)
   const editingPresentation = item?.type === 'media' && item.content?.media_category === 'presentation'
@@ -87,7 +89,7 @@ export default function AddItemModal({ onClose, onAdd, item }) {
   const handleAddWelcome = () => {
     onAdd({
       type: 'welcome',
-      content: { title: welcomeTitle, subtitle: welcomeSubtitle },
+      content: { title: welcomeTitle, subtitle: welcomeSubtitle, ...(welcomeStyle ? { style: welcomeStyle } : {}) },
     })
     onClose()
   }
@@ -255,10 +257,13 @@ export default function AddItemModal({ onClose, onAdd, item }) {
                 <input className="input" placeholder="Join us as we worship together" value={welcomeSubtitle} onChange={e => setWelcomeSubtitle(e.target.value)} />
               </div>
               {/* Preview */}
-              <div className="rounded-xl bg-black aspect-video flex items-center justify-center p-3 border border-border" style={{ containerType: 'inline-size' }}>
-                <TitleSlide title={welcomeTitle} subtitle={welcomeSubtitle} unit="cqw" />
+              <div className="space-y-2">
+                <TitleSlideToolbar style={welcomeStyle} onChange={setWelcomeStyle} />
+                <div className="rounded-xl bg-black aspect-video flex items-center justify-center p-3 border border-border" style={{ containerType: 'inline-size' }}>
+                  <TitleSlide title={welcomeTitle} subtitle={welcomeSubtitle} style={welcomeStyle} unit="cqw" />
+                </div>
+                <p className="text-[11px] text-muted">Preview of the full-screen slide. Text size is automatic (about 60% of the screen); use − / + to adjust.</p>
               </div>
-              <p className="text-[11px] text-muted -mt-2">Preview of how it will look full screen. Text scales to fill about 60% of the width.</p>
               <button onClick={handleAddWelcome} className="btn-primary w-full">{editing ? 'Save Changes' : 'Add Slide'}</button>
             </div>
           )}

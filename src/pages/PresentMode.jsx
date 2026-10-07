@@ -185,7 +185,7 @@ export default function PresentMode() {
         <img src={slide.image} alt="" className="absolute inset-0 w-full h-full object-contain bg-black" draggable={false} />
       )}
       {loaded && !blank && slide?.type === 'welcome' && (
-        <TitleSlide title={slide.title} subtitle={slide.subtitle} />
+        <TitleSlide title={slide.title} subtitle={slide.subtitle} style={slide.style} />
       )}
       {loaded && !blank && slide && !slide.image && slide.type !== 'welcome' && (
         <div className="w-full max-w-5xl px-16 text-center">
