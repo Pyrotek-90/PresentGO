@@ -1,5 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { isOfflineEnabled, clearOfflineData } from '../lib/offline'
+import { downloadForOffline } from '../lib/offlineSync'
+
+const USER_KEY = 'presentgo.cachedUser'
+const readCachedUser = () => { try { return JSON.parse(localStorage.getItem(USER_KEY)) } catch { return null } }
+const cacheUser = u => { try { u ? localStorage.setItem(USER_KEY, JSON.stringify({ id: u.id, email: u.email, user_metadata: u.user_metadata })) : localStorage.removeItem(USER_KEY) } catch { /* ignore */ } }
 
 const AuthContext = createContext(null)
 
@@ -17,13 +23,21 @@ export function AuthProvider({ children }) {
     }
 
     const timeout = setTimeout(() => setLoading(false), 5000)
+    const offlineUser = () => (isOfflineEnabled() && !navigator.onLine ? readCachedUser() : null)
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(timeout)
-      setUser(session?.user ?? null)
+      const u = session?.user ?? offlineUser()
+      if (session?.user) {
+        cacheUser(session.user)
+        if (isOfflineEnabled() && navigator.onLine) downloadForOffline(session.user.id).catch(() => {})
+      }
+      setUser(u)
       setLoading(false)
-    }).catch(() => { clearTimeout(timeout); setLoading(false) })
+    }).catch(() => { clearTimeout(timeout); setUser(offlineUser()); setLoading(false) })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' && isOfflineEnabled() && !navigator.onLine) return
+      if (session?.user) cacheUser(session.user)
       setUser(session?.user ?? null)
     })
 
@@ -54,7 +68,11 @@ export function AuthProvider({ children }) {
   const signInWithApple = () =>
     supabase.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: window.location.origin } })
 
-  const signOut = () => supabase.auth.signOut()
+  const signOut = async () => {
+    cacheUser(null)
+    await clearOfflineData()
+    return supabase.auth.signOut()
+  }
 
   return (
     <AuthContext.Provider value={{ user, loading, signUp, signIn, signInWithGoogle, signInWithApple, signOut }}>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { openControlChannel } from '../lib/controlChannel'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import {
   ChevronLeft, ChevronRight, XSquare, X, Tv, ArrowLeft,
@@ -403,18 +404,15 @@ export default function Controller() {
 
   // Supabase Realtime channel — persists for the session
   useEffect(() => {
-    const ch = supabase.channel(`presentgo-${setId}`)
+    const ch = openControlChannel(setId, {
+      onStatus: payload => { if (payload.type === 'STATUS') { setCurrent(payload.current); setBlank(payload.blank) } },
+    })
     channelRef.current = ch
-    ch
-      .on('broadcast', { event: 'status' }, ({ payload }) => {
-        if (payload.type === 'STATUS') { setCurrent(payload.current); setBlank(payload.blank) }
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(ch); channelRef.current = null }
+    return () => { ch.close(); channelRef.current = null }
   }, [setId])
 
   const send = useCallback((msg) => {
-    channelRef.current?.send({ type: 'broadcast', event: 'control', payload: msg })
+    channelRef.current?.sendControl(msg)
   }, [])
 
   const go = useCallback((idx) => {

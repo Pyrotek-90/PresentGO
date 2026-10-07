@@ -4,8 +4,24 @@
     {
       "name": "PresentGO Dev Server",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5173,
+      "autoPort": false
+    },
+    {
+      "name": "PresentGO Preview (production build)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
+      "port": 4173,
       "autoPort": false
     }
   ]

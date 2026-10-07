@@ -1,5 +1,6 @@
 import Layout from '../components/Layout'
 import CalendarSync from '../components/settings/CalendarSync'
+import OfflineMode from '../components/settings/OfflineMode'
 import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
@@ -213,6 +214,8 @@ export default function Settings() {
               ))}
             </div>
           </div>
+
+          <OfflineMode />
 
           <CalendarSync />
         </section>

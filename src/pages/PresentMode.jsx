@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { openControlChannel } from '../lib/controlChannel'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import { ChevronLeft, ChevronRight, Square } from 'lucide-react'
 
@@ -49,27 +50,22 @@ export default function PresentMode() {
   // ── Supabase Realtime — receive control commands from Controller ────────────
   const channelRef = useRef(null)
   useEffect(() => {
-    const ch = supabase.channel(`presentgo-${setId}`)
-    channelRef.current = ch
-    ch
-      .on('broadcast', { event: 'control' }, ({ payload }) => {
+    const ch = openControlChannel(setId, {
+      onControl: payload => {
         if (payload.type === 'GOTO')  setCurrent(payload.index)
         if (payload.type === 'BLANK') setBlank(b => !b)
         if (payload.type === 'NEXT')  setCurrent(c => Math.min(c + 1, slides.length - 1))
         if (payload.type === 'PREV')  setCurrent(c => Math.max(c - 1, 0))
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(ch); channelRef.current = null }
+      },
+    })
+    channelRef.current = ch
+    return () => { ch.close(); channelRef.current = null }
   }, [setId, slides.length])
 
   // ── Send status back to controller ─────────────────────────────────────────
   useEffect(() => {
     if (!loaded || !channelRef.current) return
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'status',
-      payload: { type: 'STATUS', current, blank, total: slides.length },
-    })
+    channelRef.current.sendStatus({ type: 'STATUS', current, blank, total: slides.length })
   }, [current, blank, loaded, slides.length])
 
   // ── Keyboard navigation ─────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { Home, CalendarDays, Users, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
+import { WifiOff } from 'lucide-react'
 
 const navItems = [
   { to: '/',        label: 'Home',            icon: Home       },
@@ -16,6 +17,12 @@ export default function Layout({ children }) {
   const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
+  const [online, setOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const up = () => setOnline(true), down = () => setOnline(false)
+    window.addEventListener('online', up); window.addEventListener('offline', down)
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down) }
+  }, [])
   const [menuOpen, setMenuOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const profileRef = useRef(null)
@@ -191,6 +198,12 @@ export default function Layout({ children }) {
             </button>
           </div>
         </nav>
+      )}
+
+      {!online && (
+        <div className="shrink-0 flex items-center justify-center gap-2 px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/30 text-xs text-amber-300">
+          <WifiOff size={13} /> You're offline. Songs, sets and slides are available; changes can't be saved until you reconnect.
+        </div>
       )}
 
       {/* Page content */}
