@@ -158,6 +158,10 @@ export default function PresentMode() {
 
   // ── Font size ───────────────────────────────────────────────────────────────
   const slide = slides[current]
+
+  useEffect(() => {
+    for (const i of [current + 1, current + 2]) { const u = slides[i]?.image; if (u) { const img = new Image(); img.src = u } }
+  }, [current, slides])
   const dynamicFontSize = slide?.lines?.length
     ? (() => {
         const maxLen = Math.max(...slide.lines.map(l => l.length), 1)
@@ -180,7 +184,10 @@ export default function PresentMode() {
       )}
 
       {/* Slide content */}
-      {loaded && !blank && slide && (
+      {loaded && !blank && slide?.image && (
+        <img src={slide.image} alt="" className="absolute inset-0 w-full h-full object-contain bg-black" draggable={false} />
+      )}
+      {loaded && !blank && slide && !slide.image && (
         <div className="w-full max-w-5xl px-16 text-center">
           <div className="space-y-4">
             {slide.lines.map((line, i) => (

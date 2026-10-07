@@ -153,7 +153,9 @@ function SlideThumb({ slide, live, onClick, className = '', large = false, group
         live ? 'border-red-500/70 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'border-border hover:border-[#555]'
       } ${className}`}
     >
-      {slide ? (
+      {slide?.image ? (
+        <img src={slide.image} alt="" className="w-full h-full object-contain" draggable={false} />
+      ) : slide ? (
         <div className="text-center w-full">
           {slide.label && !large && (
             <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-1">

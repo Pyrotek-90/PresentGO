@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder } from 'lucide-react'
+import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2 } from 'lucide-react'
+import { filesToSlideImages } from '../../lib/importSlides'
 import SongEditor from '../songs/SongEditor'
 
 const ITEM_TYPES = [
@@ -20,7 +21,7 @@ const MEDIA_COLORS = {
 export default function AddItemModal({ onClose, onAdd, item }) {
   const editing = !!item
   const { user } = useAuth()
-  const [type, setType] = useState(item ? (item.type === 'media' ? 'content' : item.type) : 'welcome')
+  const [type, setType] = useState(item ? (item.type === 'media' ? (item.content?.media_category === 'presentation' ? 'announcement' : 'content') : item.type) : 'welcome')
   const [songs, setSongs] = useState([])
   const [query, setQuery] = useState('')
   const [showNewSong, setShowNewSong] = useState(false)
@@ -33,6 +34,15 @@ export default function AddItemModal({ onClose, onAdd, item }) {
   // Welcome slide state
   const [welcomeTitle, setWelcomeTitle] = useState(item?.type === 'welcome' ? item.content?.title || '' : 'Welcome')
   const [welcomeSubtitle, setWelcomeSubtitle] = useState(item?.type === 'welcome' ? item.content?.subtitle || '' : '')
+
+  // Presentation import state (PDF / images → slide images)
+  const editingPresentation = item?.type === 'media' && item.content?.media_category === 'presentation'
+  const [presMode, setPresMode] = useState(item?.type === 'announcement' ? 'text' : 'import')
+  const [presName, setPresName] = useState(editingPresentation ? item.content.media_name || '' : '')
+  const [pages, setPages] = useState(editingPresentation ? item.content.images.map(im => ({ ...im, existing: true })) : [])
+  const [removed, setRemoved] = useState([])
+  const [busy, setBusy] = useState(null)   // progress message while converting / uploading
+  const [importErr, setImportErr] = useState(null)
 
   // Announcement state
   const [announcementTitle, setAnnouncementTitle] = useState(item?.type === 'announcement' ? item.content?.title || '' : 'Announcements')
@@ -106,6 +116,52 @@ export default function AddItemModal({ onClose, onAdd, item }) {
       )
       return next
     })
+  }
+
+  const handleFiles = async fileList => {
+    const files = Array.from(fileList || [])
+    if (!files.length) return
+    setImportErr(null); setBusy('Reading files…')
+    try {
+      const converted = await filesToSlideImages(files, msg => setBusy(`Converting ${msg}…`))
+      setPages(prev => [...prev, ...converted])
+      if (!presName) setPresName(files[0].name.replace(/\.[^.]+$/, ''))
+    } catch (e) {
+      setImportErr(e.message || 'Could not read that file.')
+    } finally { setBusy(null) }
+  }
+
+  const removePage = idx => {
+    const p = pages[idx]
+    if (p.existing && p.storage_path) setRemoved(r => [...r, p.storage_path])
+    if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url)
+    setPages(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleAddPresentation = async () => {
+    if (!pages.length) return
+    setImportErr(null)
+    try {
+      const images = []
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i]
+        if (p.existing) { images.push({ url: p.url, storage_path: p.storage_path }); continue }
+        setBusy(`Uploading slide ${i + 1} of ${pages.length}…`)
+        const path = `${user.id}/presentations/${crypto.randomUUID()}.jpg`
+        const { error } = await supabase.storage.from('media').upload(path, p.blob, { contentType: 'image/jpeg', upsert: false })
+        if (error) throw new Error(error.message)
+        const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
+        images.push({ url: publicUrl, storage_path: path })
+      }
+      if (removed.length) await supabase.storage.from('media').remove(removed)
+      onAdd({
+        type: 'media',
+        content: { media_name: presName.trim() || 'Presentation', media_category: 'presentation', images },
+      })
+      onClose()
+    } catch (e) {
+      setImportErr(e.message || 'Upload failed — try again.')
+    } finally { setBusy(null) }
   }
 
   if (showNewSong) {
@@ -206,8 +262,57 @@ export default function AddItemModal({ onClose, onAdd, item }) {
             </div>
           )}
 
+          {/* Presentation: import or text */}
+          {type === 'announcement' && !editingPresentation && item?.type !== 'announcement' && (
+            <div className="flex rounded-lg overflow-hidden border border-border">
+              {[['import', 'Import PDF / images'], ['text', 'Text slides']].map(([id, label]) => (
+                <button key={id} onClick={() => setPresMode(id)}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${presMode === id ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>{label}</button>
+              ))}
+            </div>
+          )}
+
+          {type === 'announcement' && presMode === 'import' && (
+            <div className="space-y-3">
+              <label className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border hover:border-accent/50 p-6 text-center cursor-pointer transition-colors ${busy ? 'opacity-60 pointer-events-none' : ''}`}>
+                {busy ? <Loader2 size={24} className="animate-spin text-accent-light" /> : <Upload size={24} className="text-accent-light" />}
+                <span className="text-sm font-medium">{busy || (pages.length ? 'Add more PDF or image files' : 'Choose a PDF or images')}</span>
+                <span className="text-xs text-muted">Each PDF page or image becomes one slide.</span>
+                <input type="file" multiple accept="application/pdf,image/*,.pdf" className="hidden"
+                  onChange={e => { handleFiles(e.target.files); e.target.value = '' }} />
+              </label>
+              <p className="text-[11px] text-muted">
+                Using PowerPoint or Keynote? Export first: PowerPoint → File → Save As → PDF; Keynote → File → Export To → PDF.
+              </p>
+              {importErr && <p className="text-xs text-red-400">{importErr}</p>}
+
+              {pages.length > 0 && (
+                <>
+                  <div>
+                    <label className="label">Name</label>
+                    <input className="input" placeholder="Sermon slides" value={presName} onChange={e => setPresName(e.target.value)} />
+                  </div>
+                  <p className="text-xs text-muted">{pages.length} slide{pages.length !== 1 ? 's' : ''}</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {pages.map((p, i) => (
+                      <div key={p.url + i} className="relative group aspect-video rounded-md overflow-hidden border border-border bg-black">
+                        <img src={p.url} alt="" className="w-full h-full object-contain" />
+                        <span className="absolute bottom-0.5 left-1 text-[9px] text-white/70">{i + 1}</span>
+                        <button onClick={() => removePage(i)} aria-label={`Remove slide ${i + 1}`}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 text-white/80 hover:bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"><X size={11} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={handleAddPresentation} disabled={!!busy} className="btn-primary w-full disabled:opacity-50">
+                    {busy && busy.startsWith('Uploading') ? busy : editing ? 'Save Changes' : `Add ${pages.length} Slide${pages.length !== 1 ? 's' : ''} to Set`}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Announcement */}
-          {type === 'announcement' && (
+          {type === 'announcement' && presMode === 'text' && (
             <div className="space-y-4">
               <div>
                 <label className="label">Title</label>

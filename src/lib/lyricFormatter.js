@@ -130,6 +130,17 @@ export function buildPresentationSlides(setItems, songs) {
         label: null,
         sectionLabel: null,
       })
+    } else if (item.type === 'media' && item.content?.images?.length) {
+      const imgs = item.content.images
+      imgs.forEach((img, i) => all.push({
+        type: 'media',
+        itemId: item.id,
+        itemTitle: item.content?.media_name || 'Presentation',
+        image: img.url,
+        lines: [],
+        label: `${item.content?.media_name || 'Presentation'} · ${i + 1}/${imgs.length}`,
+        sectionLabel: i === 0 ? (item.content?.media_name || 'Presentation') : null,
+      }))
     } else if (item.type === 'media') {
       all.push({
         type: 'media',

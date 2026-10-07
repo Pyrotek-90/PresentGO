@@ -145,6 +145,7 @@ export default function SetEditor() {
     if (item.type === 'welcome')      return [{ lines: [item.content.title, item.content.subtitle].filter(Boolean), label: 'Welcome' }]
     if (item.type === 'announcement') return (item.content.slides || [])
     if (item.type === 'blank')        return [{ lines: [], label: 'Blank' }]
+    if (item.type === 'media' && item.content?.images?.length) return item.content.images.map(img => ({ image: img.url, lines: [] }))
     if (item.type === 'media')        return [{ lines: [item.content?.media_name || 'Media file'], label: item.content?.media_category || 'Content' }]
     return []
   }
@@ -218,7 +219,7 @@ export default function SetEditor() {
                       <button onClick={() => editable && handleEdit(item)} className="flex-1 min-w-0 text-left" disabled={!editable}>
                         <p className="text-sm font-medium truncate">{itemTitle(item)}</p>
                         <p className="text-xs text-muted truncate">
-                          {ITEM_LABELS[item.type]}
+                          {item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}
                           {item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}
                           {slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}
                         </p>
