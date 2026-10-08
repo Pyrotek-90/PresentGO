@@ -6,12 +6,12 @@ import { getPref } from '../../lib/prefs'
 
 const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
-const FIT = { lyrics: [64, 16], chords: [48, 14] }       // auto-fit [largest, smallest] font size
+const FIT = { lyrics: [32, 15], chords: [32, 15] }       // auto-fit [largest, smallest] font size
 const COMFORT = { lyrics: 22, chords: 18 }              // never auto-shrink below this; paginate instead
-const FIT_PHONE = { lyrics: [34, 16], chords: [30, 14] } // phones: smaller text so more of the song is visible
-const COMFORT_PHONE = { lyrics: 16, chords: 14 }
-const FLOOR_TWO_COL = { lyrics: 18, chords: 15 }        // two columns may go a little smaller to keep a song on one page
-const MIN_READABLE = { lyrics: 15, chords: 13 }         // never shrink everything below this just for one long line
+const FIT_PHONE = { lyrics: [32, 15], chords: [30, 15] } // phones: smaller text so more of the song is visible
+const COMFORT_PHONE = { lyrics: 16, chords: 15 }
+const FLOOR_TWO_COL = { lyrics: 15, chords: 15 }        // two columns may go a little smaller to keep a song on one page
+const MIN_READABLE = { lyrics: 15, chords: 15 }         // never shrink everything below this just for one long line
 const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
