@@ -1,9 +1,8 @@
-// Title slide text, sized so the block fills roughly 60% of the screen. `unit` is 'vw' on the TV
-// and 'cqw' inside previews (they size relative to their own box).
-// Sizes are in "% of slide width". A 16:9 slide is 56.25 tall, so the block gets about 60% of that,
-// word-wrapped within 70% of the width.
-const MAX_WIDTH = 70
-const HEIGHT_BUDGET = 34
+import { useEffect, useRef } from 'react'
+
+// Title slide text. `unit` is 'vw' on the TV and 'cqw' inside previews (they size relative to their
+// own box). Default sizing matches the original slide look: both lines share one size that shrinks
+// with the longest line, between 1.25% and 3.75% of the slide width (24–72px on a 1080p screen).
 
 export const FONTS = {
   sans:  { label: 'Sans',  family: "'Inter', system-ui, sans-serif" },
@@ -12,38 +11,19 @@ export const FONTS = {
 }
 export const COLORS = ['#ffffff', '#d1d5db', '#fde047', '#22d3ee', '#fb923c', '#f87171']
 
-export const DEFAULT_STYLE = {
-  align: 'center',
-  title:    { bold: true,  italic: false, color: '#ffffff', font: 'sans', scale: 1 },
-  subtitle: { bold: false, italic: false, color: '#d1d5db', font: 'sans', scale: 1 },
-}
+const BASE = { bold: false, italic: false, color: '#ffffff', font: 'sans', scale: 1 }
+export const DEFAULT_STYLE = { align: 'center', title: { ...BASE }, subtitle: { ...BASE } }
 
 export const mergeStyle = s => ({
   align: s?.align || DEFAULT_STYLE.align,
-  title: { ...DEFAULT_STYLE.title, ...(s?.title || {}) },
-  subtitle: { ...DEFAULT_STYLE.subtitle, ...(s?.subtitle || {}) },
+  title: { ...BASE, ...(s?.title || {}) },
+  subtitle: { ...BASE, ...(s?.subtitle || {}) },
 })
 
-const countLines = (text, maxChars) => {
-  let lines = 1, len = 0
-  for (const word of (text || '').split(/\s+/).filter(Boolean)) {
-    if (len && len + 1 + word.length > maxChars) { lines++; len = word.length } else len += (len ? 1 : 0) + word.length
-  }
-  return lines
-}
-
 export function titleSlideSizes(title, subtitle) {
-  for (let t = 12; t >= 3.5; t -= 0.25) {
-    const titleLines = countLines(title, Math.max(1, Math.floor(MAX_WIDTH / (t * 0.54))))
-    let s = 0, subLines = 0
-    if (subtitle) {
-      s = Math.max(2.4, Math.min(t * 0.45, 5))
-      subLines = countLines(subtitle, Math.max(1, Math.floor(MAX_WIDTH / (s * 0.5))))
-    }
-    const height = titleLines * t * 1.12 + (subtitle ? s * 0.5 + subLines * s * 1.2 : 0)
-    if (height <= HEIGHT_BUDGET) return { titleSize: t, subSize: s }
-  }
-  return { titleSize: 3.5, subSize: subtitle ? 2.4 : 0 }
+  const longest = Math.max(...[title || 'Welcome', subtitle].filter(Boolean).map(l => l.length), 1)
+  const size = Math.min(3.75, Math.max(1.25, 90 / longest))
+  return { titleSize: size, subSize: subtitle ? size : 0 }
 }
 
 const textStyle = (st, size, unit) => ({
@@ -56,13 +36,41 @@ const textStyle = (st, size, unit) => ({
   textWrap: 'balance',
 })
 
-export default function TitleSlide({ title, subtitle, unit = 'vw', style }) {
+// `target` / `onTarget` make the lines selectable in the editor preview: click or highlight a line
+// to choose which text the formatting toolbar changes.
+export default function TitleSlide({ title, subtitle, unit = 'vw', style, target, onTarget }) {
   const st = mergeStyle(style)
   const { titleSize, subSize } = titleSlideSizes(title || 'Welcome', subtitle)
+  const root = useRef(null)
+
+  useEffect(() => {
+    if (!onTarget) return
+    const onSel = () => {
+      const sel = document.getSelection()
+      if (!sel || sel.isCollapsed || !root.current) return
+      const node = sel.anchorNode?.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode
+      const line = node?.closest?.('[data-line]')
+      if (line && root.current.contains(line)) onTarget(line.dataset.line)
+    }
+    document.addEventListener('selectionchange', onSel)
+    return () => document.removeEventListener('selectionchange', onSel)
+  }, [onTarget])
+
+  const line = (which, text, size, extra = {}) => (
+    <p data-line={which} onClick={onTarget ? () => onTarget(which) : undefined}
+      className="leading-snug rounded"
+      style={{
+        ...textStyle(st[which], size, unit), ...extra,
+        ...(onTarget ? { cursor: 'text', outline: target === which ? '2px dashed #22d3ee' : '2px dashed transparent', outlineOffset: '0.15em' } : {}),
+      }}>
+      {text}
+    </p>
+  )
+
   return (
-    <div className="w-full max-w-[76%] mx-auto" style={{ textAlign: st.align }}>
-      <p className="leading-[1.1] tracking-tight" style={textStyle(st.title, titleSize, unit)}>{title || 'Welcome'}</p>
-      {subtitle && <p className="leading-tight" style={{ ...textStyle(st.subtitle, subSize, unit), marginTop: '0.5em' }}>{subtitle}</p>}
+    <div ref={root} className="w-full max-w-[76%] mx-auto" style={{ textAlign: st.align }}>
+      {line('title', title || 'Welcome', titleSize)}
+      {subtitle && line('subtitle', subtitle, subSize, { marginTop: '0.6em' })}
     </div>
   )
 }

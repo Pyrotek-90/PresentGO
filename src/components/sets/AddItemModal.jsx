@@ -36,6 +36,7 @@ export default function AddItemModal({ onClose, onAdd, item }) {
   // Welcome slide state
   const [welcomeTitle, setWelcomeTitle] = useState(item?.type === 'welcome' ? item.content?.title || '' : 'Welcome')
   const [welcomeSubtitle, setWelcomeSubtitle] = useState(item?.type === 'welcome' ? item.content?.subtitle || '' : '')
+  const [fmtTarget, setFmtTarget] = useState(null)
   const [welcomeStyle, setWelcomeStyle] = useState(item?.type === 'welcome' ? item.content?.style || null : null)
 
   // Presentation import state (PDF / images → slide images)
@@ -258,11 +259,11 @@ export default function AddItemModal({ onClose, onAdd, item }) {
               </div>
               {/* Preview */}
               <div className="space-y-2">
-                <TitleSlideToolbar style={welcomeStyle} onChange={setWelcomeStyle} />
+                <TitleSlideToolbar style={welcomeStyle} onChange={setWelcomeStyle} target={fmtTarget} />
                 <div className="rounded-xl bg-black aspect-video flex items-center justify-center p-3 border border-border" style={{ containerType: 'inline-size' }}>
-                  <TitleSlide title={welcomeTitle} subtitle={welcomeSubtitle} style={welcomeStyle} unit="cqw" />
+                  <TitleSlide title={welcomeTitle} subtitle={welcomeSubtitle} style={welcomeStyle} unit="cqw" target={fmtTarget} onTarget={setFmtTarget} />
                 </div>
-                <p className="text-[11px] text-muted">Preview of the full-screen slide. Text size is automatic (about 60% of the screen); use − / + to adjust.</p>
+                <p className="text-[11px] text-muted">Preview of the full-screen slide.</p>
               </div>
               <button onClick={handleAddWelcome} className="btn-primary w-full">{editing ? 'Save Changes' : 'Add Slide'}</button>
             </div>
