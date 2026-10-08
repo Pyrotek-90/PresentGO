@@ -8,6 +8,8 @@ const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
 const FIT = { lyrics: [64, 16], chords: [48, 14] }       // auto-fit [largest, smallest] font size
 const COMFORT = { lyrics: 22, chords: 18 }              // never auto-shrink below this; paginate instead
+const FIT_PHONE = { lyrics: [34, 16], chords: [30, 14] } // phones: smaller text so more of the song is visible
+const COMFORT_PHONE = { lyrics: 16, chords: 14 }
 const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
@@ -18,7 +20,7 @@ const headerStyle = { fontFamily: "'Archivo', 'Inter', sans-serif", fontStretch:
 
 function SectionBanner({ text, size = '1.05em' }) {
   return (
-    <div style={{ breakAfter: 'avoid', marginTop: '0.7em', marginBottom: '0.25em' }}>
+    <div style={{ breakAfter: 'avoid', marginTop: 0, marginBottom: '0.3em' }}>
       <span style={{ ...headerStyle, fontSize: size }}
         className="inline-block px-3 py-0.5 rounded-md bg-accent text-white border-l-[0.4em] border-white/60">{text}</span>
     </div>
@@ -174,8 +176,8 @@ export default function SongViewer({ song, onClose }) {
     inner.style.columnWidth = 'auto'
     inner.style.columnGap = `${gap}px`
 
-    const [max] = FIT[mode]
-    const floor = COMFORT[mode]
+    const [max] = (widthOk ? FIT : FIT_PHONE)[mode]
+    const floor = (widthOk ? COMFORT : COMFORT_PHONE)[mode]
     const lines = mode === 'chords' ? inner.querySelectorAll('[data-fit]') : []
     const apply = (nc, f) => { inner.style.columnCount = String(nc); inner.style.fontSize = `${f}px` }
     const clipped = () => lines.length > 0 && Array.from(lines).some(el => el.scrollWidth > el.clientWidth + 1)
@@ -272,7 +274,7 @@ export default function SongViewer({ song, onClose }) {
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="View">
             {[['lyrics', Mic, 'Lyrics'], ['chords', Music, 'Chord Chart']].map(([id, Icon, label]) => (
               <button key={id} onClick={() => setMode(id)} title={label} aria-label={label} aria-pressed={mode === id}
-                className={`w-10 h-8 flex items-center justify-center transition-colors ${mode === id ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
+                className={`w-10 h-8 flex items-center justify-center transition-colors ${mode === id ? 'bg-accent/25 text-accent-light' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
                 <Icon size={16} />
               </button>
             ))}
@@ -280,10 +282,10 @@ export default function SongViewer({ song, onClose }) {
 
           <div className="hidden sm:flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Columns">
             <button onClick={() => pickCols('auto')} aria-pressed={cols === 'auto'} title={`Auto: picks the best layout for each song (now ${effCols} column${effCols > 1 ? 's' : ''})`}
-              className={`px-2 h-8 text-xs font-semibold transition-colors ${cols === 'auto' ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>Auto</button>
+              className={`px-2 h-8 text-xs font-semibold transition-colors ${cols === 'auto' ? 'bg-accent/25 text-accent-light' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>Auto</button>
             {[[1, Square, 'Single column'], [2, Columns2, widthOk ? 'Two columns' : 'Two columns (needs a wider screen — try landscape)']].map(([n, Icon, label]) => (
               <button key={n} onClick={() => pickCols(n)} title={label} aria-label={label} aria-pressed={cols === n} disabled={n === 2 && !widthOk}
-                className={`w-9 h-8 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${cols === n ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
+                className={`w-9 h-8 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${cols === n ? 'bg-accent/25 text-accent-light' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
                 <Icon size={15} />
               </button>
             ))}
@@ -335,11 +337,11 @@ export default function SongViewer({ song, onClose }) {
             className="font-semibold"
             style={{ transform: `translateX(${-page * (box.w)}px)`, transition: 'transform 0.2s ease', columnFill: 'auto', lineHeight: 1.4 }}>
             {mode === 'chords' ? chartSections.map((sec, i) => (
-              <div key={i} style={{ breakInside: 'avoid', marginBottom: '0.5em' }}>
+              <div key={i} style={{ breakInside: 'avoid', marginBottom: '1em' }}>
                 {sec.map((b, j) => <ChartBlock key={j} block={b} />)}
               </div>
             )) : sections.map((sec, i) => (
-              <div key={i} style={{ breakInside: 'avoid', marginBottom: '0.6em' }}>
+              <div key={i} style={{ breakInside: 'avoid', marginBottom: '1em' }}>
                 {sec.label && <SectionBanner text={sec.label} size="0.7em" />}
                 {sec.lines.map((l, j) => <p key={j} style={{ paddingLeft: INDENT }}>{l || '\u00a0'}</p>)}
               </div>
