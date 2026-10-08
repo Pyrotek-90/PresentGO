@@ -30,7 +30,7 @@ const ITEM_COLORS = {
 
 const REVEAL = 80   // px the row slides to show the trash can
 
-function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabel, keyChosen, onOptions, open, onSwipe, onDelete }) {
+function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabel, onOptions, open, onSwipe, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const [dx, setDx] = useState(null)       // live finger offset while swiping, null when not swiping
   const touch = useRef(null)
@@ -83,10 +83,8 @@ function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabe
           <p className="text-xs text-muted truncate">{subtitle}</p>
         </button>
         {keyLabel && (
-          <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={keyChosen ? `Key for this set: ${keyLabel}` : `Song's key: ${keyLabel} (tap to choose a key for this set)`}
-            className={`shrink-0 min-w-[2rem] h-7 px-2 rounded-md border text-xs font-semibold ${
-              keyChosen ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
-            }`}>{keyLabel}</button>
+          <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={`Key: ${keyLabel} (tap to change for this set)`}
+            className="shrink-0 min-w-[2rem] h-7 px-2 rounded-md border border-border text-xs font-semibold text-muted hover:text-[#f5f5f5]">{keyLabel}</button>
         )}
         <button onClick={() => (open ? onSwipe(false) : onOptions(item))} aria-label="Item options" title="Options"
           className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] shrink-0"><Pencil size={14} /></button>
@@ -423,7 +421,6 @@ export default function SetEditor() {
                           title={itemTitle(item)}
                           subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
                           keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
-                          keyChosen={!!item.content?.key}
                           onOptions={it => (it.type === 'song' || it.type === 'blank' ? setOptionsItem(it) : handleEdit(it))}
                           open={swipedId === item.id} onSwipe={o => setSwipedId(o ? item.id : null)}
                           onDelete={async () => { setSwipedId(null); await handleDelete(item) }} />
