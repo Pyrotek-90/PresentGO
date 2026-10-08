@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatModified, formatSetTime } from '../lib/sets'
 import { buildIcs } from '../lib/ics'
+import { DndContext, PointerSensor, TouchSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, useSortable, sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import Layout from '../components/Layout'
 import AddItemModal from '../components/sets/AddItemModal'
 import SongEditor from '../components/songs/SongEditor'
@@ -11,7 +14,7 @@ import SetSongViewer from '../components/songs/SetSongViewer'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  Trash2, ChevronUp, ChevronDown, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
+  Trash2, GripVertical, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
@@ -22,6 +25,32 @@ const ITEM_COLORS = {
   announcement: 'text-orange-400 bg-orange-400/10',
   blank:        'text-gray-500 bg-gray-500/10',
   media:        'text-purple-400 bg-purple-400/10',
+}
+
+function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, editable, deleting, onEdit, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  return (
+    <li ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 20 : undefined, position: 'relative' }}
+      className={`flex items-center gap-2 px-1 py-1.5 rounded-lg group ${isDragging ? 'bg-accent/15 shadow-xl ring-1 ring-accent/50' : 'hover:bg-[#1a1a1a]'}`}>
+      <button type="button" {...attributes} {...listeners} aria-label={`Drag to reorder ${title}`} title="Drag to reorder"
+        className="w-8 h-9 flex items-center justify-center rounded-md text-muted hover:text-[#f5f5f5] cursor-grab active:cursor-grabbing touch-none shrink-0">
+        <GripVertical size={16} />
+      </button>
+      <span className="text-xs text-muted w-4 shrink-0 text-center">{idx + 1}</span>
+      <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}><ItemIcon size={13} /></div>
+      <button onClick={() => editable && onEdit(item)} className="flex-1 min-w-0 text-left" disabled={!editable}>
+        <p className="text-sm font-medium truncate">{title}</p>
+        <p className="text-xs text-muted truncate">{subtitle}</p>
+      </button>
+      <div className="flex items-center gap-0.5 shrink-0">
+        <button onClick={() => onEdit(item)} disabled={!editable} aria-label="Edit item" title={editable ? 'Edit' : 'Nothing to edit'}
+          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><Pencil size={14} /></button>
+        <button onClick={() => onDelete(item)} aria-label="Delete item" title={deleting === item.id ? 'Click again to confirm delete' : 'Delete'}
+          className={`p-1.5 rounded-lg transition-colors ${deleting === item.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={14} /></button>
+      </div>
+    </li>
+  )
 }
 
 export default function SetEditor() {
@@ -175,18 +204,24 @@ export default function SetEditor() {
     if (setId !== 'mock') await Promise.all(touched.map(i => supabase.from('set_items').update({ content: content(i) }).eq('id', i.id)))
   }
 
-  const moveItem = async (idx, dir) => {
-    const next = [...items]
-    const swap = idx + dir
-    if (swap < 0 || swap >= next.length) return
-    ;[next[idx], next[swap]] = [next[swap], next[idx]]
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleDragEnd = async ({ active, over }) => {
+    if (!over || active.id === over.id) return
+    const from = items.findIndex(i => i.id === active.id)
+    const to = items.findIndex(i => i.id === over.id)
+    if (from < 0 || to < 0) return
+    const before = items
+    const next = arrayMove(items, from, to)
     setItems(next)
-    if (setId !== 'mock') {
-      await Promise.all([
-        supabase.from('set_items').update({ position: swap }).eq('id', next[swap].id),
-        supabase.from('set_items').update({ position: idx  }).eq('id', next[idx].id),
-      ])
-    }
+    if (setId === 'mock') return
+    const changed = next.map((it, position) => ({ it, position })).filter(({ it, position }) => before.indexOf(it) !== position)
+    const results = await Promise.all(changed.map(({ it, position }) => supabase.from('set_items').update({ position }).eq('id', it.id)))
+    if (results.some(r => r.error)) setItems(before)   // couldn't save: put the order back
   }
 
   const getSlidesForItem = (item) => {
@@ -317,38 +352,23 @@ export default function SetEditor() {
                 </button>
               </div>
             ) : (
-              <ul className="space-y-0.5">
-                {items.map((item, idx) => {
-                  const ItemIcon = ITEM_ICONS[item.type] || Square
-                  const colorClass = ITEM_COLORS[item.type] || ITEM_COLORS.blank
-                  const slideCount = getSlidesForItem(item).length
-                  const editable = item.type !== 'blank' && !(item.type === 'song' && !songs[item.content?.song_id])
-                  return (
-                    <li key={item.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#1a1a1a] group">
-                      <span className="text-xs text-muted w-5 shrink-0 text-center">{idx + 1}</span>
-                      <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}><ItemIcon size={13} /></div>
-                      <button onClick={() => editable && handleEdit(item)} className="flex-1 min-w-0 text-left" disabled={!editable}>
-                        <p className="text-sm font-medium truncate">{itemTitle(item)}</p>
-                        <p className="text-xs text-muted truncate">
-                          {item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}
-                          {item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}
-                          {slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}
-                        </p>
-                      </button>
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} aria-label="Move up"
-                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ChevronUp size={14} /></button>
-                        <button onClick={() => moveItem(idx, 1)} disabled={idx === items.length - 1} aria-label="Move down"
-                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ChevronDown size={14} /></button>
-                        <button onClick={() => handleEdit(item)} disabled={!editable} aria-label="Edit item" title={editable ? 'Edit' : 'Nothing to edit'}
-                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><Pencil size={14} /></button>
-                        <button onClick={() => handleDelete(item)} aria-label="Delete item" title={deleting === item.id ? 'Click again to confirm delete' : 'Delete'}
-                          className={`p-1.5 rounded-lg transition-colors ${deleting === item.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={14} /></button>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                  <ul className="space-y-0.5">
+                    {items.map((item, idx) => {
+                      const slideCount = getSlidesForItem(item).length
+                      return (
+                        <SortableRow key={item.id} item={item} idx={idx}
+                          ItemIcon={ITEM_ICONS[item.type] || Square} colorClass={ITEM_COLORS[item.type] || ITEM_COLORS.blank}
+                          title={itemTitle(item)}
+                          subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
+                          editable={item.type !== 'blank' && !(item.type === 'song' && !songs[item.content?.song_id])}
+                          deleting={deleting} onEdit={handleEdit} onDelete={handleDelete} />
+                      )
+                    })}
+                  </ul>
+                </SortableContext>
+              </DndContext>
             )}
           </div>
         </section>
