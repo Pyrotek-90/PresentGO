@@ -16,6 +16,7 @@ const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
 const SIZE_KEY = 'presentgo.viewer.size'
+const SIZE_STEPS = [16, 20, 24, 28, 32]   // phone size button: steps up through these, then back to Auto
 const loadSizes = () => { try { return JSON.parse(localStorage.getItem(SIZE_KEY)) || {} } catch { return {} } }
 
 const headerStyle = { fontFamily: "'Archivo', 'Inter', sans-serif", fontStretch: '125%', fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase' }
@@ -211,10 +212,15 @@ export default function SongViewer({ song, onClose }) {
       nc = 1; f = Math.min(floor, widestNoWrap(1))
     }
     apply(nc, f)
-    // A line must never spill onto a second row: shrink until every line fits its column, but not below
-    // a readable size. If a single line is still too wide there, only that line is allowed to wrap.
-    while (f > minReadable && clipped()) { f--; apply(nc, f) }
-    if (clipped()) lines.forEach(el => { if (el.scrollWidth > el.clientWidth + 1) { el.dataset.ws = el.style.whiteSpace; el.dataset.wrapped = '1'; el.style.whiteSpace = 'normal' } })
+    if (manual[mode]) {
+      // A size you picked is honored exactly; lines that are too wide for it wrap instead of being shrunk.
+      lines.forEach(el => { el.dataset.ws = el.style.whiteSpace; el.dataset.wrapped = '1'; el.style.whiteSpace = 'normal' })
+    } else {
+      // Automatic sizing: a line must never spill onto a second row. Shrink until every line fits its
+      // column, but not below a readable size; if one line is still too wide, only that line wraps.
+      while (f > minReadable && clipped()) { f--; apply(nc, f) }
+      if (clipped()) lines.forEach(el => { if (el.scrollWidth > el.clientWidth + 1) { el.dataset.ws = el.style.whiteSpace; el.dataset.wrapped = '1'; el.style.whiteSpace = 'normal' } })
+    }
 
     setFontSize(f)
     setEffCols(nc)
@@ -238,6 +244,20 @@ export default function SongViewer({ song, onClose }) {
     try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
     return out
   })
+  const cycleSize = () => {
+    const current = manual[mode]
+    const nextStep = SIZE_STEPS.find(v => v > (current ?? fontSize))
+    if (current == null || nextStep) {
+      const target = nextStep ?? SIZE_STEPS[SIZE_STEPS.length - 1]
+      setManual(m => {
+        const out = { ...m, [mode]: target }
+        try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
+        return out
+      })
+    } else resetSize()
+  }
+  const cycleKey = () => keys.length > 1 && setActiveKey(keys[(keys.indexOf(activeKey) + 1) % keys.length])
+
   const resetSize = () => setManual(m => {
     const out = { ...m }; delete out[mode]
     try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
@@ -277,13 +297,13 @@ export default function SongViewer({ song, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black text-[#f5f5f5]"
       style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <header className="shrink-0 border-b border-border bg-surface px-3 py-2 flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-3">
+      <header className="shrink-0 border-b border-border bg-surface px-3 py-2 flex flex-nowrap items-center gap-2 sm:gap-3">
         <div className="order-1 flex-1 min-w-0 basis-14">
           <p className="truncate font-semibold leading-tight">{song.title}</p>
           {song.artist && <p className="truncate text-xs text-muted">{song.artist}</p>}
         </div>
 
-        <div className="order-3 sm:order-2 w-full sm:w-auto flex items-center gap-2 sm:gap-3 min-w-0 sm:shrink overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+        <div className="hidden sm:flex order-2 items-center gap-3 min-w-0 shrink overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {/* View controls */}
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="View">
             {[['lyrics', Mic, 'Lyrics'], ['chords', Music, 'Chord Chart']].map(([id, Icon, label]) => (
@@ -334,7 +354,25 @@ export default function SongViewer({ song, onClose }) {
           )}
         </div>
 
-        <button onClick={onClose} className="order-2 sm:order-3 p-2 rounded-lg hover:bg-card text-muted hover:text-[#f5f5f5] shrink-0" aria-label="Close"><X size={18} /></button>
+        {/* Phone: one compact row — each control is a single tap button */}
+        <div className="sm:hidden order-2 flex items-center gap-1.5 shrink-0">
+          {mode === 'chords' && keys.length > 0 && (
+            <button onClick={cycleKey} title={`Key: ${activeKey} — tap for the next key`} aria-label={`Key ${activeKey}`}
+              className="min-w-[2.25rem] h-8 px-2 rounded-lg border border-accent bg-accent/25 text-accent-light text-sm font-semibold">{shortKey(activeKey)}</button>
+          )}
+          <button onClick={() => setMode(m => (m === 'lyrics' ? 'chords' : 'lyrics'))}
+            title={mode === 'lyrics' ? 'Lyrics — tap for the chord chart' : 'Chord chart — tap for lyrics'}
+            aria-label={mode === 'lyrics' ? 'Showing lyrics. Switch to chord chart' : 'Showing chord chart. Switch to lyrics'}
+            className="w-9 h-8 flex items-center justify-center rounded-lg border border-border bg-accent/25 text-accent-light">
+            {mode === 'lyrics' ? <Mic size={16} /> : <Music size={16} />}
+          </button>
+          <button onClick={cycleSize} title="Text size — tap to enlarge, loops back to Auto" aria-label="Text size"
+            className="min-w-[2.5rem] h-8 px-2 rounded-lg border border-border bg-card text-xs font-semibold text-accent-light">
+            {manual[mode] ? manual[mode] : 'Aa'}
+          </button>
+        </div>
+
+        <button onClick={onClose} className="order-3 p-2 rounded-lg hover:bg-card text-muted hover:text-[#f5f5f5] shrink-0" aria-label="Close"><X size={18} /></button>
       </header>
 
       <div ref={viewportRef} className="relative flex-1 min-h-0 overflow-hidden select-none"
