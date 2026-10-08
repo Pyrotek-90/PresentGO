@@ -24,17 +24,51 @@ function SectionBanner({ text, size = '1.05em' }) {
   )
 }
 
+const INDENT = '0.9em'   // lyric text sits slightly in from the left-aligned section headers
+
+// Splits a lyric line at each chord's column so every chord sits directly above its word,
+// whatever font is used (the chart's spaces only tell us *where* in the line each chord goes).
+function chordSegments(chordLine, lyric) {
+  const chords = [...chordLine.matchAll(/\S+/g)].map(m => ({ text: m[0], at: m.index }))
+  const segs = []
+  if (chords[0].at > 0 && lyric.slice(0, chords[0].at).trim()) segs.push({ chord: '', text: lyric.slice(0, chords[0].at) })
+  chords.forEach((c, i) => {
+    const end = i + 1 < chords.length ? chords[i + 1].at : lyric.length
+    segs.push({ chord: c.text, text: lyric.slice(Math.min(c.at, lyric.length), Math.max(end, c.at)) })
+  })
+  return segs
+}
+
+function ChordPill({ children }) {
+  return (
+    <span className="text-accent-light font-extrabold rounded-sm px-[0.25em] bg-accent/15" style={{ lineHeight: 1.25 }}>{children}</span>
+  )
+}
+
 function ChartBlock({ block }) {
   if (block.type === 'header') return <SectionBanner text={block.text} />
   if (block.type === 'pair') {
+    if (block.lyric === null) {
+      // chords with no lyric underneath (intro / instrumental): keep their relative spacing
+      const parts = [...block.chords.matchAll(/(\S+)(\s*)/g)]
+      return (
+        <div data-fit className="whitespace-nowrap" style={{ paddingLeft: INDENT, breakInside: 'avoid' }}>
+          {parts.map((m, i) => <span key={i} style={{ marginRight: `${Math.max(0.8, m[2].length * 0.45)}em` }}><ChordPill>{m[1]}</ChordPill></span>)}
+        </div>
+      )
+    }
     return (
-      <div style={{ breakInside: 'avoid' }}>
-        <div data-fit className="text-accent-light font-extrabold bg-accent/10 rounded-sm">{block.chords}</div>
-        {block.lyric !== null && <div data-fit>{block.lyric}</div>}
+      <div data-fit className="whitespace-nowrap" style={{ paddingLeft: INDENT, breakInside: 'avoid', lineHeight: 1.15, marginTop: '0.3em' }}>
+        {chordSegments(block.chords, block.lyric).map((seg, i) => (
+          <span key={i} style={{ display: 'inline-flex', flexDirection: 'column', verticalAlign: 'top' }}>
+            <span style={{ minHeight: '1.3em', paddingRight: seg.chord ? '0.35em' : 0 }}>{seg.chord ? <ChordPill>{seg.chord}</ChordPill> : '\u00a0'}</span>
+            <span style={{ whiteSpace: 'pre' }}>{seg.text}</span>
+          </span>
+        ))}
       </div>
     )
   }
-  return <div data-fit>{block.text || '\u00a0'}</div>
+  return <div data-fit className="whitespace-pre" style={{ paddingLeft: INDENT }}>{block.text || '\u00a0'}</div>
 }
 
 export default function SongViewer({ song, onClose }) {
@@ -200,13 +234,13 @@ export default function SongViewer({ song, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black text-[#f5f5f5]"
       style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <header className="shrink-0 border-b border-border bg-surface px-3 py-2 flex items-center gap-2 sm:gap-3">
-        <div className="flex-1 min-w-0 basis-14">
+      <header className="shrink-0 border-b border-border bg-surface px-3 py-2 flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-3">
+        <div className="order-1 flex-1 min-w-0 basis-14">
           <p className="truncate font-semibold leading-tight">{song.title}</p>
           {song.artist && <p className="truncate text-xs text-muted">{song.artist}</p>}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+        <div className="order-3 sm:order-2 w-full sm:w-auto flex items-center gap-2 sm:gap-3 min-w-0 sm:shrink overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {/* View controls */}
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="View">
             {[['lyrics', Mic, 'Lyrics'], ['chords', Music, 'Chord Chart']].map(([id, Icon, label]) => (
@@ -218,7 +252,7 @@ export default function SongViewer({ song, onClose }) {
           </div>
 
           {showCols && (
-            <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Columns">
+            <div className="hidden sm:flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Columns">
               {[[1, Square, 'Single column'], [2, Columns2, widthOk ? 'Two columns' : 'Two columns (needs a wider screen — try landscape)']].map(([n, Icon, label]) => (
                 <button key={n} onClick={() => pickCols(n)} title={label} aria-label={label} disabled={n === 2 && !widthOk}
                   className={`w-9 h-8 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${colCount === n ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
@@ -239,7 +273,7 @@ export default function SongViewer({ song, onClose }) {
 
           {/* BPM and Key */}
           {mode === 'chords' && meta.bpm && (
-            <span className="flex items-baseline gap-1 shrink-0">
+            <span className="hidden sm:flex items-baseline gap-1 shrink-0">
               <span className="text-[10px] uppercase tracking-widest text-muted">BPM</span>
               <span className="text-base font-bold">{meta.bpm}</span>
             </span>
@@ -257,7 +291,7 @@ export default function SongViewer({ song, onClose }) {
           )}
         </div>
 
-        <button onClick={onClose} className="p-2 rounded-lg hover:bg-card text-muted hover:text-[#f5f5f5] shrink-0" aria-label="Close"><X size={18} /></button>
+        <button onClick={onClose} className="order-2 sm:order-3 p-2 rounded-lg hover:bg-card text-muted hover:text-[#f5f5f5] shrink-0" aria-label="Close"><X size={18} /></button>
       </header>
 
       <div ref={viewportRef} className="relative flex-1 min-h-0 overflow-hidden select-none"
@@ -271,8 +305,8 @@ export default function SongViewer({ song, onClose }) {
           </div>
         ) : (
           <div ref={innerRef}
-            className={mode === 'chords' ? 'font-mono whitespace-pre font-bold' : 'font-semibold'}
-            style={{ transform: `translateX(${-page * (box.w)}px)`, transition: 'transform 0.2s ease', columnFill: 'auto', lineHeight: mode === 'chords' ? 1.3 : 1.4 }}>
+            className="font-semibold"
+            style={{ transform: `translateX(${-page * (box.w)}px)`, transition: 'transform 0.2s ease', columnFill: 'auto', lineHeight: 1.4 }}>
             {mode === 'chords' ? chartBlocks.map((b, i) => <ChartBlock key={i} block={b} />) : sections.map((sec, i) => (
               <div key={i} style={{ breakInside: 'avoid', marginBottom: '0.6em' }}>
                 {sec.label && <SectionBanner text={sec.label} size="0.7em" />}
@@ -288,7 +322,7 @@ export default function SongViewer({ song, onClose }) {
           {Array.from({ length: pages }, (_, i) => (
             <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === page ? 'bg-accent-light' : 'bg-border'}`} />
           ))}
-          <span className="ml-1">Page {page + 1} of {pages} · swipe or tap to turn</span>
+          <span className="ml-1">{page + 1} / {pages}<span className="hidden sm:inline"> · swipe or tap to turn</span></span>
         </div>
       )}
     </div>
