@@ -330,12 +330,12 @@ export default function SetEditor() {
               </button>
               <button onClick={() => setViewerOpen(true)} disabled={orderedSongs.length === 0}
                 title="Song Viewer: step through the songs in order" aria-label="Song Viewer"
-                className="btn-secondary flex items-center gap-1.5 !py-1 !px-2.5 sm:!px-3 text-sm disabled:opacity-40">
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
                 <BookOpen size={14} /><span className="hidden sm:inline">Song Viewer</span>
               </button>
               <button onClick={openPresent} disabled={items.length === 0}
-                className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm disabled:opacity-40">
-                <MonitorPlay size={14} /> Presentation Mode
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
+                <MonitorPlay size={14} /> Present
               </button>
             </div>
           </div>
@@ -374,7 +374,7 @@ export default function SetEditor() {
         </section>
 
         {items.length > 0 && (
-          <p className="text-xs text-muted text-center">When your program is ready, open <strong className="text-[#f5f5f5]">Presentation Mode</strong> to connect a TV and run the slides.</p>
+          <p className="text-xs text-muted text-center">When your program is ready, tap <strong className="text-[#f5f5f5]">Present</strong> to connect a TV and run the slides.</p>
         )}
       </div>
 
