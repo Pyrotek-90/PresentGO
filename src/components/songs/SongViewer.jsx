@@ -10,6 +10,8 @@ const FIT = { lyrics: [64, 16], chords: [48, 14] }       // auto-fit [largest, s
 const COMFORT = { lyrics: 22, chords: 18 }              // never auto-shrink below this; paginate instead
 const FIT_PHONE = { lyrics: [34, 16], chords: [30, 14] } // phones: smaller text so more of the song is visible
 const COMFORT_PHONE = { lyrics: 16, chords: 14 }
+const FLOOR_TWO_COL = { lyrics: 18, chords: 15 }        // two columns may go a little smaller to keep a song on one page
+const MIN_READABLE = { lyrics: 15, chords: 13 }         // never shrink everything below this just for one long line
 const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
@@ -178,11 +180,15 @@ export default function SongViewer({ song, onClose }) {
 
     const [max] = (widthOk ? FIT : FIT_PHONE)[mode]
     const floor = (widthOk ? COMFORT : COMFORT_PHONE)[mode]
-    const lines = mode === 'chords' ? inner.querySelectorAll('[data-fit]') : []
+    const floor2 = Math.min(floor, FLOOR_TWO_COL[mode])
+    const minReadable = MIN_READABLE[mode]
+    const lines = inner.querySelectorAll('[data-fit]')   // every lyric / chart line: none may wrap or overflow
+    lines.forEach(el => { if (el.dataset.wrapped) { el.style.whiteSpace = el.dataset.ws; delete el.dataset.wrapped } })
     const apply = (nc, f) => { inner.style.columnCount = String(nc); inner.style.fontSize = `${f}px` }
     const clipped = () => lines.length > 0 && Array.from(lines).some(el => el.scrollWidth > el.clientWidth + 1)
     const fitsOnePage = (nc, f) => { apply(nc, f); return inner.scrollWidth <= cw + 1 && !clipped() }
     const largestFit = (nc, lo) => { for (let f = max; f >= lo; f--) if (fitsOnePage(nc, f)) return f; return null }
+    const widestNoWrap = nc => { for (let f = max; f >= minReadable; f--) { apply(nc, f); if (!clipped()) return f } return minReadable }
 
     let nc, f
     if (manual[mode]) {
@@ -194,13 +200,21 @@ export default function SongViewer({ song, onClose }) {
     } else if ((f = largestFit(1, floor)) != null) {
       nc = 1
     } else if (widthOk) {
-      nc = 2
-      f = largestFit(2, floor) ?? floor
+      f = largestFit(2, floor2)
+      if (f != null) nc = 2
+      else {
+        // Too long for one page either way: paginate. Use two columns unless they'd force tiny text.
+        const wide2 = widestNoWrap(2)
+        if (wide2 >= floor2) { nc = 2; f = Math.min(floor, wide2) } else { nc = 1; f = Math.min(floor, widestNoWrap(1)) }
+      }
     } else {
-      nc = 1; f = floor
+      nc = 1; f = Math.min(floor, widestNoWrap(1))
     }
     apply(nc, f)
-    while (mode === 'chords' && f > 10 && clipped()) { f--; apply(nc, f) }
+    // A line must never spill onto a second row: shrink until every line fits its column, but not below
+    // a readable size. If a single line is still too wide there, only that line is allowed to wrap.
+    while (f > minReadable && clipped()) { f--; apply(nc, f) }
+    if (clipped()) lines.forEach(el => { if (el.scrollWidth > el.clientWidth + 1) { el.dataset.ws = el.style.whiteSpace; el.dataset.wrapped = '1'; el.style.whiteSpace = 'normal' } })
 
     setFontSize(f)
     setEffCols(nc)
@@ -343,7 +357,7 @@ export default function SongViewer({ song, onClose }) {
             )) : sections.map((sec, i) => (
               <div key={i} style={{ breakInside: 'avoid', marginBottom: '1em' }}>
                 {sec.label && <SectionBanner text={sec.label} size="0.7em" />}
-                {sec.lines.map((l, j) => <p key={j} style={{ paddingLeft: INDENT }}>{l || '\u00a0'}</p>)}
+                {sec.lines.map((l, j) => <p key={j} data-fit style={{ paddingLeft: INDENT, whiteSpace: 'nowrap' }}>{l || '\u00a0'}</p>)}
               </div>
             ))}
           </div>
