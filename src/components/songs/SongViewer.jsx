@@ -6,8 +6,9 @@ import { getPref } from '../../lib/prefs'
 
 const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
-const FIT = { lyrics: [34, 16], chords: [30, 14], chords2: [26, 12] } // auto-fit [max, min] font size
-const COLS_KEY = 'presentgo.viewer.cols'
+const FIT = { lyrics: [64, 16], chords: [48, 14] }       // auto-fit [largest, smallest] font size
+const COMFORT = { lyrics: 22, chords: 18 }              // never auto-shrink below this; paginate instead
+const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
 const SIZE_KEY = 'presentgo.viewer.size'
@@ -83,7 +84,9 @@ export default function SongViewer({ song, onClose }) {
   const [pages, setPages] = useState(1)
   const [box, setBox] = useState({ w: 0, h: 0 })
   const [fontSize, setFontSize] = useState(20)
-  const [cols, setCols] = useState(() => { try { return localStorage.getItem(COLS_KEY) === '2' ? 2 : 1 } catch { return 1 } })
+  const [effCols, setEffCols] = useState(1)   // columns actually in use (auto picks this)
+  const [fontTick, setFontTick] = useState(0)
+  const [cols, setCols] = useState(() => { try { const v = localStorage.getItem(COLS_KEY); return v === '1' ? 1 : v === '2' ? 2 : 'auto' } catch { return 'auto' } })
   const [manual, setManual] = useState(loadSizes) // { lyrics?: px, chords?: px } — absent means auto-fit
   const viewportRef = useRef(null)
   const innerRef = useRef(null)
@@ -132,6 +135,15 @@ export default function SongViewer({ song, onClose }) {
     return blocks
   }, [chart])
 
+  const chartSections = useMemo(() => {
+    const out = []
+    for (const b of chartBlocks) {
+      if (b.type === 'header' || !out.length) out.push([])
+      out[out.length - 1].push(b)
+    }
+    return out
+  }, [chartBlocks])
+
   useLayoutEffect(() => {
     const el = viewportRef.current
     if (!el) return
@@ -142,11 +154,16 @@ export default function SongViewer({ song, onClose }) {
     return () => ro.disconnect()
   }, [])
 
-  const showCols = mode === 'chords'
   const widthOk = box.w >= TWO_COL_MIN_WIDTH
-  const colCount = showCols && widthOk && cols === 2 ? 2 : 1
 
-  // Pick the largest font that fits on one page; otherwise paginate at the minimum size.
+  // Re-measure once web fonts are ready (text width changes when Inter loads).
+  useEffect(() => { document.fonts?.ready?.then(() => setFontTick(t => t + 1)) }, [])
+
+  // Default view logic.
+  //  1. Fits on one page in a single column at a comfortable size -> single column, as large as fits.
+  //  2. Otherwise, on a wide screen -> two columns, as large as fits on one page.
+  //  3. Otherwise -> paginate at a comfortable size. Sections move to the next column/page whole.
+  // Choosing 1 or 2 columns, or a text size, by hand overrides the matching part.
   useLayoutEffect(() => {
     const inner = innerRef.current
     if (!inner || !box.w) return
@@ -154,35 +171,45 @@ export default function SongViewer({ song, onClose }) {
     const gap = PAD * 2
     inner.style.width = `${cw}px`
     inner.style.height = `${box.h - PAD_V * 2}px`
-    inner.style.columnCount = String(colCount)
     inner.style.columnWidth = 'auto'
     inner.style.columnGap = `${gap}px`
-    const [max, min] = FIT[mode === 'chords' && colCount === 2 ? 'chords2' : mode]
-    let f = manual[mode]
-    if (f) {
-      inner.style.fontSize = `${f}px`
+
+    const [max] = FIT[mode]
+    const floor = COMFORT[mode]
+    const lines = mode === 'chords' ? inner.querySelectorAll('[data-fit]') : []
+    const apply = (nc, f) => { inner.style.columnCount = String(nc); inner.style.fontSize = `${f}px` }
+    const clipped = () => lines.length > 0 && Array.from(lines).some(el => el.scrollWidth > el.clientWidth + 1)
+    const fitsOnePage = (nc, f) => { apply(nc, f); return inner.scrollWidth <= cw + 1 && !clipped() }
+    const largestFit = (nc, lo) => { for (let f = max; f >= lo; f--) if (fitsOnePage(nc, f)) return f; return null }
+
+    let nc, f
+    if (manual[mode]) {
+      f = manual[mode]
+      nc = cols === 'auto' ? (fitsOnePage(1, f) || !widthOk ? 1 : 2) : (cols === 2 && widthOk ? 2 : 1)
+    } else if (cols !== 'auto') {
+      nc = cols === 2 && widthOk ? 2 : 1
+      f = largestFit(nc, floor) ?? floor
+    } else if ((f = largestFit(1, floor)) != null) {
+      nc = 1
+    } else if (widthOk) {
+      nc = 2
+      f = largestFit(2, floor) ?? floor
     } else {
-      f = max
-      for (; f > min; f--) {
-        inner.style.fontSize = `${f}px`
-        if (inner.scrollWidth <= cw + 1) break
-      }
-      inner.style.fontSize = `${f}px`
+      nc = 1; f = floor
     }
-    if (mode === 'chords') {
-      const lines = inner.querySelectorAll('[data-fit]')
-      const clipped = () => Array.from(lines).some(el => el.scrollWidth > el.clientWidth + 1)
-      while (f > 10 && clipped()) { f--; inner.style.fontSize = `${f}px` }
-    }
+    apply(nc, f)
+    while (mode === 'chords' && f > 10 && clipped()) { f--; apply(nc, f) }
+
     setFontSize(f)
-    const colW = (cw - (colCount - 1) * gap) / colCount
+    setEffCols(nc)
+    const colW = (cw - (nc - 1) * gap) / nc
     const totalCols = Math.max(1, Math.round((inner.scrollWidth + gap) / (colW + gap)))
-    const n = Math.ceil(totalCols / colCount)
+    const n = Math.ceil(totalCols / nc)
     setPages(n)
     setPage(p => Math.min(p, n - 1))
-  }, [box, mode, activeKey, sections, chart, chartBlocks, manual, colCount])
+  }, [box, mode, activeKey, sections, chart, chartBlocks, manual, cols, widthOk, fontTick])
 
-  useEffect(() => { setPage(0) }, [mode, activeKey, colCount])
+  useEffect(() => { setPage(0) }, [mode, activeKey, effCols])
 
   const pickCols = n => {
     setCols(n)
@@ -251,16 +278,16 @@ export default function SongViewer({ song, onClose }) {
             ))}
           </div>
 
-          {showCols && (
-            <div className="hidden sm:flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Columns">
-              {[[1, Square, 'Single column'], [2, Columns2, widthOk ? 'Two columns' : 'Two columns (needs a wider screen — try landscape)']].map(([n, Icon, label]) => (
-                <button key={n} onClick={() => pickCols(n)} title={label} aria-label={label} disabled={n === 2 && !widthOk}
-                  className={`w-9 h-8 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${colCount === n ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
-                  <Icon size={15} />
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="hidden sm:flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Columns">
+            <button onClick={() => pickCols('auto')} aria-pressed={cols === 'auto'} title={`Auto: picks the best layout for each song (now ${effCols} column${effCols > 1 ? 's' : ''})`}
+              className={`px-2 h-8 text-xs font-semibold transition-colors ${cols === 'auto' ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>Auto</button>
+            {[[1, Square, 'Single column'], [2, Columns2, widthOk ? 'Two columns' : 'Two columns (needs a wider screen — try landscape)']].map(([n, Icon, label]) => (
+              <button key={n} onClick={() => pickCols(n)} title={label} aria-label={label} aria-pressed={cols === n} disabled={n === 2 && !widthOk}
+                className={`w-9 h-8 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${cols === n ? 'bg-accent text-white' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
+                <Icon size={15} />
+              </button>
+            ))}
+          </div>
 
           <div className="flex items-center rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label="Text size">
             <button onClick={() => bump(-2)} className="w-8 h-8 flex items-center justify-center text-muted hover:text-[#f5f5f5] hover:bg-card" aria-label="Smaller text"><Minus size={14} /></button>
@@ -307,7 +334,11 @@ export default function SongViewer({ song, onClose }) {
           <div ref={innerRef}
             className="font-semibold"
             style={{ transform: `translateX(${-page * (box.w)}px)`, transition: 'transform 0.2s ease', columnFill: 'auto', lineHeight: 1.4 }}>
-            {mode === 'chords' ? chartBlocks.map((b, i) => <ChartBlock key={i} block={b} />) : sections.map((sec, i) => (
+            {mode === 'chords' ? chartSections.map((sec, i) => (
+              <div key={i} style={{ breakInside: 'avoid', marginBottom: '0.5em' }}>
+                {sec.map((b, j) => <ChartBlock key={j} block={b} />)}
+              </div>
+            )) : sections.map((sec, i) => (
               <div key={i} style={{ breakInside: 'avoid', marginBottom: '0.6em' }}>
                 {sec.label && <SectionBanner text={sec.label} size="0.7em" />}
                 {sec.lines.map((l, j) => <p key={j} style={{ paddingLeft: INDENT }}>{l || '\u00a0'}</p>)}
