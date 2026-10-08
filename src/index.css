@@ -18,15 +18,15 @@
 
   /* ── Light theme ──────────────────────────────────────────────── */
   html.light {
-    --color-bg:           #f4eee3;   /* warm paper */
-    --color-surface:      #ebe3d4;
-    --color-card:         #faf6ee;   /* soft cream instead of pure white */
-    --color-border:       #dcd1bd;
-    --color-text:         #2d2820;   /* warm near-black */
-    --color-muted:        #7b6f5e;
-    --color-scrollbar-bg:    #ebe3d4;
-    --color-scrollbar-thumb: #bdae93;
-    --color-scrollbar-hover: #8f8267;
+    --color-bg:           #e3e0db;   /* warm light gray */
+    --color-surface:      #d8d4cd;
+    --color-card:         #edeae5;   /* soft warm gray instead of white */
+    --color-border:       #c6c1b8;
+    --color-text:         #2a2825;   /* warm near-black */
+    --color-muted:        #6d675e;
+    --color-scrollbar-bg:    #d8d4cd;
+    --color-scrollbar-thumb: #a8a297;
+    --color-scrollbar-hover: #7d776b;
   }
 
   html, body, #root {

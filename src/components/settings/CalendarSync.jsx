@@ -67,7 +67,7 @@ export default function CalendarSync() {
           </div>
         </div>
         <button onClick={toggle} disabled={loading || busy} aria-label="Toggle calendar sync" aria-pressed={enabled}
-          className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 disabled:opacity-50 ${enabled ? 'bg-accent' : 'bg-stone-300'}`}>
+          className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 disabled:opacity-50 ${enabled ? 'bg-accent' : 'bg-stone-400'}`}>
           <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
         </button>
       </div>

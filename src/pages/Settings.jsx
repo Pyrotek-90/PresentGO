@@ -181,7 +181,7 @@ export default function Settings() {
               onClick={toggleTheme}
               aria-label="Toggle theme"
               className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-card ${
-                isDark ? 'bg-accent' : 'bg-stone-300'
+                isDark ? 'bg-accent' : 'bg-stone-400'
               }`}
             >
               <span
