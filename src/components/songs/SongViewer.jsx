@@ -11,8 +11,8 @@ const COMFORT = { lyrics: 22, chords: 18 }              // never auto-shrink bel
 const FIT_PHONE = { lyrics: [32, 15], chords: [30, 15] } // phones: smaller text so more of the song is visible
 const COMFORT_PHONE = { lyrics: 16, chords: 15 }
 const FLOOR_TWO_COL = { lyrics: 15, chords: 15 }        // two columns may go a little smaller to keep a song on one page
-const MIN_READABLE = { lyrics: 15, chords: 15 }         // never shrink everything below this just for one long line
-const MIN_READABLE_PHONE = { lyrics: 13, chords: 13 }   // phones are narrow, so allow a little smaller before wrapping a line
+const MIN_READABLE = { lyrics: 12, chords: 12 }         // last resort: smallest size used to keep one long line from wrapping
+const MIN_READABLE_PHONE = { lyrics: 11, chords: 11 }
 const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
