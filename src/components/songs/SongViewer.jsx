@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2 } from 'lucide-react'
+import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2, ChevronLeft, ChevronRight, List } from 'lucide-react'
 import { transposeChart, isChordLine } from '../../lib/chords'
 import { reconcileChart, lyricSections } from '../../lib/chart'
 import { getPref } from '../../lib/prefs'
@@ -93,13 +93,19 @@ function ChartBlock({ block }) {
   return <div data-fit className="whitespace-pre" style={{ paddingLeft: INDENT }}>{block.text || '\u00a0'}</div>
 }
 
-export default function SongViewer({ song, onClose }) {
+// `setNav` turns this into "set mode": the songs of a set played back to back.
+//   { index, total, titles, onNext(), onPrev(), onJump(i) }   `startAtEnd` lands on the last page (coming back from the next song).
+export default function SongViewer({ song, onClose, setNav, initialMode, onModeChange, startAtEnd }) {
   const meta = song.metadata || {}
   const original = meta.original_key || meta.key || ''
   const keys = [original, ...(meta.transposed_keys || [])].filter(Boolean)
   const hasChart = !!meta.chord_chart?.trim()
 
-  const [mode, setMode] = useState(() => (getPref('viewerMode', 'lyrics') === 'chords' ? 'chords' : 'lyrics'))
+  const [mode, setMode] = useState(() => initialMode || (getPref('viewerMode', 'lyrics') === 'chords' ? 'chords' : 'lyrics'))
+  const [showList, setShowList] = useState(false)
+  const wantEnd = useRef(!!startAtEnd)
+  useEffect(() => { onModeChange?.(mode) }, [mode])
+  useEffect(() => { if (wantEnd.current) { const t = setTimeout(() => { wantEnd.current = false }, 400); return () => clearTimeout(t) } }, [])
   const [activeKey, setActiveKey] = useState(keys[0] || '')
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
@@ -251,10 +257,10 @@ export default function SongViewer({ song, onClose }) {
     const totalCols = Math.max(1, Math.round((inner.scrollWidth + gap) / (colW + gap)))
     const n = Math.ceil(totalCols / nc)
     setPages(n)
-    setPage(p => Math.min(p, n - 1))
+    setPage(p => (wantEnd.current ? n - 1 : Math.min(p, n - 1)))
   }, [box, mode, activeKey, sections, chart, chartBlocks, manual, cols, widthOk, pad, fontTick])
 
-  useEffect(() => { setPage(0) }, [mode, activeKey, effCols])
+  useEffect(() => { if (!wantEnd.current) setPage(0) }, [mode, activeKey, effCols])
 
   const pickCols = n => {
     setCols(n)
@@ -287,8 +293,8 @@ export default function SongViewer({ song, onClose }) {
     return out
   })
 
-  const next = () => setPage(p => Math.min(p + 1, pages - 1))
-  const prev = () => setPage(p => Math.max(p - 1, 0))
+  const next = () => (page < pages - 1 ? setPage(page + 1) : setNav?.onNext())
+  const prev = () => (page > 0 ? setPage(page - 1) : setNav?.onPrev())
 
   useEffect(() => {
     const onKey = e => {
@@ -298,7 +304,7 @@ export default function SongViewer({ song, onClose }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [pages, onClose])
+  }, [pages, page, onClose, setNav])
 
   const onTouchStart = e => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; swiped.current = false }
   const onTouchEnd = e => {
@@ -425,13 +431,36 @@ export default function SongViewer({ song, onClose }) {
         )}
       </div>
 
-      {(pages > 1 || arrangement.length > 0) && (
+      {showList && setNav && (
+        <div className="absolute inset-x-0 bottom-9 z-10 mx-2 max-h-[55vh] overflow-y-auto rounded-xl border border-border bg-surface shadow-2xl">
+          {setNav.titles.map((t, i) => (
+            <button key={i} onClick={() => { setShowList(false); setNav.onJump(i) }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left text-sm border-b border-border/50 last:border-0 ${i === setNav.index ? 'bg-accent/20 text-accent-light' : 'hover:bg-card'}`}>
+              <span className="w-5 text-xs text-muted shrink-0">{i + 1}</span>
+              <span className="truncate font-medium">{t}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {(pages > 1 || arrangement.length > 0 || setNav) && (
         <div className="shrink-0 flex items-center justify-between gap-3 px-3 py-1.5 border-t border-border bg-surface text-xs text-muted">
           <div className="flex items-center gap-2 min-w-0">
+            {setNav && (
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={setNav.onPrev} disabled={setNav.index === 0} aria-label="Previous song"
+                  className="p-1 rounded hover:bg-card disabled:opacity-25"><ChevronLeft size={14} /></button>
+                <button onClick={() => setShowList(v => !v)} aria-label="Jump to a song" aria-expanded={showList}
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-card text-[#f5f5f5] font-semibold whitespace-nowrap">
+                  <List size={12} className="text-accent-light" /> {setNav.index + 1} of {setNav.total}
+                </button>
+                <button onClick={setNav.onNext} disabled={setNav.index === setNav.total - 1} aria-label="Next song"
+                  className="p-1 rounded hover:bg-card disabled:opacity-25"><ChevronRight size={14} /></button>
+              </div>
+            )}
             {pages > 1 && Array.from({ length: pages }, (_, i) => (
               <span key={i} className={`w-1.5 h-1.5 rounded-full shrink-0 ${i === page ? 'bg-accent-light' : 'bg-border'}`} />
             ))}
-            {pages > 1 && <span className="ml-1 whitespace-nowrap">{page + 1} / {pages}<span className="hidden sm:inline"> · swipe or tap to turn</span></span>}
+            {pages > 1 && !setNav && <span className="ml-1 whitespace-nowrap">{page + 1} / {pages}<span className="hidden sm:inline"> · swipe or tap to turn</span></span>}
           </div>
           {arrangement.length > 0 && (
             <div className="flex flex-wrap justify-end gap-1 max-w-[75%]" aria-label={`Song arrangement: ${arrangement.join(', ')}`} title="Arrangement">

@@ -7,10 +7,11 @@ import { buildIcs } from '../lib/ics'
 import Layout from '../components/Layout'
 import AddItemModal from '../components/sets/AddItemModal'
 import SongEditor from '../components/songs/SongEditor'
+import SetSongViewer from '../components/songs/SetSongViewer'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  Trash2, ChevronUp, ChevronDown, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin,
+  Trash2, ChevronUp, ChevronDown, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
@@ -32,6 +33,7 @@ export default function SetEditor() {
   const [songs, setSongs]   = useState({})
   const [editItem, setEditItem] = useState(null)
   const [editSong, setEditSong] = useState(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const [deleting, setDeleting] = useState(null)
   const [details, setDetails] = useState(null)   // form state while editing set details
   const [detailsSaving, setDetailsSaving] = useState(false)
@@ -201,6 +203,8 @@ export default function SetEditor() {
     return []
   }
 
+  const orderedSongs = items.filter(i => i.type === 'song').map(i => songs[i.content?.song_id]).filter(Boolean)
+
   const openPresent = () => {
     navigate(`/sets/${setId}/control`)
   }
@@ -289,6 +293,11 @@ export default function SetEditor() {
               <button onClick={() => setShowAdd(true)} className="btn-secondary flex items-center gap-1.5 !py-1 !px-3 text-sm">
                 <Plus size={14} /> Add Item
               </button>
+              <button onClick={() => setViewerOpen(true)} disabled={orderedSongs.length === 0}
+                title="Song Viewer: step through the songs in order" aria-label="Song Viewer"
+                className="btn-secondary flex items-center gap-1.5 !py-1 !px-2.5 sm:!px-3 text-sm disabled:opacity-40">
+                <BookOpen size={14} /><span className="hidden sm:inline">Song Viewer</span>
+              </button>
               <button onClick={openPresent} disabled={items.length === 0}
                 className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm disabled:opacity-40">
                 <MonitorPlay size={14} /> Presentation Mode
@@ -351,6 +360,7 @@ export default function SetEditor() {
 
       {showAdd && <AddItemModal onClose={() => setShowAdd(false)} onAdd={handleAddItem} />}
       {editItem && <AddItemModal item={editItem} onClose={() => setEditItem(null)} onAdd={handleSaveEdit} />}
+      {viewerOpen && orderedSongs.length > 0 && <SetSongViewer songs={orderedSongs} onClose={() => setViewerOpen(false)} />}
       {editSong && <SongEditor song={editSong} onClose={() => setEditSong(null)} onSaved={handleSongSaved} />}
     </Layout>
   )
