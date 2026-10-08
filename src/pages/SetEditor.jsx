@@ -229,9 +229,9 @@ export default function SetEditor() {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button onClick={openDetails} className="btn-ghost flex items-center gap-1.5 text-sm !px-2.5 !py-1.5"><Pencil size={13} /> Edit details</button>
+            <button onClick={openDetails} title="Edit details" aria-label="Edit details" className="btn-ghost flex items-center gap-1.5 text-sm !px-2 sm:!px-2.5 !py-1.5"><Pencil size={14} /><span className="hidden sm:inline">Edit details</span></button>
             <button onClick={downloadIcs} disabled={!set?.service_date} title={set?.service_date ? 'Download an event file for Apple, Google or Outlook calendar' : 'Add a date first'}
-              className="btn-ghost flex items-center gap-1.5 text-sm !px-2.5 !py-1.5 disabled:opacity-40"><CalendarPlus size={14} /> Add to calendar</button>
+              className="hidden sm:flex btn-ghost items-center gap-1.5 text-sm !px-2.5 !py-1.5 disabled:opacity-40"><CalendarPlus size={14} /> Add to calendar</button>
           </div>
         </div>
 
