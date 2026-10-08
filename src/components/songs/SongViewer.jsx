@@ -310,7 +310,7 @@ export default function SongViewer({ song, onClose }) {
             {mode === 'chords' ? chartBlocks.map((b, i) => <ChartBlock key={i} block={b} />) : sections.map((sec, i) => (
               <div key={i} style={{ breakInside: 'avoid', marginBottom: '0.6em' }}>
                 {sec.label && <SectionBanner text={sec.label} size="0.7em" />}
-                {sec.lines.map((l, j) => <p key={j}>{l || ' '}</p>)}
+                {sec.lines.map((l, j) => <p key={j} style={{ paddingLeft: INDENT }}>{l || '\u00a0'}</p>)}
               </div>
             ))}
           </div>
