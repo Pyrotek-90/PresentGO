@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,7 +15,7 @@ import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  GripVertical, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
+  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
@@ -28,30 +28,69 @@ const ITEM_COLORS = {
   media:        'text-purple-400 bg-purple-400/10',
 }
 
-function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabel, keyChosen, onOptions }) {
+const REVEAL = 80   // px the row slides to show the trash can
+
+function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabel, keyChosen, onOptions, open, onSwipe, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const [dx, setDx] = useState(null)       // live finger offset while swiping, null when not swiping
+  const touch = useRef(null)
+
+  const onTouchStart = e => {
+    if (e.target.closest('[data-drag-handle]')) return
+    touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, base: open ? -REVEAL : 0, swiping: false }
+  }
+  const onTouchMove = e => {
+    const t = touch.current
+    if (!t) return
+    const mx = e.touches[0].clientX - t.x
+    const my = e.touches[0].clientY - t.y
+    if (!t.swiping) {
+      if (Math.abs(mx) < 8 || Math.abs(mx) < Math.abs(my)) return   // not a sideways swipe
+      t.swiping = true
+    }
+    setDx(Math.max(-REVEAL, Math.min(0, t.base + mx)))
+  }
+  const onTouchEnd = () => {
+    const t = touch.current
+    touch.current = null
+    if (!t?.swiping) return
+    onSwipe(dx !== null && dx < -REVEAL / 2)
+    setDx(null)
+  }
+
+  const offset = dx !== null ? dx : open ? -REVEAL : 0
+
   return (
-    <li ref={setNodeRef}
+    <li ref={setNodeRef} data-swiped-row={open ? '' : undefined}
       style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 20 : undefined, position: 'relative' }}
-      className={`flex items-center gap-2 px-1 py-1.5 rounded-lg group ${isDragging ? 'bg-accent/15 shadow-xl ring-1 ring-accent/50' : 'hover:bg-[#1a1a1a]'}`}>
-      <button type="button" {...attributes} {...listeners} aria-label={`Drag to reorder ${title}`} title="Drag to reorder"
-        className="w-8 h-9 flex items-center justify-center rounded-md text-muted hover:text-[#f5f5f5] cursor-grab active:cursor-grabbing touch-none shrink-0">
-        <GripVertical size={16} />
+      className={`rounded-lg ${isDragging ? 'shadow-xl ring-1 ring-accent/50' : 'overflow-hidden'}`}>
+      <button type="button" onClick={onDelete} tabIndex={open ? 0 : -1} aria-label={`Delete ${title}`} aria-hidden={!open}
+        className="absolute inset-y-0 right-0 flex items-center justify-center bg-red-600 text-white"
+        style={{ width: REVEAL }}>
+        <Trash2 size={20} />
       </button>
-      <span className="text-xs text-muted w-4 shrink-0 text-center">{idx + 1}</span>
-      <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}><ItemIcon size={13} /></div>
-      <button onClick={() => onOptions(item)} className="flex-1 min-w-0 text-left">
-        <p className="text-sm font-medium truncate">{title}</p>
-        <p className="text-xs text-muted truncate">{subtitle}</p>
-      </button>
-      {keyLabel && (
-        <button onClick={() => onOptions(item)} title={keyChosen ? `Key for this set: ${keyLabel}` : `Song's key: ${keyLabel} (tap to choose a key for this set)`}
-          className={`shrink-0 min-w-[2rem] h-7 px-2 rounded-md border text-xs font-semibold ${
-            keyChosen ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
-          }`}>{keyLabel}</button>
-      )}
-      <button onClick={() => onOptions(item)} aria-label="Item options" title="Options"
-        className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] shrink-0"><Pencil size={14} /></button>
+      <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+        style={{ transform: `translateX(${offset}px)`, transition: dx !== null ? 'none' : 'transform 0.2s ease', touchAction: 'pan-y' }}
+        className={`relative flex items-center gap-2 px-1 py-1.5 group ${isDragging ? 'bg-accent/15' : 'bg-card hover:bg-[#1a1a1a]'}`}>
+        <button type="button" data-drag-handle {...attributes} {...listeners} aria-label={`Drag to reorder ${title}`} title="Drag to reorder"
+          className="w-8 h-9 flex items-center justify-center rounded-md text-muted hover:text-[#f5f5f5] cursor-grab active:cursor-grabbing touch-none shrink-0">
+          <GripVertical size={16} />
+        </button>
+        <span className="text-xs text-muted w-4 shrink-0 text-center">{idx + 1}</span>
+        <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}><ItemIcon size={13} /></div>
+        <button onClick={() => (open ? onSwipe(false) : onOptions(item))} className="flex-1 min-w-0 text-left">
+          <p className="text-sm font-medium truncate">{title}</p>
+          <p className="text-xs text-muted truncate">{subtitle}</p>
+        </button>
+        {keyLabel && (
+          <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={keyChosen ? `Key for this set: ${keyLabel}` : `Song's key: ${keyLabel} (tap to choose a key for this set)`}
+            className={`shrink-0 min-w-[2rem] h-7 px-2 rounded-md border text-xs font-semibold ${
+              keyChosen ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+            }`}>{keyLabel}</button>
+        )}
+        <button onClick={() => (open ? onSwipe(false) : onOptions(item))} aria-label="Item options" title="Options"
+          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] shrink-0"><Pencil size={14} /></button>
+      </div>
     </li>
   )
 }
@@ -69,6 +108,7 @@ export default function SetEditor() {
   const [editSong, setEditSong] = useState(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [optionsItem, setOptionsItem] = useState(null)
+  const [swipedId, setSwipedId] = useState(null)   // row currently swiped open to show its trash can
   const [details, setDetails] = useState(null)   // form state while editing set details
   const [detailsSaving, setDetailsSaving] = useState(false)
   const [detailsError, setDetailsError] = useState(null)
@@ -216,6 +256,13 @@ export default function SetEditor() {
     setItems(prev => prev.map(i => touched.includes(i) ? { ...i, content: content(i) } : i))
     if (setId !== 'mock') await Promise.all(touched.map(i => supabase.from('set_items').update({ content: content(i) }).eq('id', i.id)))
   }
+
+  useEffect(() => {
+    if (!swipedId) return
+    const close = e => { if (!e.target.closest('[data-swiped-row]')) setSwipedId(null) }
+    document.addEventListener('touchstart', close, { passive: true })
+    return () => document.removeEventListener('touchstart', close)
+  }, [swipedId])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -377,7 +424,9 @@ export default function SetEditor() {
                           subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
                           keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
                           keyChosen={!!item.content?.key}
-                          onOptions={setOptionsItem} />
+                          onOptions={it => (it.type === 'song' || it.type === 'blank' ? setOptionsItem(it) : handleEdit(it))}
+                          open={swipedId === item.id} onSwipe={o => setSwipedId(o ? item.id : null)}
+                          onDelete={async () => { setSwipedId(null); await handleDelete(item) }} />
                       )
                     })}
                   </ul>
@@ -393,7 +442,8 @@ export default function SetEditor() {
       </div>
 
       {showAdd && <AddItemModal onClose={() => setShowAdd(false)} onAdd={handleAddItem} />}
-      {editItem && <AddItemModal item={editItem} onClose={() => setEditItem(null)} onAdd={handleSaveEdit} />}
+      {editItem && <AddItemModal item={editItem} onClose={() => setEditItem(null)} onAdd={handleSaveEdit}
+        onDelete={async () => { const it = editItem; setEditItem(null); await handleDelete(it) }} />}
       {optionsItem && (
         <ItemOptionsDialog item={optionsItem} title={itemTitle(optionsItem)} song={songs[optionsItem.content?.song_id]}
           onClose={() => setOptionsItem(null)}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2 } from 'lucide-react'
+import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2 } from 'lucide-react'
 import { filesToSlideImages } from '../../lib/importSlides'
 import TitleSlide from '../TitleSlide'
 import TitleSlideToolbar from '../TitleSlideToolbar'
@@ -20,7 +20,8 @@ const MEDIA_COLORS = {
   image:        'text-green-400 bg-green-400/10',
 }
 
-export default function AddItemModal({ onClose, onAdd, item }) {
+export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const editing = !!item
   const { user } = useAuth()
   const [type, setType] = useState(item ? (item.type === 'media' ? (item.content?.media_category === 'presentation' ? 'announcement' : 'content') : item.type) : 'welcome')
@@ -58,10 +59,10 @@ export default function AddItemModal({ onClose, onAdd, item }) {
     supabase
       .from('songs')
       .select('id, title, artist, slides, raw_lyrics, lines_per_slide')
-      .eq('user_id', user.id)
+      .eq('user_id', user?.id)
       .order('title')
       .then(({ data }) => setSongs(data || []))
-  }, [user.id])
+  }, [user?.id])
 
   // Load media items when Content tab is selected
   useEffect(() => {
@@ -69,10 +70,10 @@ export default function AddItemModal({ onClose, onAdd, item }) {
     supabase
       .from('media_items')
       .select('id, name, category, file_size, created_at')
-      .eq('user_id', user.id)
+      .eq('user_id', user?.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => { setMediaItems(data || []); setMediaLoaded(true) })
-  }, [type, user.id, mediaLoaded])
+  }, [type, user?.id, mediaLoaded])
 
   const filtered = songs.filter(s =>
     s.title.toLowerCase().includes(query.toLowerCase()) ||
@@ -151,7 +152,7 @@ export default function AddItemModal({ onClose, onAdd, item }) {
         const p = pages[i]
         if (p.existing) { images.push({ url: p.url, storage_path: p.storage_path }); continue }
         setBusy(`Uploading slide ${i + 1} of ${pages.length}…`)
-        const path = `${user.id}/presentations/${crypto.randomUUID()}.jpg`
+        const path = `${user?.id}/presentations/${crypto.randomUUID()}.jpg`
         const { error } = await supabase.storage.from('media').upload(path, p.blob, { contentType: 'image/jpeg', upsert: false })
         if (error) throw new Error(error.message)
         const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
@@ -186,7 +187,18 @@ export default function AddItemModal({ onClose, onAdd, item }) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <h2 className="text-lg font-semibold">{editing ? 'Edit Item' : 'Add to Set'}</h2>
-          <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg"><X size={18} /></button>
+          <div className="flex items-center gap-1">
+            {item && onDelete && (
+              <button onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))} onBlur={() => setConfirmDelete(false)}
+                aria-label="Delete item" title={confirmDelete ? 'Click again to delete' : 'Delete from set'}
+                className={`flex items-center gap-1.5 h-9 px-2.5 rounded-lg border text-sm transition-colors ${
+                  confirmDelete ? 'border-red-600 bg-red-700 text-white' : 'border-transparent text-muted hover:text-red-400 hover:bg-red-500/10'
+                }`}>
+                <Trash2 size={16} />{confirmDelete && <span>Click again to delete</span>}
+              </button>
+            )}
+            <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg" aria-label="Close"><X size={18} /></button>
+          </div>
         </div>
 
         {/* Type tabs */}
