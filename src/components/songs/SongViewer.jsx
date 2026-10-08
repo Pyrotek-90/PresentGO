@@ -95,10 +95,10 @@ function ChartBlock({ block }) {
 
 // `setNav` turns this into "set mode": the songs of a set played back to back.
 //   { index, total, titles, onNext(), onPrev(), onJump(i) }   `startAtEnd` lands on the last page (coming back from the next song).
-export default function SongViewer({ song, onClose, setNav, initialMode, onModeChange, startAtEnd }) {
+export default function SongViewer({ song, onClose, setNav, initialMode, onModeChange, startAtEnd, initialKey }) {
   const meta = song.metadata || {}
   const original = meta.original_key || meta.key || ''
-  const keys = [original, ...(meta.transposed_keys || [])].filter(Boolean)
+  const keys = [...new Set([original, ...(meta.transposed_keys || []), initialKey].filter(Boolean))]
   const hasChart = !!meta.chord_chart?.trim()
 
   const [mode, setMode] = useState(() => initialMode || (getPref('viewerMode', 'lyrics') === 'chords' ? 'chords' : 'lyrics'))
@@ -106,7 +106,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
   const wantEnd = useRef(!!startAtEnd)
   useEffect(() => { onModeChange?.(mode) }, [mode])
   useEffect(() => { if (wantEnd.current) { const t = setTimeout(() => { wantEnd.current = false }, 400); return () => clearTimeout(t) } }, [])
-  const [activeKey, setActiveKey] = useState(keys[0] || '')
+  const [activeKey, setActiveKey] = useState(initialKey || keys[0] || '')
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
   const [box, setBox] = useState({ w: 0, h: 0 })

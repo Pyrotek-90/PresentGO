@@ -11,10 +11,11 @@ import Layout from '../components/Layout'
 import AddItemModal from '../components/sets/AddItemModal'
 import SongEditor from '../components/songs/SongEditor'
 import SetSongViewer from '../components/songs/SetSongViewer'
+import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  Trash2, GripVertical, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
+  GripVertical, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
@@ -27,7 +28,7 @@ const ITEM_COLORS = {
   media:        'text-purple-400 bg-purple-400/10',
 }
 
-function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, editable, deleting, onEdit, onDelete }) {
+function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabel, keyChosen, onOptions }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   return (
     <li ref={setNodeRef}
@@ -39,19 +40,23 @@ function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, editabl
       </button>
       <span className="text-xs text-muted w-4 shrink-0 text-center">{idx + 1}</span>
       <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}><ItemIcon size={13} /></div>
-      <button onClick={() => editable && onEdit(item)} className="flex-1 min-w-0 text-left" disabled={!editable}>
+      <button onClick={() => onOptions(item)} className="flex-1 min-w-0 text-left">
         <p className="text-sm font-medium truncate">{title}</p>
         <p className="text-xs text-muted truncate">{subtitle}</p>
       </button>
-      <div className="flex items-center gap-0.5 shrink-0">
-        <button onClick={() => onEdit(item)} disabled={!editable} aria-label="Edit item" title={editable ? 'Edit' : 'Nothing to edit'}
-          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] disabled:opacity-20"><Pencil size={14} /></button>
-        <button onClick={() => onDelete(item)} aria-label="Delete item" title={deleting === item.id ? 'Click again to confirm delete' : 'Delete'}
-          className={`p-1.5 rounded-lg transition-colors ${deleting === item.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={14} /></button>
-      </div>
+      {keyLabel && (
+        <button onClick={() => onOptions(item)} title={keyChosen ? `Key for this set: ${keyLabel}` : `Song's key: ${keyLabel} (tap to choose a key for this set)`}
+          className={`shrink-0 min-w-[2rem] h-7 px-2 rounded-md border text-xs font-semibold ${
+            keyChosen ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+          }`}>{keyLabel}</button>
+      )}
+      <button onClick={() => onOptions(item)} aria-label="Item options" title="Options"
+        className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5] shrink-0"><Pencil size={14} /></button>
     </li>
   )
 }
+
+const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
 
 export default function SetEditor() {
   const { setId } = useParams()
@@ -63,7 +68,7 @@ export default function SetEditor() {
   const [editItem, setEditItem] = useState(null)
   const [editSong, setEditSong] = useState(null)
   const [viewerOpen, setViewerOpen] = useState(false)
-  const [deleting, setDeleting] = useState(null)
+  const [optionsItem, setOptionsItem] = useState(null)
   const [details, setDetails] = useState(null)   // form state while editing set details
   const [detailsSaving, setDetailsSaving] = useState(false)
   const [detailsError, setDetailsError] = useState(null)
@@ -80,6 +85,7 @@ export default function SetEditor() {
           id: mockSongId, title: 'Holy Forever', artist: 'Bethel Music', lines_per_slide: 2,
           raw_lyrics: '[Verse 1]\nA thousand generations falling down in worship\nTo sing the song of ages to the Lamb\n\n[Chorus]\nHoly forever\nA story never ending\nHoly forever\nTo sing Your praise unceasing',
           slides: [],
+          metadata: { original_key: 'G Major', transposed_keys: ['A Major', 'B♭ Major'], chord_chart: '[Verse 1]\nG        D\nA thousand generations falling down in worship\nEm       C\nTo sing the song of ages to the Lamb\n' },
         }
         setSongs({ [mockSongId]: mockSong })
         setItems([
@@ -129,10 +135,17 @@ export default function SetEditor() {
   }
 
   const handleDelete = async item => {
-    if (deleting !== item.id) { setDeleting(item.id); return }
     if (setId !== 'mock') await supabase.from('set_items').delete().eq('id', item.id)
     setItems(prev => prev.filter(i => i.id !== item.id))
-    setDeleting(null)
+    setOptionsItem(null)
+  }
+
+  const handleSetKey = async (item, key) => {
+    const content = { ...item.content }
+    if (key) content.key = key; else delete content.key
+    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, content } : i)))
+    setOptionsItem(prev => (prev && prev.id === item.id ? { ...prev, content } : prev))
+    if (setId !== 'mock') await supabase.from('set_items').update({ content }).eq('id', item.id)
   }
 
   const DURATIONS = [30, 45, 60, 75, 90, 105, 120, 150, 180, 240]
@@ -238,7 +251,7 @@ export default function SetEditor() {
     return []
   }
 
-  const orderedSongs = items.filter(i => i.type === 'song').map(i => songs[i.content?.song_id]).filter(Boolean)
+  const orderedSongs = items.filter(i => i.type === 'song').map(i => (songs[i.content?.song_id] ? { song: songs[i.content.song_id], key: i.content?.key || null } : null)).filter(Boolean)
 
   const openPresent = () => {
     navigate(`/sets/${setId}/control`)
@@ -362,8 +375,9 @@ export default function SetEditor() {
                           ItemIcon={ITEM_ICONS[item.type] || Square} colorClass={ITEM_COLORS[item.type] || ITEM_COLORS.blank}
                           title={itemTitle(item)}
                           subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
-                          editable={item.type !== 'blank' && !(item.type === 'song' && !songs[item.content?.song_id])}
-                          deleting={deleting} onEdit={handleEdit} onDelete={handleDelete} />
+                          keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
+                          keyChosen={!!item.content?.key}
+                          onOptions={setOptionsItem} />
                       )
                     })}
                   </ul>
@@ -380,7 +394,14 @@ export default function SetEditor() {
 
       {showAdd && <AddItemModal onClose={() => setShowAdd(false)} onAdd={handleAddItem} />}
       {editItem && <AddItemModal item={editItem} onClose={() => setEditItem(null)} onAdd={handleSaveEdit} />}
-      {viewerOpen && orderedSongs.length > 0 && <SetSongViewer songs={orderedSongs} onClose={() => setViewerOpen(false)} />}
+      {optionsItem && (
+        <ItemOptionsDialog item={optionsItem} title={itemTitle(optionsItem)} song={songs[optionsItem.content?.song_id]}
+          onClose={() => setOptionsItem(null)}
+          onSetKey={key => handleSetKey(optionsItem, key)}
+          onEdit={() => { const it = optionsItem; setOptionsItem(null); handleEdit(it) }}
+          onRemove={() => handleDelete(optionsItem)} />
+      )}
+      {viewerOpen && orderedSongs.length > 0 && <SetSongViewer entries={orderedSongs} onClose={() => setViewerOpen(false)} />}
       {editSong && <SongEditor song={editSong} onClose={() => setEditSong(null)} onSaved={handleSongSaved} />}
     </Layout>
   )
