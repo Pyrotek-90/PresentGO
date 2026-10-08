@@ -12,12 +12,28 @@ const FIT_PHONE = { lyrics: [32, 15], chords: [30, 15] } // phones: smaller text
 const COMFORT_PHONE = { lyrics: 16, chords: 15 }
 const FLOOR_TWO_COL = { lyrics: 15, chords: 15 }        // two columns may go a little smaller to keep a song on one page
 const MIN_READABLE = { lyrics: 15, chords: 15 }         // never shrink everything below this just for one long line
+const MIN_READABLE_PHONE = { lyrics: 13, chords: 13 }   // phones are narrow, so allow a little smaller before wrapping a line
 const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
 const SIZE_KEY = 'presentgo.viewer.size'
 const SIZE_STEPS = [16, 20, 24, 28, 32]   // phone size button: steps up through these, then back to Auto
 const loadSizes = () => { try { return JSON.parse(localStorage.getItem(SIZE_KEY)) || {} } catch { return {} } }
+
+const ABBREV = {
+  verse: 'V', chorus: 'C', 'pre-chorus': 'PC', prechorus: 'PC', 'pre chorus': 'PC', bridge: 'B', intro: 'I', outro: 'O',
+  tag: 'T', interlude: 'Int', instrumental: 'Inst', refrain: 'R', ending: 'E', turnaround: 'TA', vamp: 'Vamp', coda: 'Coda',
+}
+// "Verse 1" -> V1, "Chorus" -> C, "Pre-Chorus 2" -> PC2, unknown labels -> initials or first letters
+export function abbreviateLabel(label) {
+  const m = label.trim().match(/^(.*?)\s*(\d+)?$/)
+  const base = (m?.[1] || label).trim().toLowerCase()
+  const num = m?.[2] || ''
+  if (ABBREV[base]) return ABBREV[base] + num
+  const words = base.split(/[\s-]+/).filter(Boolean)
+  const short = words.length > 1 ? words.map(w => w[0]).join('') : base.slice(0, 3)
+  return short.toUpperCase() + num
+}
 
 const headerStyle = { fontFamily: "'Archivo', 'Inter', sans-serif", fontStretch: '125%', fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase' }
 
@@ -115,6 +131,12 @@ export default function SongViewer({ song, onClose }) {
     () => (hasChart && song.raw_lyrics?.trim() ? reconcileChart(song.raw_lyrics, meta.chord_chart) : meta.chord_chart || ''),
     [hasChart, song.raw_lyrics, meta.chord_chart]
   )
+  // Order the sections are performed in (from the saved arrangement), e.g. V1 C V2 C B C
+  const arrangement = useMemo(
+    () => (song.slides || []).filter(sl => sl.label).map(sl => abbreviateLabel(sl.label)),
+    [song.slides]
+  )
+
   const chart = useMemo(() => {
     if (!hasChart) return ''
     return activeKey && activeKey !== original ? transposeChart(baseChart, original, activeKey) : baseChart
@@ -160,6 +182,7 @@ export default function SongViewer({ song, onClose }) {
   }, [])
 
   const widthOk = box.w >= TWO_COL_MIN_WIDTH
+  const pad = box.w > 0 && !widthOk ? 14 : PAD   // narrower side margins on phones
 
   // Re-measure once web fonts are ready (text width changes when Inter loads).
   useEffect(() => { document.fonts?.ready?.then(() => setFontTick(t => t + 1)) }, [])
@@ -172,8 +195,8 @@ export default function SongViewer({ song, onClose }) {
   useLayoutEffect(() => {
     const inner = innerRef.current
     if (!inner || !box.w) return
-    const cw = box.w - PAD * 2
-    const gap = PAD * 2
+    const cw = box.w - pad * 2
+    const gap = pad * 2
     inner.style.width = `${cw}px`
     inner.style.height = `${box.h - PAD_V * 2}px`
     inner.style.columnWidth = 'auto'
@@ -182,7 +205,7 @@ export default function SongViewer({ song, onClose }) {
     const [max] = (widthOk ? FIT : FIT_PHONE)[mode]
     const floor = (widthOk ? COMFORT : COMFORT_PHONE)[mode]
     const floor2 = Math.min(floor, FLOOR_TWO_COL[mode])
-    const minReadable = MIN_READABLE[mode]
+    const minReadable = (widthOk ? MIN_READABLE : MIN_READABLE_PHONE)[mode]
     const lines = inner.querySelectorAll('[data-fit]')   // every lyric / chart line: none may wrap or overflow
     lines.forEach(el => { if (el.dataset.wrapped) { el.style.whiteSpace = el.dataset.ws; delete el.dataset.wrapped } })
     const apply = (nc, f) => { inner.style.columnCount = String(nc); inner.style.fontSize = `${f}px` }
@@ -229,7 +252,7 @@ export default function SongViewer({ song, onClose }) {
     const n = Math.ceil(totalCols / nc)
     setPages(n)
     setPage(p => Math.min(p, n - 1))
-  }, [box, mode, activeKey, sections, chart, chartBlocks, manual, cols, widthOk, fontTick])
+  }, [box, mode, activeKey, sections, chart, chartBlocks, manual, cols, widthOk, pad, fontTick])
 
   useEffect(() => { setPage(0) }, [mode, activeKey, effCols])
 
@@ -376,7 +399,7 @@ export default function SongViewer({ song, onClose }) {
       </header>
 
       <div ref={viewportRef} className="relative flex-1 min-h-0 overflow-hidden select-none"
-        style={{ padding: `${PAD_V}px ${PAD}px` }}
+        style={{ padding: `${PAD_V}px ${pad}px` }}
         onClick={onTap} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {mode === 'chords' && !hasChart ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-muted text-center">
@@ -402,12 +425,21 @@ export default function SongViewer({ song, onClose }) {
         )}
       </div>
 
-      {pages > 1 && (
-        <div className="shrink-0 flex items-center justify-center gap-2 py-2 border-t border-border bg-surface text-xs text-muted">
-          {Array.from({ length: pages }, (_, i) => (
-            <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === page ? 'bg-accent-light' : 'bg-border'}`} />
-          ))}
-          <span className="ml-1">{page + 1} / {pages}<span className="hidden sm:inline"> · swipe or tap to turn</span></span>
+      {(pages > 1 || arrangement.length > 0) && (
+        <div className="shrink-0 flex items-center justify-between gap-3 px-3 py-1.5 border-t border-border bg-surface text-xs text-muted">
+          <div className="flex items-center gap-2 min-w-0">
+            {pages > 1 && Array.from({ length: pages }, (_, i) => (
+              <span key={i} className={`w-1.5 h-1.5 rounded-full shrink-0 ${i === page ? 'bg-accent-light' : 'bg-border'}`} />
+            ))}
+            {pages > 1 && <span className="ml-1 whitespace-nowrap">{page + 1} / {pages}<span className="hidden sm:inline"> · swipe or tap to turn</span></span>}
+          </div>
+          {arrangement.length > 0 && (
+            <div className="flex flex-wrap justify-end gap-1 max-w-[75%]" aria-label={`Song arrangement: ${arrangement.join(', ')}`} title="Arrangement">
+              {arrangement.map((a, i) => (
+                <span key={i} className="px-1.5 rounded bg-accent/15 text-accent-light font-semibold leading-5">{a}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
