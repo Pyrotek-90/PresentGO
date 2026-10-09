@@ -3,10 +3,11 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
 import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
+import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
-  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink,
+  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp,
 } from 'lucide-react'
 
 // ─── Wizard steps ─────────────────────────────────────────────────────────────
@@ -276,6 +277,56 @@ function LyricsSearch({ onSongFound }) {
   )
 }
 
+// ─── ChordPro import ──────────────────────────────────────────────────────────
+function ChordProImport({ onImport, hasExisting }) {
+  const [text, setText] = useState('')
+  const [err, setErr]   = useState(null)
+  const fileRef = useRef(null)
+
+  const run = src => {
+    setErr(null)
+    if (!looksLikeChordPro(src)) { setErr("That doesn't look like a ChordPro file — expected lines like {title: …} or chords in [brackets]."); return }
+    const parsed = parseChordPro(src)
+    if (!parsed.rawLyrics.trim() && !parsed.chordChart.trim()) { setErr('No lyrics or chords found in that file.'); return }
+    if (hasExisting && !window.confirm('Replace this song\'s lyrics and chord chart with the imported file?')) return
+    onImport(parsed)
+    setText('')
+  }
+
+  const handleFile = async e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > 512 * 1024) { setErr('That file is too large to be a ChordPro chart.'); return }
+    run(await file.text())
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted leading-snug">
+        Import a ChordPro file from SongSelect (Download → ChordPro), PraiseCharts, OnSong, or any chart app.
+        Lyrics, chords, key, tempo, writers, and CCLI number are filled in automatically.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input ref={fileRef} type="file" accept=".chordpro,.cho,.crd,.chopro,.pro,.txt,text/plain" className="hidden" onChange={handleFile} />
+        <button onClick={() => fileRef.current?.click()} className="btn-primary px-4 flex items-center gap-1.5 text-sm">
+          <FileUp size={15} /> Choose File
+        </button>
+        <span className="text-xs text-muted">or paste below</span>
+      </div>
+      <textarea className="input resize-y font-mono text-xs leading-relaxed min-h-[6rem]"
+        placeholder={'{title: Song Title}\n{key: G}\n\n{comment: Verse 1}\n[G]Line of [D]lyrics here'}
+        value={text} onChange={e => setText(e.target.value)} />
+      {text.trim() && (
+        <button onClick={() => run(text)} className="btn-primary px-4 flex items-center gap-1.5 text-sm">
+          <Check size={15} /> Import Pasted Chart
+        </button>
+      )}
+      {err && <p className="text-xs text-red-400">{err}</p>}
+    </div>
+  )
+}
+
 // ─── Main editor ──────────────────────────────────────────────────────────────
 export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -296,6 +347,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
   // Lyrics step UI
   const [showSearch, setShowSearch] = useState(isNew)
+  const [showImport, setShowImport] = useState(false)
+  const [importNote, setImportNote] = useState(null)
   const [cleaningUp, setCleaningUp] = useState(false)
   const [cleanupErr, setCleanupErr] = useState(null)
   const [showInsertMenu, setShowInsertMenu] = useState(false)
@@ -382,6 +435,30 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     arr.flatMap(entry =>
       (map[entry.label] || []).map((s, i) => ({ ...s, label: i === 0 ? entry.label : null }))
     )
+
+  const handleChordProImport = p => {
+    if (p.title) setTitle(p.title)
+    if (p.artist) setArtist(p.artist)
+    if (p.ccli) setCcliNumber(p.ccli)
+    if (p.author) setAuthor(p.author)
+    if (p.bpm) setBpm(p.bpm)
+    if (p.key) {
+      const m = p.key.match(/^([A-G])([#♭]?)\s+(Major|Minor)$/)
+      if (m) {
+        setKeyRoot(m[1]); setKeyAccidental(m[2] === '♭' ? 'b' : m[2]); setKeyMode(m[3])
+        setSongKey(p.key); songKeyRef.current = p.key
+      }
+    }
+    setRawLyrics(p.rawLyrics)
+    setChordChart(p.chordChart)
+    setSlides([]); setShowSlides(false)
+    setSectionsMap({}); setSectionOrder([]); setArrangement([])
+    setSectionsRaw({}); setSectionLPS({})
+    setShowImport(false); setShowSearch(false)
+    const got = [p.rawLyrics && 'lyrics', p.chordChart.trim() && 'chords', p.key && 'key', p.bpm && 'tempo', p.author && 'writers', p.ccli && 'CCLI #'].filter(Boolean)
+    setImportNote(`Imported ${got.join(', ')}. Review the lyrics, then continue to build slides.`)
+    if (!p.key && !p.bpm && (p.title || title)) lookupSongDetails(p.title || title, p.artist || artist)
+  }
 
   const handleSongFound = ({ title: t, artist: a, lyrics }) => {
     if (t) setTitle(t)
@@ -650,6 +727,27 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           </div>
         )}
       </div>
+      )}
+
+      {/* ChordPro import */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <button onClick={() => setShowImport(v => !v)}
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#1e1e1e] transition-colors">
+          <div className="flex items-center gap-2.5">
+            <FileUp size={14} className="text-accent-light" />
+            <span className="text-sm font-medium">Import ChordPro Chart</span>
+            <span className="text-[10px] text-muted hidden sm:inline">SongSelect · PraiseCharts · OnSong</span>
+          </div>
+          <ChevronDown size={15} className={`text-muted transition-transform ${showImport ? 'rotate-180' : ''}`} />
+        </button>
+        {showImport && (
+          <div className="px-4 pb-4 pt-3 border-t border-border">
+            <ChordProImport onImport={handleChordProImport} hasExisting={!!(rawLyrics.trim() || chordChart.trim())} />
+          </div>
+        )}
+      </div>
+      {importNote && (
+        <p className="text-xs text-emerald-400 flex items-center gap-1.5"><Check size={12} /> {importNote}</p>
       )}
 
       {/* Song details */}
