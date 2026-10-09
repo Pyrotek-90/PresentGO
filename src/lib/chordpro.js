@@ -17,11 +17,11 @@ const SECTION_ENV = {
 const END_ENV = /^(end_of_(verse|chorus|bridge|tab|grid)|eov|eoc|eob|eot|eog)$/
 
 // Plain lines some exports use instead of {comment: ...} directives.
-const BARE_SECTION_RE = /^(intro|verse|chorus|pre-?chorus|bridge|tag|outro|ending|interlude|instrumental|turnaround|refrain|vamp|coda|misc)(\s*\d+[a-z]?)?\s*:?$/i
+export const BARE_SECTION_RE = /^(intro|verse|chorus|pre-?chorus|bridge|tag|outro|ending|interlude|instrumental|turnaround|refrain|vamp|coda|misc)(\s*\d+[a-z]?)?\s*:?$/i
 
-const titleCase = s => s.replace(/\b([a-z])/g, c => c.toUpperCase())
+export const titleCase = s => s.replace(/\b([a-z])/g, c => c.toUpperCase())
 
-function parseChordProKey(raw) {
+export function parseChordProKey(raw) {
   const m = (raw || '').trim().match(/^([A-G])([#b♭]?)\s*(m(?!aj)|min|minor)?/i)
   if (!m) return ''
   const acc = m[2] === '♭' ? 'b' : m[2]
@@ -77,7 +77,6 @@ export function parseChordPro(text) {
   const sections = []
   let cur = null
   let envLabel = null
-  const counts = {}
 
   const open = label => {
     cur = { label, rows: [] }
@@ -125,7 +124,14 @@ export function parseChordPro(text) {
     }
   }
 
-  // Raw lyrics keep each section once; identical repeats are dropped, differing ones get numbered.
+  return assembleSong({ ...meta, author: meta.authors.join(', ') }, sections)
+}
+
+// Builds the song shape from parsed sections ({ label, rows: [{ chords, lyric }] }).
+// Raw lyrics keep each section once; identical repeats are dropped, differing ones get numbered.
+// Shared by the ChordPro and PDF readers so both produce charts the editor can reconcile.
+export function assembleSong(meta, sections) {
+  const counts = {}
   const seen = new Map()
   const lyricBlocks = []
   const chartBlocks = []
@@ -154,14 +160,14 @@ export function parseChordPro(text) {
   }
 
   return {
-    title: meta.title,
-    artist: meta.artist,
-    author: meta.authors.join(', '),
-    ccli: meta.ccli,
-    key: meta.key,
-    bpm: meta.bpm,
-    copyright: meta.copyright,
+    title: meta.title || '',
+    artist: meta.artist || '',
+    author: meta.author || '',
+    ccli: meta.ccli || '',
+    key: meta.key || '',
+    bpm: meta.bpm || '',
+    copyright: meta.copyright || '',
     rawLyrics: lyricBlocks.join('\n\n'),
-    chordChart: chartBlocks.join('\n\n') + '\n',
+    chordChart: chartBlocks.length ? chartBlocks.join('\n\n') + '\n' : '',
   }
 }

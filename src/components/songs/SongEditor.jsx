@@ -1142,6 +1142,19 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
       )}
 
+      {/* Licensing details — used on slides and in the CCLI report */}
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_10rem] gap-3">
+        <div>
+          <label className="label !mb-1">Writers</label>
+          <input className="input" placeholder="John Newton, Edwin O. Excell" value={author} onChange={e => setAuthor(e.target.value)} />
+        </div>
+        <div>
+          <label className="label !mb-1">CCLI Song #</label>
+          <input className="input" inputMode="numeric" placeholder="22025" value={ccliNumber}
+            onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
+        </div>
+      </div>
+
       {/* Tempo + keys — one-line bar */}
       <div className="rounded-xl border border-border bg-card px-3 py-2 space-y-1.5">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
