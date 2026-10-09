@@ -11,6 +11,8 @@ import ContentLibrary from './pages/ContentLibrary'
 import Settings from './pages/Settings'
 import Calendar from './pages/Calendar'
 import Team from './pages/Team'
+import GetStarted from './pages/GetStarted'
+import CcliReport from './pages/CcliReport'
 
 export default function App() {
   return (
@@ -35,6 +37,8 @@ export default function App() {
               <Route path="/team" element={<Team />} />
               <Route path="/media" element={<ContentLibrary />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/get-started" element={<GetStarted />} />
+              <Route path="/ccli-report" element={<CcliReport />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

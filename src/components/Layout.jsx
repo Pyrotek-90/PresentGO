@@ -1,7 +1,7 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
-import { Home, CalendarDays, Users, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown } from 'lucide-react'
+import { Home, CalendarDays, Users, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown, FileBarChart, Upload } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { WifiOff } from 'lucide-react'
 
@@ -107,6 +107,26 @@ export default function Layout({ children }) {
                   {isDark ? 'Light Mode' : 'Dark Mode'}
                 </button>
 
+                {/* Import & CCLI report */}
+                {[
+                  { to: '/get-started', label: 'Import Songs', icon: Upload },
+                  { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },
+                ].map(({ to, label, icon: Icon }) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    onClick={() => setProfileOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                      location.pathname === to
+                        ? 'text-accent-light bg-accent/10'
+                        : 'text-muted hover:text-primary hover:bg-surface'
+                    }`}
+                  >
+                    <Icon size={15} />
+                    {label}
+                  </Link>
+                ))}
+
                 {/* Settings link */}
                 <Link
                   to="/settings"
@@ -181,6 +201,20 @@ export default function Layout({ children }) {
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
               {isDark ? 'Light Mode' : 'Dark Mode'}
             </button>
+            {[
+              { to: '/get-started', label: 'Import Songs', icon: Upload },
+              { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },
+            ].map(({ to, label, icon: Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:text-primary hover:bg-card transition-colors"
+              >
+                <Icon size={16} />
+                {label}
+              </Link>
+            ))}
             <Link
               to="/settings"
               onClick={() => setMenuOpen(false)}

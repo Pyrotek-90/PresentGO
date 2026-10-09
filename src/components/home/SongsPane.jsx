@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, Music, ChevronRight, Check, X, ListPlus } from 'lucide-react'
+import { Plus, Search, Music, ChevronRight, Check, X, ListPlus, Upload } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { formatSetDate } from '../../lib/sets'
 
 export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onAdd, onEdit, onView, onNew }) {
@@ -52,6 +53,10 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             }`}>
             {addMode ? <><Check size={14} /> Done</> : <><ListPlus size={14} /> + To Set</>}
           </button>
+          <Link to="/get-started" title="Import a folder of ChordPro or PDF charts"
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-sm font-medium text-muted hover:text-primary hover:border-accent/50 transition-colors">
+            <Upload size={14} /> <span className="hidden sm:inline">Import</span>
+          </Link>
           <button onClick={onNew} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
             <Plus size={14} /> New Song
           </button>
@@ -96,6 +101,11 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
           <div className="text-center py-12 space-y-2">
             <Music size={36} className="text-muted mx-auto" />
             <p className="text-muted text-sm">{songs.length === 0 ? 'No songs yet. Add your first song to get started.' : 'No songs match your search or filters.'}</p>
+            {songs.length === 0 && (
+              <Link to="/get-started" className="btn-primary text-sm inline-flex items-center gap-2 mt-2">
+                <Upload size={14} /> Import your existing charts
+              </Link>
+            )}
           </div>
         ) : (
           <ul className="space-y-0.5">
