@@ -42,23 +42,29 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
   return (
     <section className="flex flex-col min-h-0 flex-1 rounded-xl border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border shrink-0">
-        <div className="flex items-baseline gap-2">
-          <h2 className="font-semibold">Song Library</h2>
+        <div className="flex items-baseline gap-2 min-w-0">
+          <h2 className="font-semibold whitespace-nowrap">Song Library</h2>
           <span className="text-xs text-muted">{songs.length}</span>
         </div>
-        <div className="flex items-center gap-2">
+        {/* On phones the buttons show icons only so the header stays on one row. */}
+        <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setAddMode(v => !v)}
-            className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border text-sm font-medium transition-colors ${
+            title={addMode ? 'Done adding to set' : 'Add songs to a set'}
+            aria-label={addMode ? 'Done adding to set' : 'Add songs to a set'}
+            className={`flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-colors ${
               addMode ? 'border-accent bg-accent/20 text-accent-light' : 'border-accent/50 text-accent-light hover:bg-accent/10'
             }`}>
-            {addMode ? <><Check size={14} /> Done</> : <><ListPlus size={14} /> + To Set</>}
+            {addMode
+              ? <><Check size={14} /> <span className="hidden sm:inline">Done</span></>
+              : <><ListPlus size={14} /> <span className="hidden sm:inline">+ To Set</span></>}
           </button>
-          <Link to="/get-started" title="Import a folder of ChordPro or PDF charts"
-            className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-sm font-medium text-muted hover:text-primary hover:border-accent/50 transition-colors">
+          <Link to="/get-started" title="Import a folder of ChordPro or PDF charts" aria-label="Import songs"
+            className="flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-3 rounded-lg border border-border text-sm font-medium text-muted whitespace-nowrap hover:text-primary hover:border-accent/50 transition-colors">
             <Upload size={14} /> <span className="hidden sm:inline">Import</span>
           </Link>
-          <button onClick={onNew} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-            <Plus size={14} /> New Song
+          <button onClick={onNew} title="New song" aria-label="New song"
+            className="btn-primary flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto !p-0 sm:!px-3 text-sm whitespace-nowrap">
+            <Plus size={14} /> <span className="hidden sm:inline">New Song</span>
           </button>
         </div>
       </div>
