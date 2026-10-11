@@ -75,7 +75,7 @@ export default function PositionsPanel({ positions, setPositions, loading, loadE
                   {items.map(p => (
                     <li key={p.id} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[#1a1a1a] group">
                       <span className={`flex-1 min-w-0 truncate text-sm ${drumAltOf(p) ? 'pl-3 text-muted' : ''}`}>
-                        {drumAltOf(p) ? `or ${p.name}` : p.name}
+                        {p.name}
                         {drumAltOf(p) && <span className="ml-1.5 text-[10px] text-muted">alternative to {drumAltOf(p)}</span>}
                       </span>
                       {p.level && (
