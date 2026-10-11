@@ -156,13 +156,13 @@ export default function Team() {
                 {positions.length === 0 ? (
                   <p className="text-xs text-muted">No positions yet. Create them on the <Link to="/calendar" className="text-accent-light underline">Calendar</Link> page.</p>
                 ) : (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1">
                     {positions.map(p => {
                       const on = form.position_ids.includes(p.id)
                       return (
                         <button key={p.id} type="button" onClick={() => togglePos(p.id)} aria-pressed={on}
                           title={drumAltOf(p) ? `Alternative to ${drumAltOf(p)}` : undefined}
-                          className={`flex items-center gap-1 px-3 h-8 rounded-full border text-xs font-medium transition-colors ${
+                          className={`flex items-center gap-1 px-2.5 h-7 rounded-full border text-xs font-medium transition-colors ${
                             on ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                           }`}>
                           {on && <Check size={12} />}{posLabel(p)}
@@ -205,7 +205,7 @@ export default function Team() {
                   return (
                     <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 rounded-lg hover:bg-[#1a1a1a] group">
                       <span className="text-sm font-medium w-40 truncate">{m.name}</span>
-                      <span className="flex-1 min-w-[8rem] flex flex-wrap gap-1">
+                      <span className="flex-1 min-w-[8rem] flex flex-wrap gap-0.5">
                         {mine.map(p => <span key={p.id} className="text-[10px] px-1.5 py-0.5 rounded-full border border-border text-muted">{posLabel(p)}</span>)}
                       </span>
                       <span className="flex items-center gap-3 text-xs text-muted">
