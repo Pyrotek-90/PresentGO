@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import SetsPane from '../components/home/SetsPane'
+import WeeklyThought from '../components/home/WeeklyThought'
 import SongsPane from '../components/home/SongsPane'
 import SongEditor from '../components/songs/SongEditor'
 import SongViewer from '../components/songs/SongViewer'
@@ -76,6 +77,7 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto p-4 md:p-6 flex flex-col gap-3 h-[calc(100dvh-4.5rem)]">
+        <WeeklyThought />
         <SetsPane sets={sets} loading={loadingSets} targetSetId={targetSetId}
           onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
         <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
