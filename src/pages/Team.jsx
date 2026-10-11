@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Search, Pencil, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
-import { posLabel, sortPositions, drumAltOf, ensureStandardPositions } from '../lib/positions'
+import { posLabel, sortPositions, ensureStandardPositions } from '../lib/positions'
 import { parseVCards, saveVCard, canPickContacts, pickContact } from '../lib/vcard'
 const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
 
@@ -21,7 +20,8 @@ export default function Team() {
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [importNote, setImportNote] = useState(null)
-  const [contactHelp, setContactHelp] = useState(false)   // shown where the browser can't open the contact list
+  const [contactHelp, setContactHelp] = useState(false)
+  const [newPos, setNewPos] = useState(null)   // text of a position being added from the form, or null   // shown where the browser can't open the contact list
   const vcfInput = useRef(null)
 
   useEffect(() => {
@@ -43,6 +43,22 @@ export default function Team() {
       .filter(m => !filterPos || m.position_ids?.includes(filterPos))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
   }, [members, query, filterPos])
+
+  // "+ Add" bubble: creates a new position and selects it for this person.
+  const addPosition = async () => {
+    const name = (newPos || '').trim()
+    if (!name) { setNewPos(null); return }
+    const existing = positions.find(p => p.name.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      setForm(f => (f.position_ids.includes(existing.id) ? f : { ...f, position_ids: [...f.position_ids, existing.id] }))
+      setNewPos(null); return
+    }
+    const { data, error } = await supabase.from('positions').insert({ user_id: user.id, name, category: 'Other', level: null }).select().single()
+    if (error) { setError('Could not add that position.'); return }
+    setPositions(prev => sortPositions([...prev, data]))
+    setForm(f => ({ ...f, position_ids: [...f.position_ids, data.id] }))
+    setNewPos(null)
+  }
 
   const togglePos = id => setForm(f => ({
     ...f, position_ids: f.position_ids.includes(id) ? f.position_ids.filter(x => x !== id) : [...f.position_ids, id],
@@ -167,15 +183,12 @@ export default function Team() {
 
               <div>
                 <span className="label !mb-1.5">Positions</span>
-                {positions.length === 0 ? (
-                  <p className="text-xs text-muted">No positions yet. Create them on the <Link to="/calendar" className="text-accent-light underline">Calendar</Link> page.</p>
-                ) : (
+                {(
                   <div className="flex flex-wrap gap-1">
                     {positions.map(p => {
                       const on = form.position_ids.includes(p.id)
                       return (
                         <button key={p.id} type="button" onClick={() => togglePos(p.id)} aria-pressed={on}
-                          title={drumAltOf(p) ? `Alternative to ${drumAltOf(p)}` : undefined}
                           className={`flex items-center gap-1 px-2.5 h-7 rounded-full border text-xs font-medium transition-colors ${
                             on ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                           }`}>
@@ -183,6 +196,21 @@ export default function Team() {
                         </button>
                       )
                     })}
+                    {newPos === null ? (
+                      <button type="button" onClick={() => setNewPos('')}
+                        className="flex items-center gap-1 px-2.5 h-7 rounded-full border border-dashed border-accent/50 text-xs font-medium text-accent-light hover:bg-accent/10 transition-colors">
+                        <Plus size={12} /> Add
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full border border-accent bg-accent/10">
+                        <input autoFocus className="bg-transparent outline-none text-xs w-28 text-primary placeholder:text-muted" placeholder="New position"
+                          value={newPos} onChange={e => setNewPos(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPosition() } if (e.key === 'Escape') setNewPos(null) }}
+                          onBlur={() => { if (!newPos.trim()) setNewPos(null) }} />
+                        <button type="button" onMouseDown={e => e.preventDefault()} onClick={addPosition} disabled={!newPos.trim()}
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-accent-light hover:bg-accent/20 disabled:opacity-40" aria-label="Add position"><Check size={12} /></button>
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -190,7 +218,7 @@ export default function Team() {
               {error && <p className="text-red-400 text-xs">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm">{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add member'}</button>
-                <button onClick={() => { setForm(null); setImportNote(null); setContactHelp(false) }} className="btn-ghost text-sm">Cancel</button>
+                <button onClick={() => { setForm(null); setImportNote(null); setContactHelp(false); setNewPos(null) }} className="btn-ghost text-sm">Cancel</button>
               </div>
             </div>
           )}
