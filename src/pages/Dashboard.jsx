@@ -45,6 +45,15 @@ export default function Dashboard() {
     return null
   }
 
+  // "+ New Set" from the Song Library: create the set, make it the add-to target, stay here.
+  const createTargetSet = async fields => {
+    const { data, error } = await insertSet(supabase, user.id, fields)
+    if (error) return 'Could not create set. Please try again.'
+    setSets(prev => [...prev, { ...data, set_items: [] }])
+    setTargetSetId(data.id)
+    return null
+  }
+
   const addToSet = async song => {
     const { count } = await supabase.from('set_items').select('id', { count: 'exact', head: true }).eq('set_id', targetSetId)
     const { error } = await supabase.from('set_items').insert({
@@ -69,7 +78,7 @@ export default function Dashboard() {
         <SetsPane sets={sets} loading={loadingSets} targetSetId={targetSetId}
           onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
         <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
-          onTargetChange={setTargetSetId} onAdd={addToSet} onEdit={setEditing}
+          onTargetChange={setTargetSetId} onCreateSet={createTargetSet} onAdd={addToSet} onEdit={setEditing}
           onView={setViewing} onNew={() => setEditing(true)} />
       </div>
 

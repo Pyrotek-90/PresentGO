@@ -1,14 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Plus, Search, Music, ChevronRight, Check, X, ListPlus, Upload } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { formatSetDate } from '../../lib/sets'
+import { formatSetDate, todayISO } from '../../lib/sets'
 
-export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onAdd, onEdit, onView, onNew }) {
+export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onCreateSet, onAdd, onEdit, onView, onNew }) {
   const [query, setQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState([])
   const [addMode, setAddMode] = useState(false)
   const [justAdded, setJustAdded] = useState(null)
   const [addError, setAddError] = useState(null)
+  const [newSetOpen, setNewSetOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newDate, setNewDate] = useState(todayISO)
+  const [creatingSet, setCreatingSet] = useState(false)
+  const [newSetError, setNewSetError] = useState(null)
 
   const themeCounts = useMemo(() => {
     const m = {}
@@ -39,6 +44,22 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
 
   const noSets = sets.length === 0
 
+  const closeNewSet = () => { setNewSetOpen(false); setNewName(''); setNewDate(todayISO()); setNewSetError(null) }
+  const submitNewSet = async () => {
+    if (!newName.trim() || creatingSet) return
+    setCreatingSet(true); setNewSetError(null)
+    const err = await onCreateSet({ name: newName.trim(), date: newDate })
+    setCreatingSet(false)
+    if (err) setNewSetError(err)
+    else closeNewSet()
+  }
+  const toggleAddMode = () => {
+    const on = !addMode
+    setAddMode(on)
+    if (on && noSets) setNewSetOpen(true)   // nothing to add to yet: start with the new-set form
+    if (!on) closeNewSet()
+  }
+
   return (
     <section className="flex flex-col min-h-0 flex-1 rounded-xl border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border shrink-0">
@@ -48,7 +69,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
         </div>
         {/* On phones the buttons show icons only so the header stays on one row. */}
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => setAddMode(v => !v)}
+          <button onClick={toggleAddMode}
             title={addMode ? 'Done adding to set' : 'Add songs to a set'}
             aria-label={addMode ? 'Done adding to set' : 'Add songs to a set'}
             className={`flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-colors ${
@@ -76,12 +97,28 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             <input className="input !pl-9 !h-8 text-sm" placeholder="Search title, artist, or CCLI #…" value={query} onChange={e => setQuery(e.target.value)} />
           </div>
           {addMode && <span className="text-[10px] uppercase tracking-widest text-muted">Add to</span>}
-          {addMode && <select className="input !h-8 !py-0 !px-2 text-sm !w-auto max-w-[14rem]" value={targetSetId || ''} disabled={noSets}
-            onChange={e => onTargetChange(e.target.value)}>
-            {noSets && <option value="">Create a set first</option>}
+          {addMode && <select className="input !h-8 !py-0 !px-2 text-sm !w-auto max-w-[14rem]" value={newSetOpen ? '__new' : targetSetId || ''}
+            onChange={e => { if (e.target.value === '__new') setNewSetOpen(true); else { closeNewSet(); onTargetChange(e.target.value) } }}>
+            {noSets && !newSetOpen && <option value="">No sets yet</option>}
             {sets.map(s => <option key={s.id} value={s.id}>{s.name}{s.service_date ? ` · ${formatSetDate(s.service_date)}` : ''}</option>)}
+            <option value="__new">+ New Set…</option>
           </select>}
         </div>
+        {addMode && newSetOpen && (
+          <div className="space-y-1.5">
+            {newSetError && <p className="text-red-400 text-xs">{newSetError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <input className="input flex-1 min-w-[10rem] !h-8 text-sm" placeholder="New set name, e.g. Sunday Morning Worship" autoFocus
+                value={newName} onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitNewSet(); if (e.key === 'Escape') closeNewSet() }} />
+              <input type="date" className="input !h-8 !py-0 text-sm !w-auto" value={newDate} onChange={e => setNewDate(e.target.value)} aria-label="Service date" />
+              <button onClick={submitNewSet} disabled={creatingSet || !newName.trim()} className="btn-primary !py-0 h-8 !px-3 text-sm shrink-0">
+                {creatingSet ? 'Creating…' : 'Create'}
+              </button>
+              <button onClick={closeNewSet} className="btn-ghost !py-0 h-8 !px-3 text-sm shrink-0">Cancel</button>
+            </div>
+          </div>
+        )}
         {themeCounts.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
             {themeCounts.map(([t, n]) => (
