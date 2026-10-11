@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { CATEGORIES } from './PositionsPanel'
-
-const posLabel = p => `${p.name}${p.level ? ` (${p.level})` : ''}`
+import { posLabel, drumAltOf } from '../../lib/positions'
 
 export default function SetTeam({ assignments, positions, members, onAdd, onRemove }) {
   const [positionId, setPositionId] = useState('')
@@ -46,7 +45,7 @@ export default function SetTeam({ assignments, positions, members, onAdd, onRemo
             <option value="">Position…</option>
             {CATEGORIES.map(cat => {
               const items = positions.filter(p => p.category === cat)
-              return items.length ? <optgroup key={cat} label={cat}>{items.map(p => <option key={p.id} value={p.id}>{posLabel(p)}</option>)}</optgroup> : null
+              return items.length ? <optgroup key={cat} label={cat}>{items.map(p => <option key={p.id} value={p.id}>{drumAltOf(p) ? `\u00a0\u00a0or ${posLabel(p)}` : posLabel(p)}</option>)}</optgroup> : null
             })}
           </select>
           <select className="input !h-7 !py-0 !px-2 text-xs !w-auto max-w-[11rem]" value={memberId} disabled={!positionId}
