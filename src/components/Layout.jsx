@@ -1,7 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { useTheme } from '../contexts/ThemeContext'
-import { Home, CalendarDays, Users, LogOut, Menu, X, Tv, FolderOpen, Settings, Sun, Moon, User, ChevronDown, FileBarChart, Upload } from 'lucide-react'
+import { Home, CalendarDays, Users, LogOut, Tv, FolderOpen, Settings, ChevronDown, FileBarChart, Upload } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { WifiOff } from 'lucide-react'
 
@@ -14,7 +13,6 @@ const navItems = [
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
-  const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const [online, setOnline] = useState(() => navigator.onLine)
@@ -92,21 +90,6 @@ export default function Layout({ children }) {
 
             {profileOpen && (
               <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
-                {/* User info */}
-                <div className="px-4 py-3 border-b border-border">
-                  <p className="text-sm font-medium text-primary truncate">{displayName}</p>
-                  <p className="text-xs text-muted truncate">{user?.email}</p>
-                </div>
-
-                {/* Theme toggle */}
-                <button
-                  onClick={toggleTheme}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:text-primary hover:bg-surface transition-colors"
-                >
-                  {isDark ? <Sun size={15} /> : <Moon size={15} />}
-                  {isDark ? 'Light Mode' : 'Dark Mode'}
-                </button>
-
                 {/* Import & CCLI report */}
                 {[
                   { to: '/get-started', label: 'Import Songs', icon: Upload },
@@ -157,10 +140,16 @@ export default function Layout({ children }) {
 
           {/* Mobile menu toggle */}
           <button
-            className="md:hidden btn-ghost p-2"
+            className="md:hidden btn-ghost flex items-center gap-2 text-sm px-2 py-1.5"
             onClick={() => setMenuOpen(o => !o)}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
           >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            <div className="w-7 h-7 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-xs font-semibold shrink-0">
+              {displayName[0]?.toUpperCase()}
+            </div>
+            <span className="text-sm text-primary max-w-[120px] truncate">{displayName}</span>
+            <ChevronDown size={14} className={`text-muted transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </header>
@@ -185,22 +174,6 @@ export default function Layout({ children }) {
           ))}
           {/* Mobile profile section */}
           <div className="border-t border-border mt-1 pt-1">
-            <div className="flex items-center gap-2 px-3 py-2">
-              <div className="w-7 h-7 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-xs font-semibold shrink-0">
-                {displayName[0]?.toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-primary truncate">{displayName}</p>
-                <p className="text-xs text-muted truncate">{user?.email}</p>
-              </div>
-            </div>
-            <button
-              onClick={toggleTheme}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:text-primary hover:bg-card transition-colors"
-            >
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
-              {isDark ? 'Light Mode' : 'Dark Mode'}
-            </button>
             {[
               { to: '/get-started', label: 'Import Songs', icon: Upload },
               { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },
