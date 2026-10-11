@@ -113,6 +113,7 @@ export default function SetEditor() {
   const [detailsSaving, setDetailsSaving] = useState(false)
   const [detailsError, setDetailsError] = useState(null)
   const [showAdd, setShowAdd]   = useState(false)
+  const [confirmDeleteSet, setConfirmDeleteSet] = useState(false)
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
@@ -241,6 +242,14 @@ export default function SetEditor() {
     setDetailsSaving(false); setDetails(null); setIsNew(false)
   }
 
+  // Trash can in the header: first tap arms it (turns red), second tap deletes the set and its program.
+  const deleteSet = async () => {
+    if (!confirmDeleteSet) { setConfirmDeleteSet(true); setTimeout(() => setConfirmDeleteSet(false), 4000); return }
+    const { error } = await supabase.from('sets').delete().eq('id', setId)
+    if (error) { setConfirmDeleteSet(false); return }
+    navigate('/')
+  }
+
   const downloadIcs = () => {
     const ics = buildIcs([{ ...set, id: set.id }], { baseUrl: window.location.origin, calendarName: set.name })
     const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }))
@@ -347,6 +356,11 @@ export default function SetEditor() {
             <button onClick={openDetails} title="Edit details" aria-label="Edit details" className="btn-ghost flex items-center gap-1.5 text-sm !px-2 sm:!px-2.5 !py-1.5"><Pencil size={14} /><span className="hidden sm:inline">Edit details</span></button>
             <button onClick={downloadIcs} disabled={!set?.service_date} title={set?.service_date ? 'Download an event file for Apple, Google or Outlook calendar' : 'Add a date first'}
               className="hidden sm:flex btn-ghost items-center gap-1.5 text-sm !px-2.5 !py-1.5 disabled:opacity-40"><CalendarPlus size={14} /> Add to calendar</button>
+            <button onClick={deleteSet} disabled={setId === 'mock'}
+              title={confirmDeleteSet ? 'Tap again to delete this set' : 'Delete set'} aria-label={confirmDeleteSet ? 'Tap again to delete this set' : 'Delete set'}
+              className={`flex items-center justify-center h-8 w-8 rounded-lg transition-colors ${confirmDeleteSet ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400 hover:bg-[#2e2e2e]'}`}>
+              <Trash2 size={15} />
+            </button>
           </div>
         </div>
 
@@ -396,23 +410,23 @@ export default function SetEditor() {
 
         {/* Program card */}
         <section className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border">
-            <div className="flex items-baseline gap-2">
-              <h2 className="font-semibold">Set Program</h2>
-              <span className="text-xs text-muted">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h2 className="font-semibold">Program</h2>
+              <span className="text-xs text-muted whitespace-nowrap">{items.length}<span className="hidden sm:inline"> item{items.length !== 1 ? 's' : ''}</span></span>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setShowAdd(true)} className="btn-secondary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-                <Plus size={14} /> Add Item
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button onClick={() => setShowAdd(true)} className="btn-secondary flex items-center gap-1 !py-1 !px-2.5 text-sm whitespace-nowrap" aria-label="Add item">
+                <Plus size={14} /> Item
               </button>
               <button onClick={() => setViewerOpen(true)} disabled={orderedSongs.length === 0}
                 title="Song Viewer: step through the songs in order" aria-label="Song Viewer"
                 className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
                 <BookOpen size={14} /><span className="hidden sm:inline">Song Viewer</span>
               </button>
-              <button onClick={openPresent} disabled={items.length === 0}
-                className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
-                <MonitorPlay size={14} /> Present
+              <button onClick={openPresent} disabled={items.length === 0} title="Present" aria-label="Present"
+                className="flex items-center justify-center h-8 w-9 rounded-lg border border-accent/50 text-accent-light transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
+                <MonitorPlay size={15} />
               </button>
             </div>
           </div>
@@ -453,7 +467,7 @@ export default function SetEditor() {
         </section>
 
         {items.length > 0 && (
-          <p className="text-xs text-muted text-center">When your program is ready, tap <strong className="text-[#f5f5f5]">Present</strong> to connect a TV and run the slides.</p>
+          <p className="text-xs text-muted text-center">When your program is ready, tap <strong className="text-[#f5f5f5]">Present</strong> (<MonitorPlay size={12} className="inline -mt-0.5" />) to connect a TV and run the slides.</p>
         )}
       </div>
 
