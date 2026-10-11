@@ -5,8 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import { CATEGORIES } from '../components/calendar/PositionsPanel'
-
-const posLabel = p => `${p.name}${p.level ? ` (${p.level})` : ''}`
+import { posLabel, sortPositions, drumAltOf, ensureStandardPositions } from '../lib/positions'
 const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
 
 export default function Team() {
@@ -26,9 +25,11 @@ export default function Team() {
     Promise.all([
       supabase.from('team_members').select('*').eq('user_id', user.id).order('name'),
       supabase.from('positions').select('*').eq('user_id', user.id).order('created_at'),
-    ]).then(([m, p]) => {
+    ]).then(async ([m, p]) => {
       if (m.error || p.error) setLoadError('Team features are not set up yet. Run the latest Supabase migration.')
-      setMembers(m.data || []); setPositions(p.data || [])
+      setMembers(m.data || [])
+      const list = p.error ? [] : await ensureStandardPositions(supabase, user, p.data || [])
+      setPositions(sortPositions(list))
     }).catch(() => setLoadError('Could not load team data.')).finally(() => setLoading(false))
   }, [user.id])
 
@@ -85,9 +86,9 @@ export default function Team() {
               <div className="flex flex-wrap gap-2">
                 <input className="input flex-1 min-w-[10rem] !h-9" placeholder="Name" autoFocus value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                <input className="input flex-1 min-w-[10rem] !h-9" type="email" placeholder="Email" value={form.email}
+                <input className="input flex-[2] min-w-[14rem] !h-9" type="email" placeholder="Email" value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-                <input className="input flex-1 min-w-[8rem] !h-9" type="tel" placeholder="Phone" value={form.phone}
+                <input className="input !w-40 shrink-0 !h-9" type="tel" placeholder="Phone" value={form.phone}
                   onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
@@ -100,11 +101,14 @@ export default function Team() {
                   return (
                     <div key={cat} className="flex flex-wrap items-center gap-1">
                       <span className="w-32 shrink-0 text-[11px] text-muted">{cat}</span>
-                      {items.map(p => (
-                        <button key={p.id} type="button" onClick={() => togglePos(p.id)}
+                      {items.map((p, i) => (
+                        <span key={p.id} className="contents">
+                        {drumAltOf(p) && !drumAltOf(items[i - 1]) && <span className="text-[11px] text-muted px-0.5">or</span>}
+                        <button type="button" onClick={() => togglePos(p.id)} title={drumAltOf(p) ? `Alternative to ${drumAltOf(p)}` : undefined}
                           className={`px-2 h-6 rounded-full border text-[11px] transition-colors ${
                             form.position_ids.includes(p.id) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                          }`}>{posLabel(p)}</button>
+                          } ${drumAltOf(p) ? 'border-dashed' : ''}`}>{posLabel(p)}</button>
+                        </span>
                       ))}
                     </div>
                   )

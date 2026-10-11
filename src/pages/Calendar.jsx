@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import PositionsPanel from '../components/calendar/PositionsPanel'
+import { sortPositions, ensureStandardPositions } from '../lib/positions'
 import SetTeam from '../components/calendar/SetTeam'
 import { todayISO, formatSetTime, createSet } from '../lib/sets'
 
@@ -31,9 +32,11 @@ export default function Calendar() {
       supabase.from('positions').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('team_members').select('*').eq('user_id', user.id).order('name'),
       supabase.from('set_assignments').select('*'),
-    ]).then(([p, m, a]) => {
+    ]).then(async ([p, m, a]) => {
       if (p.error || m.error || a.error) setTeamError('Team features are not set up yet. Run the latest Supabase migration.')
-      setPositions(p.data || []); setMembers(m.data || []); setAssignments(a.data || [])
+      setMembers(m.data || []); setAssignments(a.data || [])
+      const list = p.error ? [] : await ensureStandardPositions(supabase, user, p.data || [])
+      setPositions(sortPositions(list))
     }).catch(() => setTeamError('Could not load team data.')).finally(() => setTeamLoading(false))
   }, [user.id])
 
