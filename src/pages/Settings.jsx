@@ -5,7 +5,7 @@ import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
   Sun, Moon, Shield, Check, ExternalLink,
-  Church, Zap, Bell, Star, Mic, Music,
+  Church, Zap, Bell, Star, Music,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -201,18 +201,15 @@ export default function Settings() {
             <div className="flex items-center gap-3 min-w-0">
               <Music size={18} className="text-accent-light shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-primary">Song viewer opens in</p>
-                <p className="text-xs text-muted">Singers usually want Lyrics, musicians the Chord Chart. Saved on this device.</p>
+                <p className="text-sm font-medium text-primary">Open songs in Chord Chart</p>
+                <p className="text-xs text-muted">The song viewer opens in Lyrics mode by default. Turn this on to open in Chord Chart mode instead. Saved on this device.</p>
               </div>
             </div>
-            <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Default song view">
-              {[['lyrics', Mic, 'Lyrics'], ['chords', Music, 'Chord Chart']].map(([id, Icon, label]) => (
-                <button key={id} onClick={() => pickViewerMode(id)} aria-pressed={viewerMode === id}
-                  className={`flex items-center gap-1.5 px-3 h-9 text-xs font-medium transition-colors ${viewerMode === id ? 'bg-accent text-white' : 'bg-card text-muted hover:text-primary'}`}>
-                  <Icon size={14} /> {label}
-                </button>
-              ))}
-            </div>
+            <button onClick={() => pickViewerMode(viewerMode === 'chords' ? 'lyrics' : 'chords')}
+              aria-label="Open song viewer in Chord Chart mode" aria-pressed={viewerMode === 'chords'}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 ${viewerMode === 'chords' ? 'bg-accent' : 'bg-stone-400'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${viewerMode === 'chords' ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
           </div>
 
           <OfflineMode />
