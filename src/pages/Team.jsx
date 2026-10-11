@@ -21,6 +21,7 @@ export default function Team() {
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [importNote, setImportNote] = useState(null)
+  const [contactHelp, setContactHelp] = useState(false)   // shown where the browser can't open the contact list
   const vcfInput = useRef(null)
 
   useEffect(() => {
@@ -65,15 +66,16 @@ export default function Team() {
   const fillFromContact = c => {
     if (!c) return
     setForm(f => ({ ...f, name: c.name || f.name, email: c.email || f.email, phone: c.phone || f.phone }))
-    setImportNote(null)
+    setImportNote(null); setContactHelp(false)
   }
   const importContact = async () => {
     setImportNote(null)
     if (canPickContacts()) {
-      try { fillFromContact(await pickContact()); return } catch { /* fall back to a file */ }
+      try { fillFromContact(await pickContact()); return } catch { /* picker closed or failed: show the other options */ }
     }
-    vcfInput.current?.click()
+    setContactHelp(v => !v)
   }
+  const isApple = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document
   const onVcf = async e => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -129,8 +131,20 @@ export default function Team() {
                 </div>
               </div>
               {importNote && <p className="text-xs text-amber-300">{importNote}</p>}
-              {!canPickContacts() && !form.name && !form.id && (
-                <p className="text-[11px] text-muted -mt-2">On iPhone, choose a contact card file: in Contacts open the person → Share Contact → Save to Files.</p>
+              {contactHelp && (
+                <div className="rounded-lg border border-border bg-card p-3 space-y-2 text-xs text-muted">
+                  <p className="text-primary font-medium">This browser can't open your contacts list yet.</p>
+                  {isApple ? (
+                    <p><span className="text-primary">To pick straight from Contacts:</span> open the iPhone <b>Settings</b> app → <b>Apps</b> → <b>Safari</b> → <b>Advanced</b> → <b>Feature Flags</b> and turn on <b>Contact Picker API</b>. Then reopen PresentGO and tap Import from Contacts again.</p>
+                  ) : (
+                    <p>Picking straight from contacts works in Chrome on Android.</p>
+                  )}
+                  <p><span className="text-primary">Or use a contact card:</span> in Contacts open the person → <b>Share Contact</b> → <b>Save to Files</b>, then choose it here.</p>
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={() => vcfInput.current?.click()} className="btn-ghost !py-1 !px-2.5 text-xs border border-border">Choose contact card…</button>
+                    <button type="button" onClick={() => setContactHelp(false)} className="btn-ghost !py-1 !px-2.5 text-xs">Close</button>
+                  </div>
+                </div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_10rem] gap-3">
@@ -176,7 +190,7 @@ export default function Team() {
               {error && <p className="text-red-400 text-xs">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm">{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add member'}</button>
-                <button onClick={() => { setForm(null); setImportNote(null) }} className="btn-ghost text-sm">Cancel</button>
+                <button onClick={() => { setForm(null); setImportNote(null); setContactHelp(false) }} className="btn-ghost text-sm">Cancel</button>
               </div>
             </div>
           )}
