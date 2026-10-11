@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Mail, Phone, X } from 'lucide-react'
+import { Search, Pencil, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
-import { CATEGORIES } from '../components/calendar/PositionsPanel'
 import { posLabel, sortPositions, drumAltOf, ensureStandardPositions } from '../lib/positions'
+import { parseVCards, saveVCard, canPickContacts, pickContact } from '../lib/vcard'
 const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
 
 export default function Team() {
@@ -20,6 +20,8 @@ export default function Team() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(null)
+  const [importNote, setImportNote] = useState(null)
+  const vcfInput = useRef(null)
 
   useEffect(() => {
     Promise.all([
@@ -58,6 +60,33 @@ export default function Team() {
     setForm(null)
   }
 
+  // Fills the form from a phone contact: the contact picker where the browser has one
+  // (Android), otherwise a contact card (.vcf) file — e.g. iPhone: Contacts > Share Contact > Save to Files.
+  const fillFromContact = c => {
+    if (!c) return
+    setForm(f => ({ ...f, name: c.name || f.name, email: c.email || f.email, phone: c.phone || f.phone }))
+    setImportNote(null)
+  }
+  const importContact = async () => {
+    setImportNote(null)
+    if (canPickContacts()) {
+      try { fillFromContact(await pickContact()); return } catch { /* fall back to a file */ }
+    }
+    vcfInput.current?.click()
+  }
+  const onVcf = async e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const [c] = parseVCards(await file.text())
+    if (c) fillFromContact(c)
+    else setImportNote("That file doesn't contain a contact card.")
+  }
+  const memberNote = m => {
+    const names = positions.filter(p => m.position_ids?.includes(p.id)).map(p => p.name)
+    return names.length ? `Worship team: ${names.join(', ')}` : 'Worship team'
+  }
+
   const remove = async m => {
     if (deleting !== m.id) { setDeleting(m.id); return }
     await supabase.from('team_members').delete().eq('id', m.id)
@@ -75,49 +104,79 @@ export default function Team() {
               <span className="text-xs text-muted">{members.length}</span>
             </div>
             <button onClick={() => { setForm({ ...EMPTY }); setError(null) }} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-              <Plus size={14} /> Add Member
+              <UserPlus size={14} /> Add Member
             </button>
           </div>
 
           {loadError && <p className="px-3 py-2 text-red-400 text-xs">{loadError}</p>}
 
           {form && (
-            <div className="px-3 py-3 border-b border-border space-y-3 bg-[#161616]">
-              <div className="flex flex-wrap gap-2">
-                <input className="input flex-1 min-w-[10rem] !h-9" placeholder="Name" autoFocus value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                <input className="input flex-[2] min-w-[14rem] !h-9" type="email" placeholder="Email" value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-                <input className="input !w-40 shrink-0 !h-9" type="tel" placeholder="Phone" value={form.phone}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            <div className="px-4 py-4 border-b border-border space-y-4 bg-[#161616]">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">{form.id ? 'Edit team member' : 'Add team member'}</h2>
+                <div className="flex items-center gap-1">
+                  {form.id && (
+                    <button type="button" onClick={() => saveVCard({ ...form, note: memberNote(form) })}
+                      className="btn-ghost flex items-center gap-1.5 !py-1 !px-2.5 text-xs" title="Save this person to your phone's contacts">
+                      <Download size={13} /> Save to Contacts
+                    </button>
+                  )}
+                  <button type="button" onClick={importContact}
+                    className="btn-ghost flex items-center gap-1.5 !py-1 !px-2.5 text-xs" title="Fill in from a phone contact">
+                    <Contact size={13} /> Import from Contacts
+                  </button>
+                  <input ref={vcfInput} type="file" accept=".vcf,text/vcard,text/x-vcard" className="hidden" onChange={onVcf} />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <p className="text-[10px] uppercase tracking-widest text-muted">Positions this person can fill</p>
+              {importNote && <p className="text-xs text-amber-300">{importNote}</p>}
+              {!canPickContacts() && !form.name && !form.id && (
+                <p className="text-[11px] text-muted -mt-2">On iPhone, choose a contact card file: in Contacts open the person → Share Contact → Save to Files.</p>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_10rem] gap-3">
+                <label className="sm:col-span-2 block">
+                  <span className="label !mb-1">Name</span>
+                  <input className="input !h-10" placeholder="Full name" autoFocus value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                </label>
+                <label className="block">
+                  <span className="label !mb-1">Email</span>
+                  <input className="input !h-10" type="email" placeholder="name@example.com" value={form.email}
+                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                </label>
+                <label className="block">
+                  <span className="label !mb-1">Phone</span>
+                  <input className="input !h-10" type="tel" placeholder="(555) 555-5555" value={form.phone}
+                    onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+                </label>
+              </div>
+
+              <div>
+                <span className="label !mb-1.5">Positions</span>
                 {positions.length === 0 ? (
                   <p className="text-xs text-muted">No positions yet. Create them on the <Link to="/calendar" className="text-accent-light underline">Calendar</Link> page.</p>
-                ) : CATEGORIES.map(cat => {
-                  const items = positions.filter(p => p.category === cat)
-                  if (!items.length) return null
-                  return (
-                    <div key={cat} className="flex flex-wrap items-center gap-1">
-                      <span className="w-32 shrink-0 text-[11px] text-muted">{cat}</span>
-                      {items.map((p, i) => (
-                        <span key={p.id} className="contents">
-                        {drumAltOf(p) && !drumAltOf(items[i - 1]) && <span className="text-[11px] text-muted px-0.5">or</span>}
-                        <button type="button" onClick={() => togglePos(p.id)} title={drumAltOf(p) ? `Alternative to ${drumAltOf(p)}` : undefined}
-                          className={`px-2 h-6 rounded-full border text-[11px] transition-colors ${
-                            form.position_ids.includes(p.id) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                          } ${drumAltOf(p) ? 'border-dashed' : ''}`}>{posLabel(p)}</button>
-                        </span>
-                      ))}
-                    </div>
-                  )
-                })}
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {positions.map(p => {
+                      const on = form.position_ids.includes(p.id)
+                      return (
+                        <button key={p.id} type="button" onClick={() => togglePos(p.id)} aria-pressed={on}
+                          title={drumAltOf(p) ? `Alternative to ${drumAltOf(p)}` : undefined}
+                          className={`flex items-center gap-1 px-3 h-8 rounded-full border text-xs font-medium transition-colors ${
+                            on ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                          }`}>
+                          {on && <Check size={12} />}{posLabel(p)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
+
               {error && <p className="text-red-400 text-xs">{error}</p>}
-              <div className="flex gap-2">
-                <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-1.5 !px-4 text-sm">{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add member'}</button>
-                <button onClick={() => setForm(null)} className="btn-ghost text-sm">Cancel</button>
+              <div className="flex gap-2 pt-1">
+                <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm">{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add member'}</button>
+                <button onClick={() => { setForm(null); setImportNote(null) }} className="btn-ghost text-sm">Cancel</button>
               </div>
             </div>
           )}
@@ -156,6 +215,8 @@ export default function Team() {
                       <span className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: m.phone || '', position_ids: m.position_ids || [] }); setError(null) }}
                           className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Edit"><Pencil size={13} /></button>
+                        <button onClick={() => saveVCard({ name: m.name, email: m.email, phone: m.phone, note: memberNote(m) })}
+                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Save to phone contacts" aria-label="Save to phone contacts"><Download size={13} /></button>
                         <button onClick={() => remove(m)} title={deleting === m.id ? 'Click again to confirm delete' : 'Delete'}
                           className={`p-1.5 rounded-lg transition-colors ${deleting === m.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={13} /></button>
                       </span>
