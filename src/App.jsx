@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import Respond from './pages/Respond'
 import ProtectedRoute from './components/ProtectedRoute'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
@@ -26,6 +27,7 @@ export default function App() {
             {/* Present display window — no chrome, no auth guard needed
                 (opened programmatically, token passed via sessionStorage) */}
             <Route path="/present/:setId" element={<PresentMode />} />
+            <Route path="/respond/:token" element={<Respond />} />
 
             {/* Protected app routes */}
             <Route element={<ProtectedRoute />}>
