@@ -86,13 +86,13 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
         <div className="flex-1 min-w-0 text-center">
           {set ? (
             <>
-              <p className="text-[10px] uppercase tracking-widest text-muted">Team Schedule</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted">Who's Serving</p>
               <Link to={`/sets/${set.id}`} className="inline-flex items-center gap-1 max-w-full font-semibold hover:text-accent-light" title="Open set">
                 <span className="truncate">{set.name}</span><ExternalLink size={12} className="shrink-0 text-muted" />
               </Link>
               <p className="text-xs text-muted">{dateLabel(set)}{set.service_time ? ` · ${formatSetTime(set.service_time)}` : ''}</p>
             </>
-          ) : <p className="font-semibold py-2">Team Schedule</p>}
+          ) : <p className="font-semibold py-2">Who's Serving</p>}
         </div>
         <button onClick={onNext} disabled={!set || index >= total - 1} className="btn-ghost p-1.5 disabled:opacity-30" aria-label="Next set"><ChevronRight size={16} /></button>
       </div>

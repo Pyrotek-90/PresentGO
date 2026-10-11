@@ -35,7 +35,8 @@ export default function App() {
               <Route path="/library" element={<Navigate to="/" replace />} />
               <Route path="/sets/:setId" element={<SetEditor />} />
               <Route path="/sets/:setId/control" element={<Controller />} />
-              <Route path="/calendar" element={<Calendar />} />
+              <Route path="/schedule" element={<Calendar />} />
+              <Route path="/calendar" element={<Navigate to="/schedule" replace />} />
               <Route path="/team" element={<Team />} />
               <Route path="/media" element={<ContentLibrary />} />
               <Route path="/settings" element={<Settings />} />

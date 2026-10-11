@@ -6,7 +6,7 @@ import { WifiOff } from 'lucide-react'
 
 const navItems = [
   { to: '/',        label: 'Home',            icon: Home       },
-  { to: '/calendar', label: 'Calendar',        icon: CalendarDays },
+  { to: '/schedule', label: 'Schedule',        icon: CalendarDays },
   { to: '/team',     label: 'Team',            icon: Users        },
   { to: '/media',   label: 'Content Library', icon: FolderOpen },
 ]
