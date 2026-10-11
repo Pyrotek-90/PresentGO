@@ -1,26 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
-import PositionsPanel from '../components/calendar/PositionsPanel'
+import SchedulePane from '../components/calendar/SchedulePane'
 import { sortPositions, ensureStandardPositions } from '../lib/positions'
-import SetTeam from '../components/calendar/SetTeam'
-import { todayISO, formatSetTime, createSet } from '../lib/sets'
+import { todayISO, formatSetTime } from '../lib/sets'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function Calendar() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const [sets, setSets] = useState([])
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const [selected, setSelected] = useState(todayISO())
-  const [name, setName] = useState('')
-  const [time, setTime] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState(null)
+  const [schedId, setSchedId] = useState(null)   // set shown in the Team Schedule pane
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState(null)
   const [positions, setPositions] = useState([])
   const [members, setMembers] = useState([])
   const [assignments, setAssignments] = useState([])
@@ -41,11 +37,70 @@ export default function Calendar() {
   }, [user.id])
 
   const addAssignment = async (setId, positionId, memberId) => {
-    setError(null)
     const { data, error } = await supabase.from('set_assignments')
       .insert({ set_id: setId, position_id: positionId, member_id: memberId }).select().single()
-    if (error) { setError(error.code === '23505' ? 'That person is already assigned to that position.' : 'Could not assign. Make sure the latest Supabase migration has been run.'); return }
+    if (error) return error.code === '23505' ? 'That person is already in this set for that position.' : 'Could not add. Please try again.'
     setAssignments(prev => [...prev, data])
+    setSendResult(null)
+    return null
+  }
+
+  // Replies arrive from the invite page; pick them up when you come back to the app and every 30s.
+  const refreshAssignments = useCallback(() => {
+    supabase.from('set_assignments').select('*').then(({ data, error }) => { if (!error && data) setAssignments(data) })
+  }, [])
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === 'visible') refreshAssignments() }
+    document.addEventListener('visibilitychange', onFocus)
+    window.addEventListener('focus', onFocus)
+    const t = setInterval(onFocus, 30000)
+    return () => { document.removeEventListener('visibilitychange', onFocus); window.removeEventListener('focus', onFocus); clearInterval(t) }
+  }, [refreshAssignments])
+
+  const markInvited = async ids => {
+    const now = new Date().toISOString()
+    await supabase.from('set_assignments').update({ status: 'invited', invited_at: now }).in('id', ids).in('status', ['draft', 'invited'])
+    setAssignments(prev => prev.map(a => (ids.includes(a.id) && (a.status || 'draft') !== 'accepted' ? { ...a, status: 'invited', invited_at: now } : a)))
+  }
+
+  // Before automatic email is set up: open a ready-written email in the mail app, one person per tap.
+  const mailAppFallback = async ids => {
+    const a = assignments.find(x => x.id === ids[0])
+    const m = members.find(x => x.id === a?.member_id), p = positions.find(x => x.id === a?.position_id)
+    const set = sets.find(x => x.id === a?.set_id)
+    if (!a?.invite_token || !m?.email) { setSendResult({ ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+    const link = `${window.location.origin}/respond/${a.invite_token}`
+    const when = set?.service_date ? new Date(set.service_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''
+    const subject = `Can you serve as ${p?.name || 'part of the team'}${when ? ` on ${when}` : ''}?`
+    const body = `Hi ${m.name.split(' ')[0]},\n\nCan you serve as ${p?.name} for ${set?.name}${when ? ` on ${when}${set?.service_time ? ` at ${formatSetTime(set.service_time)}` : ''}` : ''}?\n\nPlease tap to answer:\n${link}\n\nThank you!`
+    window.location.href = `mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    await markInvited([a.id])
+    const left = ids.length - 1
+    setSendResult({ ok: true, text: `Opened an email to ${m.name} in your mail app.${left ? ` Tap Email invites again for the next person (${left} left).` : ''}` })
+  }
+
+  const sendInvites = async ids => {
+    if (!ids.length) return
+    setSending(true); setSendResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/send-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ ids }),
+      })
+      const out = await r.json().catch(() => ({}))
+      if (r.status === 501) { await mailAppFallback(ids); return }
+      if (r.status === 409) { setSendResult({ ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+      if (!r.ok) { setSendResult({ ok: false, text: 'Could not send the emails. Please try again.' }); return }
+      const now = new Date().toISOString()
+      setAssignments(prev => prev.map(a => (out.sent.includes(a.id) && (a.status || 'draft') !== 'accepted' ? { ...a, status: 'invited', invited_at: now } : a)))
+      const parts = [`Sent ${out.sent.length} invite${out.sent.length === 1 ? '' : 's'}.`]
+      if (out.failed?.length) parts.push(`${out.failed.length} couldn't be sent.`)
+      setSendResult({ ok: !out.failed?.length, text: parts.join(' ') })
+    } catch {
+      setSendResult({ ok: false, text: 'Could not send the emails. Check your connection and try again.' })
+    } finally { setSending(false) }
   }
 
   const removeAssignment = async a => {
@@ -54,7 +109,7 @@ export default function Calendar() {
   }
 
   useEffect(() => {
-    supabase.from('sets').select('id, name, service_date, service_time').eq('user_id', user.id)
+    supabase.from('sets').select('id, name, service_date, service_time, venue_name, location_address').eq('user_id', user.id)
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
   }, [user.id])
@@ -79,16 +134,26 @@ export default function Calendar() {
   const shift = n => setCursor(c => new Date(c.getFullYear(), c.getMonth() + n, 1))
   const goToday = () => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); setSelected(todayISO()) }
 
-  const selectedSets = setsByDate[selected] || []
-  const selectedLabel = new Date(selected + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-
-  const create = async () => {
-    if (!name.trim()) return
-    setCreating(true); setError(null)
-    const { data, error } = await createSet(supabase, user.id, { name: name.trim(), date: selected, time })
-    setCreating(false)
-    if (error) { setError('Could not create set. Make sure the latest Supabase migration has been run.'); return }
-    navigate(`/sets/${data.id}`)
+  // Sets in date order for the Team Schedule pane; it starts on the next upcoming set.
+  const dated = useMemo(() => sets.filter(s => s.service_date)
+    .sort((a, b) => a.service_date.localeCompare(b.service_date) || (a.service_time || '').localeCompare(b.service_time || '')), [sets])
+  const schedIndex = useMemo(() => {
+    const i = dated.findIndex(s => s.id === schedId)
+    if (i >= 0) return i
+    const next = dated.findIndex(s => s.service_date >= today)
+    return next >= 0 ? next : dated.length - 1
+  }, [dated, schedId, today])
+  const schedSet = dated[schedIndex] || null
+  const showSet = s => {
+    if (!s) return
+    setSchedId(s.id); setSelected(s.service_date); setSendResult(null)
+    const d = new Date(s.service_date + 'T00:00:00')
+    setCursor(new Date(d.getFullYear(), d.getMonth(), 1))
+  }
+  const pickDay = iso => {
+    setSelected(iso)
+    const first = (setsByDate[iso] || [])[0]
+    if (first) { setSchedId(first.id); setSendResult(null) }
   }
 
   return (
@@ -110,9 +175,9 @@ export default function Calendar() {
             <div className="grid grid-cols-7">
               {days.map(({ iso, day, inMonth }) => {
                 const daySets = setsByDate[iso] || []
-                const isSel = iso === selected
+                const isSel = schedSet ? iso === schedSet.service_date : iso === selected
                 return (
-                  <button key={iso} onClick={() => setSelected(iso)}
+                  <button key={iso} onClick={() => pickDay(iso)}
                     className={`h-14 sm:h-20 p-1 border-b border-r border-border/50 text-left align-top flex flex-col gap-0.5 transition-colors ${
                       isSel ? 'bg-accent/10 ring-1 ring-inset ring-accent/60' : 'hover:bg-[#1a1a1a]'
                     } ${inMonth ? '' : 'opacity-35'}`}>
@@ -134,43 +199,15 @@ export default function Calendar() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="px-3 py-2 border-b border-border">
-              <h2 className="font-semibold">{selectedLabel}</h2>
-            </div>
-            <div className="px-3 py-2 space-y-2">
-              {selectedSets.length === 0 ? (
-                <p className="text-xs text-muted">No sets on this day.</p>
-              ) : (
-                <ul className="space-y-1">
-                  {selectedSets.map(s => (
-                    <li key={s.id} className="rounded-lg border border-border/60">
-                      <button onClick={() => navigate(`/sets/${s.id}`)}
-                        className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-[#1a1a1a] text-left">
-                        <span className="flex-1 min-w-0 truncate text-sm font-medium">{s.name}</span>
-                        <span className="text-xs text-muted">{formatSetTime(s.service_time)}</span>
-                        <ChevronRight size={14} className="text-muted" />
-                      </button>
-                      <SetTeam assignments={assignments.filter(a => a.set_id === s.id)} positions={positions} members={members}
-                        onAdd={(pid, mid) => addAssignment(s.id, pid, mid)} onRemove={removeAssignment} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex flex-wrap gap-2 pt-1">
-                <input className="input flex-1 min-w-[12rem] !h-9" placeholder="New set name for this day"
-                  value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()} />
-                <input type="time" className="input !h-9 !w-auto" value={time} onChange={e => setTime(e.target.value)} aria-label="Service time" />
-                <button onClick={create} disabled={creating || !name.trim()} className="btn-primary flex items-center gap-1 shrink-0">
-                  <Plus size={14} /> {creating ? 'Creating…' : 'New Set'}
-                </button>
-              </div>
-              {error && <p className="text-red-400 text-xs">{error}</p>}
-            </div>
-          </section>
         </div>
 
-        <PositionsPanel positions={positions} setPositions={setPositions} loading={teamLoading} loadError={teamError} />
+        <SchedulePane set={schedSet} index={schedIndex} total={dated.length}
+          onPrev={() => showSet(dated[schedIndex - 1])} onNext={() => showSet(dated[schedIndex + 1])}
+          positions={positions} members={members}
+          assignments={schedSet ? assignments.filter(a => a.set_id === schedSet.id) : []}
+          onAdd={(pid, mid) => addAssignment(schedSet.id, pid, mid)} onRemove={removeAssignment}
+          onSend={sendInvites} sending={sending} sendResult={sendResult} onRefresh={refreshAssignments} />
+        {teamError && <p className="text-red-400 text-xs lg:col-start-2">{teamError}</p>}
       </div>
     </Layout>
   )

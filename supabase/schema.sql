@@ -261,3 +261,7 @@ create trigger media_items_updated_at before update on public.media_items
 --   where t.token = p_token and s.service_date is not null;
 -- $$;
 -- grant execute on function public.calendar_feed(text) to anon, authenticated;
+
+-- ────────────────────────────────────────────────────────────
+-- MIGRATION: team invites (Accept / Decline) — see supabase/migrations/2026-10-11_team_invites.sql
+-- ────────────────────────────────────────────────────────────
