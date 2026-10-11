@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import { posLabel, sortPositions, ensureStandardPositions } from '../lib/positions'
+import { formatPhone, formatPhoneTyping, telHref } from '../lib/phone'
 import { parseVCards, saveVCard, canPickContacts, pickContact } from '../lib/vcard'
 const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
 
@@ -67,7 +68,7 @@ export default function Team() {
   const save = async () => {
     if (!form.name.trim()) return
     setSaving(true); setError(null)
-    const payload = { user_id: user.id, name: form.name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, position_ids: form.position_ids }
+    const payload = { user_id: user.id, name: form.name.trim(), email: form.email.trim() || null, phone: formatPhone(form.phone) || null, position_ids: form.position_ids }
     const { data, error } = form.id
       ? await supabase.from('team_members').update(payload).eq('id', form.id).select().single()
       : await supabase.from('team_members').insert(payload).select().single()
@@ -81,7 +82,7 @@ export default function Team() {
   // (Android), otherwise a contact card (.vcf) file — e.g. iPhone: Contacts > Share Contact > Save to Files.
   const fillFromContact = c => {
     if (!c) return
-    setForm(f => ({ ...f, name: c.name || f.name, email: c.email || f.email, phone: c.phone || f.phone }))
+    setForm(f => ({ ...f, name: c.name || f.name, email: c.email || f.email, phone: c.phone ? formatPhone(c.phone) : f.phone }))
     setImportNote(null); setContactHelp(false)
   }
   const importContact = async () => {
@@ -176,8 +177,9 @@ export default function Team() {
                 </label>
                 <label className="block">
                   <span className="label !mb-1">Phone</span>
-                  <input className="input !h-10" type="tel" placeholder="(555) 555-5555" value={form.phone}
-                    onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+                  <input className="input !h-10" type="tel" inputMode="tel" placeholder="555.555.5555" value={form.phone}
+                    onChange={e => setForm(f => ({ ...f, phone: formatPhoneTyping(e.target.value) }))}
+                    onBlur={() => setForm(f => ({ ...f, phone: formatPhone(f.phone) }))} />
                 </label>
               </div>
 
@@ -252,12 +254,12 @@ export default function Team() {
                       </span>
                       <span className="flex items-center gap-3 text-xs text-muted">
                         {m.email && <a href={`mailto:${m.email}`} className="flex items-center gap-1 hover:text-accent-light"><Mail size={11} />{m.email}</a>}
-                        {m.phone && <a href={`tel:${m.phone}`} className="flex items-center gap-1 hover:text-accent-light"><Phone size={11} />{m.phone}</a>}
+                        {m.phone && <a href={telHref(m.phone)} className="flex items-center gap-1 hover:text-accent-light"><Phone size={11} />{formatPhone(m.phone)}</a>}
                       </span>
                       <span className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: m.phone || '', position_ids: m.position_ids || [] }); setError(null) }}
+                        <button onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: formatPhone(m.phone) || '', position_ids: m.position_ids || [] }); setError(null) }}
                           className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Edit"><Pencil size={13} /></button>
-                        <button onClick={() => saveVCard({ name: m.name, email: m.email, phone: m.phone, note: memberNote(m) })}
+                        <button onClick={() => saveVCard({ name: m.name, email: m.email, phone: formatPhone(m.phone), note: memberNote(m) })}
                           className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Save to phone contacts" aria-label="Save to phone contacts"><Download size={13} /></button>
                         <button onClick={() => remove(m)} title={deleting === m.id ? 'Click again to confirm delete' : 'Delete'}
                           className={`p-1.5 rounded-lg transition-colors ${deleting === m.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={13} /></button>
