@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, Pencil, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download } from 'lucide-react'
+import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import SwipeToDelete from '../components/common/SwipeToDelete'
 import { posLabel, sortPositions, ensureStandardPositions } from '../lib/positions'
-import { formatPhone, formatPhoneTyping, telHref } from '../lib/phone'
+import { formatPhone, formatPhoneTyping } from '../lib/phone'
 import { parseVCards, saveVCard, canPickContacts, pickContact } from '../lib/vcard'
 const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
 
@@ -38,6 +38,10 @@ export default function Team() {
     setMembers(prev => prev.filter(x => x.id !== m.id))
   }   // text of a position being added from the form, or null   // shown where the browser can't open the contact list
   const vcfInput = useRef(null)
+  const formRef = useRef(null)
+  const formKey = form ? form.id || 'new' : null
+  // Opening a member from further down the list: bring the edit form into view.
+  useEffect(() => { if (formKey) formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, [formKey])
 
   useEffect(() => {
     Promise.all([
@@ -120,12 +124,7 @@ export default function Team() {
     return names.length ? `Worship team: ${names.join(', ')}` : 'Worship team'
   }
 
-  const remove = async m => {
-    if (deleting !== m.id) { setDeleting(m.id); return }
-    await supabase.from('team_members').delete().eq('id', m.id)
-    setMembers(prev => prev.filter(x => x.id !== m.id))
-    setDeleting(null)
-  }
+
 
   return (
     <Layout>
@@ -144,7 +143,7 @@ export default function Team() {
           {loadError && <p className="px-3 py-2 text-red-400 text-xs">{loadError}</p>}
 
           {form && (
-            <div className="px-4 py-4 border-b border-border space-y-4 bg-[#161616]">
+            <div ref={formRef} className="px-4 py-4 border-b border-border space-y-4 bg-[#161616] scroll-mt-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold">{form.id ? 'Edit team member' : 'Add team member'}</h2>
                 <div className="flex items-center gap-1">
@@ -234,7 +233,15 @@ export default function Team() {
               {error && <p className="text-red-400 text-xs">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm">{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add member'}</button>
-                <button onClick={() => { setForm(null); setImportNote(null); setContactHelp(false); setNewPos(null) }} className="btn-ghost text-sm">Cancel</button>
+                <button onClick={() => { setForm(null); setImportNote(null); setContactHelp(false); setNewPos(null); setDeleting(null) }} className="btn-ghost text-sm">Cancel</button>
+                {form.id && (
+                  <button onClick={async () => {
+                    if (deleting !== form.id) { setDeleting(form.id); return }
+                    await removeNow({ id: form.id }); setDeleting(null); setForm(null)
+                  }} className={`ml-auto flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${deleting === form.id ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400'}`}>
+                    <Trash2 size={14} /> {deleting === form.id ? 'Tap again to delete' : 'Delete member'}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -263,23 +270,21 @@ export default function Team() {
                   return (
                     <SwipeToDelete key={m.id} open={swipedId === m.id} onOpenChange={o => setSwipedId(o ? m.id : null)}
                       onDelete={() => removeNow(m)} label={`Delete ${m.name}`}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 hover:bg-[#1a1a1a] group">
-                      <span className="text-sm font-medium w-40 truncate">{m.name}</span>
-                      <span className="flex-1 min-w-[8rem] flex flex-wrap gap-0.5">
-                        {mine.map(p => <span key={p.id} className="text-[10px] px-1.5 py-0.5 rounded-full border border-border text-muted">{posLabel(p)}</span>)}
-                      </span>
-                      <span className="flex items-center gap-3 text-xs text-muted">
-                        {m.email && <a href={`mailto:${m.email}`} className="flex items-center gap-1 hover:text-accent-light"><Mail size={11} />{m.email}</a>}
-                        {m.phone && <a href={telHref(m.phone)} className="flex items-center gap-1 hover:text-accent-light"><Phone size={11} />{formatPhone(m.phone)}</a>}
-                      </span>
-                      <span className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: formatPhone(m.phone) || '', position_ids: m.position_ids || [] }); setError(null) }}
-                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Edit"><Pencil size={13} /></button>
-                        <button onClick={() => saveVCard({ name: m.name, email: m.email, phone: formatPhone(m.phone), note: memberNote(m) })}
-                          className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Save to phone contacts" aria-label="Save to phone contacts"><Download size={13} /></button>
-                        <button onClick={() => remove(m)} title={deleting === m.id ? 'Click again to confirm delete' : 'Delete'}
-                          className={`hidden sm:block p-1.5 rounded-lg transition-colors ${deleting === m.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={13} /></button>
-                      </span>
+                      className="hover:bg-[#1a1a1a] group">
+                      <button type="button" onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: formatPhone(m.phone) || '', position_ids: m.position_ids || [] }); setError(null); setDeleting(null) }}
+                        className="w-full flex items-center gap-3 px-2 py-2 text-left" aria-label={`Edit ${m.name}`}>
+                        <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="text-sm font-medium w-40 truncate">{m.name}</span>
+                          <span className="flex-1 min-w-[8rem] flex flex-wrap gap-0.5">
+                            {mine.map(p => <span key={p.id} className="text-[10px] px-1.5 py-0.5 rounded-full border border-border text-muted">{posLabel(p)}</span>)}
+                          </span>
+                          <span className="flex items-center gap-3 text-xs text-muted">
+                            {m.email && <span className="flex items-center gap-1 truncate"><Mail size={11} />{m.email}</span>}
+                            {m.phone && <span className="flex items-center gap-1"><Phone size={11} />{formatPhone(m.phone)}</span>}
+                          </span>
+                        </span>
+                        <ChevronRight size={14} className="text-muted group-hover:text-[#f5f5f5] shrink-0" />
+                      </button>
                     </SwipeToDelete>
                   )
                 })}
