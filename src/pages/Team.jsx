@@ -231,15 +231,17 @@ export default function Team() {
               </div>
 
               {error && <p className="text-red-400 text-xs">{error}</p>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm">{saving ? 'Saving…' : form.id ? 'Save changes' : 'Add member'}</button>
+              <div className="flex items-center gap-2 pt-1">
+                <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm whitespace-nowrap">{saving ? 'Saving…' : form.id ? 'Update' : 'Save'}</button>
                 <button onClick={() => { setForm(null); setImportNote(null); setContactHelp(false); setNewPos(null); setDeleting(null) }} className="btn-ghost text-sm">Cancel</button>
                 {form.id && (
                   <button onClick={async () => {
                     if (deleting !== form.id) { setDeleting(form.id); return }
                     await removeNow({ id: form.id }); setDeleting(null); setForm(null)
-                  }} className={`ml-auto flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${deleting === form.id ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400'}`}>
-                    <Trash2 size={14} /> {deleting === form.id ? 'Tap again to delete' : 'Delete member'}
+                  }} aria-label={deleting === form.id ? 'Tap again to delete this member' : 'Delete member'}
+                    title={deleting === form.id ? 'Tap again to delete' : 'Delete member'}
+                    className={`ml-auto w-9 h-9 flex items-center justify-center rounded-lg border transition-colors ${deleting === form.id ? 'bg-red-700 border-red-700 text-white' : 'border-border text-muted hover:text-red-400 hover:border-red-400/50'}`}>
+                    <Trash2 size={16} />
                   </button>
                 )}
               </div>
