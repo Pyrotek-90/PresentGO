@@ -3,6 +3,7 @@ import { Plus, Search, Pencil, Trash2, Mail, Phone, X, Check, Contact, UserPlus,
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
+import SwipeToDelete from '../components/common/SwipeToDelete'
 import { posLabel, sortPositions, ensureStandardPositions } from '../lib/positions'
 import { formatPhone, formatPhoneTyping, telHref } from '../lib/phone'
 import { parseVCards, saveVCard, canPickContacts, pickContact } from '../lib/vcard'
@@ -22,7 +23,20 @@ export default function Team() {
   const [deleting, setDeleting] = useState(null)
   const [importNote, setImportNote] = useState(null)
   const [contactHelp, setContactHelp] = useState(false)
-  const [newPos, setNewPos] = useState(null)   // text of a position being added from the form, or null   // shown where the browser can't open the contact list
+  const [newPos, setNewPos] = useState(null)
+  const [swipedId, setSwipedId] = useState(null)   // member row swiped open on a phone
+
+  useEffect(() => {
+    if (!swipedId) return
+    const close = e => { if (!e.target.closest('[data-swiped-row]')) setSwipedId(null) }
+    document.addEventListener('touchstart', close, { passive: true })
+    return () => document.removeEventListener('touchstart', close)
+  }, [swipedId])
+  const removeNow = async m => {
+    setSwipedId(null)
+    await supabase.from('team_members').delete().eq('id', m.id)
+    setMembers(prev => prev.filter(x => x.id !== m.id))
+  }   // text of a position being added from the form, or null   // shown where the browser can't open the contact list
   const vcfInput = useRef(null)
 
   useEffect(() => {
@@ -247,7 +261,9 @@ export default function Team() {
                 {filtered.map(m => {
                   const mine = positions.filter(p => m.position_ids?.includes(p.id))
                   return (
-                    <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 rounded-lg hover:bg-[#1a1a1a] group">
+                    <SwipeToDelete key={m.id} open={swipedId === m.id} onOpenChange={o => setSwipedId(o ? m.id : null)}
+                      onDelete={() => removeNow(m)} label={`Delete ${m.name}`}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 hover:bg-[#1a1a1a] group">
                       <span className="text-sm font-medium w-40 truncate">{m.name}</span>
                       <span className="flex-1 min-w-[8rem] flex flex-wrap gap-0.5">
                         {mine.map(p => <span key={p.id} className="text-[10px] px-1.5 py-0.5 rounded-full border border-border text-muted">{posLabel(p)}</span>)}
@@ -262,9 +278,9 @@ export default function Team() {
                         <button onClick={() => saveVCard({ name: m.name, email: m.email, phone: formatPhone(m.phone), note: memberNote(m) })}
                           className="p-1.5 rounded-lg hover:bg-[#2e2e2e] text-muted hover:text-[#f5f5f5]" title="Save to phone contacts" aria-label="Save to phone contacts"><Download size={13} /></button>
                         <button onClick={() => remove(m)} title={deleting === m.id ? 'Click again to confirm delete' : 'Delete'}
-                          className={`p-1.5 rounded-lg transition-colors ${deleting === m.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={13} /></button>
+                          className={`hidden sm:block p-1.5 rounded-lg transition-colors ${deleting === m.id ? 'bg-red-700 text-white' : 'hover:bg-[#2e2e2e] text-muted hover:text-red-400'}`}><Trash2 size={13} /></button>
                       </span>
-                    </li>
+                    </SwipeToDelete>
                   )
                 })}
               </ul>
