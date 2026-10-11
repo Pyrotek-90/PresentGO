@@ -17,7 +17,9 @@ const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
 const SIZE_KEY = 'presentgo.viewer.size'
-const SIZE_STEPS = [16, 20, 24, 28, 32]   // phone size button: steps up through these, then back to Auto
+const SIZE_STEPS = [13, 16, 20, 24]   // phone size button choices (13 smallest, 24 largest)
+const PHONE_MIN = SIZE_STEPS[0], PHONE_MAX = SIZE_STEPS[SIZE_STEPS.length - 1]
+const clampPhone = v => Math.max(PHONE_MIN, Math.min(PHONE_MAX, v))
 const loadSizes = () => { try { return JSON.parse(localStorage.getItem(SIZE_KEY)) || {} } catch { return {} } }
 
 const ABBREV = {
@@ -222,7 +224,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
 
     let nc, f
     if (manual[mode]) {
-      f = manual[mode]
+      f = widthOk ? manual[mode] : clampPhone(manual[mode])
       nc = cols === 'auto' ? (fitsOnePage(1, f) || !widthOk ? 1 : 2) : (cols === 2 && widthOk ? 2 : 1)
     } else if (cols !== 'auto') {
       nc = cols === 2 && widthOk ? 2 : 1
@@ -273,17 +275,21 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
     try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
     return out
   })
+  // Phone size button. From Auto it steps up to 24, wraps round to 13, keeps stepping up
+  // through the sizes below the auto size, then returns to Auto, so every size is one loop away.
+  const autoSize = useRef(20)
+  if (!manual[mode]) autoSize.current = fontSize
   const cycleSize = () => {
-    const current = manual[mode]
-    const nextStep = SIZE_STEPS.find(v => v > (current ?? fontSize))
-    if (current == null || nextStep) {
-      const target = nextStep ?? SIZE_STEPS[SIZE_STEPS.length - 1]
-      setManual(m => {
-        const out = { ...m, [mode]: target }
-        try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
-        return out
-      })
-    } else resetSize()
+    const current = manual[mode] != null ? clampPhone(manual[mode]) : null
+    const auto = autoSize.current
+    const order = [...SIZE_STEPS.filter(v => v > auto), ...SIZE_STEPS.filter(v => v < auto)]
+    const target = current == null ? order[0] : order[order.indexOf(current) + 1]
+    if (target == null) return resetSize()
+    setManual(m => {
+      const out = { ...m, [mode]: target }
+      try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
+      return out
+    })
   }
   const cycleKey = () => keys.length > 1 && setActiveKey(keys[(keys.indexOf(activeKey) + 1) % keys.length])
 
@@ -395,9 +401,9 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
             className="w-9 h-8 flex items-center justify-center rounded-lg border border-border bg-accent/25 text-accent-light">
             {mode === 'lyrics' ? <Mic size={16} /> : <Music size={16} />}
           </button>
-          <button onClick={cycleSize} title="Text size — tap to enlarge, loops back to Auto" aria-label="Text size"
+          <button onClick={cycleSize} title={`Text size ${PHONE_MIN}–${PHONE_MAX} — tap to change, loops back to Auto`} aria-label="Text size"
             className="min-w-[2.5rem] h-8 px-2 rounded-lg border border-border bg-card text-xs font-semibold text-accent-light">
-            {manual[mode] ? manual[mode] : 'Aa'}
+            {manual[mode] ? clampPhone(manual[mode]) : 'Aa'}
           </button>
         </div>
 
