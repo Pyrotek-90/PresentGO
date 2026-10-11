@@ -7,7 +7,7 @@ import SetsPane from '../components/home/SetsPane'
 import SongsPane from '../components/home/SongsPane'
 import SongEditor from '../components/songs/SongEditor'
 import SongViewer from '../components/songs/SongViewer'
-import { groupSets, createSet as insertSet } from '../lib/sets'
+import { groupSets, createSet as insertSet, todayISO } from '../lib/sets'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -38,10 +38,11 @@ export default function Dashboard() {
     setTargetSetId((upcoming[0] || past[0])?.id || null)
   }, [sets, targetSetId])
 
-  const createSet = async fields => {
-    const { data, error } = await insertSet(supabase, user.id, fields)
-    if (error) return 'Could not create set. Make sure the latest Supabase migration has been run.'
-    navigate(`/sets/${data.id}`)
+  // "+ New Set": create the set right away and open it with Edit details showing.
+  const createSet = async () => {
+    const { data, error } = await insertSet(supabase, user.id, { name: 'New Set', date: todayISO() })
+    if (error) return 'Could not create set. Please try again.'
+    navigate(`/sets/${data.id}`, { state: { newSet: true } })
     return null
   }
 

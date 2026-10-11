@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatModified, formatSetTime } from '../lib/sets'
@@ -99,6 +99,8 @@ export default function SetEditor() {
   const { setId } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [isNew, setIsNew] = useState(!!location.state?.newSet)   // just created from Home's + New Set
   const [set, setSet]       = useState(null)
   const [items, setItems]   = useState([])
   const [songs, setSongs]   = useState({})
@@ -143,6 +145,10 @@ export default function SetEditor() {
       if (!setData) { navigate('/'); return }
       setSet(setData)
       setItems(itemsData || [])
+      if (location.state?.newSet) {
+        openDetailsFor(setData, { name: '' })
+        navigate(location.pathname, { replace: true, state: null })   // a refresh shouldn't reopen it
+      }
 
       const songIds = (itemsData || []).filter(i => i.type === 'song').map(i => i.content?.song_id).filter(Boolean)
       if (songIds.length) {
@@ -189,17 +195,29 @@ export default function SetEditor() {
   const DURATIONS = [30, 45, 60, 75, 90, 105, 120, 150, 180, 240]
   const durationLabel = m => (m % 60 === 0 ? `${m / 60} hr` : m > 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`)
 
-  const openDetails = () => {
+  const openDetailsFor = (s, overrides = {}) => {
     setDetailsError(null)
     setDetails({
-      name: set?.name || '',
-      date: set?.service_date || '',
-      time: set?.service_time ? set.service_time.slice(0, 5) : '',
-      duration: set?.duration_min || 90,
-      venue: set?.venue_name || '',
-      address: set?.location_address || '',
-      room: set?.location_details || '',
+      name: s?.name || '',
+      date: s?.service_date || '',
+      time: s?.service_time ? s.service_time.slice(0, 5) : '',
+      duration: s?.duration_min || 90,
+      venue: s?.venue_name || '',
+      address: s?.location_address || '',
+      room: s?.location_details || '',
+      ...overrides,
     })
+  }
+  const openDetails = () => openDetailsFor(set)
+
+  // Cancel on a brand-new, still-empty set discards it and goes back Home.
+  const cancelDetails = async () => {
+    if (isNew && items.length === 0 && setId !== 'mock') {
+      await supabase.from('sets').delete().eq('id', setId)
+      navigate('/')
+      return
+    }
+    setDetails(null)
   }
 
   const saveDetails = async () => {
@@ -220,7 +238,7 @@ export default function SetEditor() {
       if (error) { setDetailsSaving(false); setDetailsError('Could not save. Make sure the latest Supabase migration has been run.'); return }
     }
     setSet(prev => ({ ...prev, ...patch, updated_at: new Date().toISOString() }))
-    setDetailsSaving(false); setDetails(null)
+    setDetailsSaving(false); setDetails(null); setIsNew(false)
   }
 
   const downloadIcs = () => {
@@ -337,7 +355,8 @@ export default function SetEditor() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="col-span-2 sm:col-span-4">
                 <label className="label !mb-1">Set name</label>
-                <input className="input" value={details.name} onChange={e => setDetails(d => ({ ...d, name: e.target.value }))} />
+                <input className="input" value={details.name} autoFocus={isNew} placeholder="e.g. Sunday Morning Worship"
+                  onChange={e => setDetails(d => ({ ...d, name: e.target.value }))} onKeyDown={e => e.key === 'Enter' && saveDetails()} />
               </div>
               <div className="col-span-1 sm:col-span-2">
                 <label className="label !mb-1">Date</label>
@@ -369,7 +388,7 @@ export default function SetEditor() {
             {detailsError && <p className="text-red-400 text-xs">{detailsError}</p>}
             <div className="flex items-center gap-2">
               <button onClick={saveDetails} disabled={detailsSaving} className="btn-primary !py-1.5 !px-4 text-sm">{detailsSaving ? 'Saving…' : 'Save details'}</button>
-              <button onClick={() => setDetails(null)} className="btn-ghost text-sm">Cancel</button>
+              <button onClick={cancelDetails} className="btn-ghost text-sm">Cancel</button>
               <span className="ml-auto text-[11px] text-muted hidden sm:block">Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
             </div>
           </section>

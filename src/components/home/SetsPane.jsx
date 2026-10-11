@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, ChevronRight, ChevronDown } from 'lucide-react'
-import { groupSets, formatSetWhen, songCount, todayISO } from '../../lib/sets'
+import { groupSets, formatSetWhen, songCount } from '../../lib/sets'
 
 const PAST_PREVIEW = 5
 const COLLAPSE_KEY = 'presentgo.setsCollapsed'
@@ -24,10 +24,6 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === '1' } catch { return false }
   })
-  const [showNew, setShowNew] = useState(false)
-  const [name, setName] = useState('')
-  const [date, setDate] = useState(todayISO)
-  const [time, setTime] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
   const [showAllPast, setShowAllPast] = useState(false)
@@ -39,12 +35,12 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
     return !c
   })
 
-  const submit = async () => {
-    if (!name.trim()) return
+  const createNew = async () => {
+    if (creating) return
     setCreating(true); setError(null)
-    const err = await onCreate({ name: name.trim(), date, time })
+    const err = await onCreate()
     setCreating(false)
-    if (err) setError(err)
+    if (err) { setCollapsed(false); setError(err) }
   }
 
   return (
@@ -55,26 +51,14 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
           <h2 className="font-semibold">Set Lists</h2>
           <span className="text-xs text-muted">{sets.length}</span>
         </button>
-        <button onClick={() => { setCollapsed(false); setShowNew(v => !v) }} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-          <Plus size={14} /> New Set
+        <button onClick={createNew} disabled={creating} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
+          <Plus size={14} /> {creating ? 'Creating…' : 'New Set'}
         </button>
       </div>
 
       {!collapsed && (
         <>
-          {showNew && (
-            <div className="px-3 pb-2 space-y-2 shrink-0">
-              {error && <p className="text-red-400 text-xs">{error}</p>}
-              <div className="flex flex-wrap gap-2">
-                <input className="input flex-1 min-w-[12rem] !h-9" placeholder="Set name, e.g. Sunday Morning Worship" autoFocus
-                  value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
-                <input type="date" className="input !h-9 !w-auto" value={date} onChange={e => setDate(e.target.value)} aria-label="Service date" />
-                <input type="time" className="input !h-9 !w-auto" value={time} onChange={e => setTime(e.target.value)} aria-label="Service time" />
-                <button onClick={submit} disabled={creating || !name.trim()} className="btn-primary shrink-0">{creating ? 'Creating…' : 'Create'}</button>
-                <button onClick={() => { setShowNew(false); setName(''); setTime(''); setDate(todayISO()); setError(null) }} className="btn-ghost shrink-0">Cancel</button>
-              </div>
-            </div>
-          )}
+          {error && <p className="px-3 pb-2 text-red-400 text-xs shrink-0">{error}</p>}
           <div className="overflow-y-auto px-2 pb-2 border-t border-border pt-1">
             {loading ? (
               <div className="flex justify-center py-6"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
