@@ -3,6 +3,13 @@ import { Plus, Search, Music, ChevronRight, Check, X, ListPlus, Upload } from 'l
 import { Link } from 'react-router-dom'
 import { formatSetDate, todayISO } from '../../lib/sets'
 
+// "G Major" -> "G", "E Minor" -> "Em"; original key first, then any transposed keys.
+const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
+const songKeys = song => {
+  const m = song.metadata || {}
+  return [...new Set([m.original_key || m.key, ...(m.transposed_keys || [])].filter(Boolean).map(shortKey))]
+}
+
 export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onCreateSet, onAdd, onEdit, onView, onNew }) {
   const [query, setQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState([])
@@ -157,6 +164,10 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
                 <button onClick={() => onView(song)} className="flex-1 min-w-0 py-1 text-left truncate text-sm">
                   <span className="font-medium">{song.title}</span>
                   {song.artist && <span className="text-xs text-muted"> · {song.artist}</span>}
+                  {songKeys(song).map((k, i) => (
+                    <span key={k} title={i === 0 ? 'Original key' : 'Transposed key'}
+                      className={`ml-1.5 inline-flex items-center px-1.5 rounded text-[10px] font-semibold align-[1px] ${i === 0 ? 'bg-accent/20 text-accent-light' : 'border border-border text-muted'}`}>{k}</span>
+                  ))}
                 </button>
                 {addMode && (
                   <button onClick={() => handleAdd(song)} disabled={noSets || !targetSetId}
