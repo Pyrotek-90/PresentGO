@@ -21,6 +21,22 @@ export const BARE_SECTION_RE = /^(intro|verse|chorus|pre-?chorus|bridge|tag|outr
 
 export const titleCase = s => s.replace(/\b([a-z])/g, c => c.toUpperCase())
 
+// Imported song titles: every word starts with a capital ("DHANYAWAD HO TERA" and
+// "dhanyawad ho tera" both become "Dhanyawad Ho Tera"). An all-caps or all-lowercase
+// title is rebuilt; a mixed-case title keeps its other letters (e.g. "McCoy", "LORD" in
+// "Holy Is The LORD") and only gets its word starts capitalised.
+export function formatSongTitle(raw) {
+  const t = (raw || '').trim().replace(/\s+/g, ' ')
+  if (!t) return t
+  const letters = t.replace(/[^\p{L}]/gu, '')
+  const shouting = letters && letters === letters.toUpperCase() && letters.length > 3
+  return t.split(' ').map(word => {
+    const w = shouting ? word.toLowerCase() : word
+    // first letter of the word (after any leading quote or bracket), not after apostrophes
+    return w.replace(/^([^\p{L}\p{N}]*)(\p{L})/u, (_, pre, ch) => pre + ch.toUpperCase())
+  }).join(' ')
+}
+
 export function parseChordProKey(raw) {
   const m = (raw || '').trim().match(/^([A-G])([#b♭]?)\s*(m(?!aj)|min|minor)?/i)
   if (!m) return ''
@@ -160,7 +176,7 @@ export function assembleSong(meta, sections) {
   }
 
   return {
-    title: meta.title || '',
+    title: formatSongTitle(meta.title),
     artist: meta.artist || '',
     author: meta.author || '',
     ccli: meta.ccli || '',
