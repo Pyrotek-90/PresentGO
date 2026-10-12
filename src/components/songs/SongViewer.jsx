@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2, ChevronLeft, ChevronRight, List } from 'lucide-react'
-import { transposeChart, isChordLine } from '../../lib/chords'
+import { transposeChart, isChordLine, isBarToken } from '../../lib/chords'
 import { reconcileChart, lyricSections } from '../../lib/chart'
 import { getPref } from '../../lib/prefs'
 
@@ -77,7 +77,9 @@ function ChartBlock({ block }) {
       const parts = [...block.chords.matchAll(/(\S+)(\s*)/g)]
       return (
         <div data-fit className="whitespace-nowrap" style={{ paddingLeft: INDENT, breakInside: 'avoid' }}>
-          {parts.map((m, i) => <span key={i} style={{ marginRight: `${Math.max(0.8, m[2].length * 0.45)}em` }}><ChordPill>{m[1]}</ChordPill></span>)}
+          {parts.map((m, i) => <span key={i} style={{ marginRight: `${Math.max(0.8, m[2].length * 0.45)}em` }}>{isBarToken(m[1])
+            ? <span className="text-muted font-semibold">{m[1]}</span>
+            : <ChordPill>{m[1]}</ChordPill>}</span>)}
         </div>
       )
     }
