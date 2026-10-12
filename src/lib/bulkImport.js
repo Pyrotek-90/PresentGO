@@ -1,4 +1,4 @@
-import { parseChordPro, looksLikeChordPro } from './chordpro'
+import { parseChordPro, looksLikeChordPro, formatSongTitle } from './chordpro'
 import { readPdfChart } from './pdfChart'
 import { buildSongSlides } from './songSlides'
 import { hasChords } from './chords'
@@ -105,7 +105,7 @@ export async function readChart(entry) {
     if (parsed.error) return { ...entry, status: 'error', message: READ_ERRORS[parsed.error] || 'Could not read this file.' }
     const song = {
       ...parsed,
-      title: parsed.title || fromName.title,
+      title: formatSongTitle(parsed.title || fromName.title),
       ccli: parsed.ccli || fromName.ccli,
     }
     const notes = []
