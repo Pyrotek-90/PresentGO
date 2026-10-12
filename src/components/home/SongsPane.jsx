@@ -164,10 +164,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
                 <button onClick={() => onView(song)} className="flex-1 min-w-0 py-1 text-left truncate text-sm">
                   <span className="font-medium">{song.title}</span>
                   {song.artist && <span className="text-xs text-muted"> · {song.artist}</span>}
-                  {songKeys(song).map((k, i) => (
-                    <span key={k} title={i === 0 ? 'Original key' : 'Transposed key'}
-                      className={`ml-1.5 inline-flex items-center px-1.5 rounded text-[10px] font-semibold align-[1px] ${i === 0 ? 'bg-accent/20 text-accent-light' : 'border border-border text-muted'}`}>{k}</span>
-                  ))}
+                  {songKeys(song).length > 0 && <span className="text-xs text-muted"> · {songKeys(song).join(', ')}</span>}
                 </button>
                 {addMode && (
                   <button onClick={() => handleAdd(song)} disabled={noSets || !targetSetId}
