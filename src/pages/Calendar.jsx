@@ -10,13 +10,13 @@ import { todayISO, formatSetTime } from '../lib/sets'
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const CAL_COLLAPSE_KEY = 'presentgo.calendarCollapsed'
 
-// How many set panes fit side by side: phone 1, iPad portrait 2, wider 3.
+// How many set panes fit side by side: phone 1, iPad portrait 2, iPad landscape 3, wide 4.
 function usePaneCount(ref) {
   const [n, setN] = useState(1)
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const measure = () => { const w = el.clientWidth; setN(w >= 960 ? 3 : w >= 600 ? 2 : 1) }
+    const measure = () => { const w = el.clientWidth; setN(w >= 1140 ? 4 : w >= 860 ? 3 : w >= 560 ? 2 : 1) }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
@@ -172,7 +172,7 @@ export default function Calendar() {
     const d = new Date(s.service_date + 'T00:00:00')
     setCursor(new Date(d.getFullYear(), d.getMonth(), 1))
   }
-  // Panes shown: phone = selected; 2 = selected + next; 3 = previous, selected, next.
+  // Panes shown: phone = selected; 2 = selected + next; 3-4 = one before the selected set, then the next ones.
   const paneWindow = useMemo(() => {
     if (!dated.length) return [-1]
     const n = Math.min(paneCount, dated.length)
@@ -189,7 +189,7 @@ export default function Calendar() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-4">
           <section className="rounded-xl border border-border bg-card overflow-hidden">
             <div className={`flex items-center justify-between px-3 py-2 ${calCollapsed ? '' : 'border-b border-border'}`}>
               <button onClick={toggleCal} aria-expanded={!calCollapsed} className="flex items-center gap-2 min-w-0 text-left">
@@ -240,7 +240,8 @@ export default function Calendar() {
             const s = dated[i]
             return (
               <SchedulePane key={s ? s.id : 'none'} set={s || null} index={i} total={dated.length}
-                active={i === schedIndex} role={paneWindow.length > 1 ? (i < schedIndex ? 'Previous' : i > schedIndex ? 'Next' : 'Selected') : null}
+                active={i === schedIndex} multi={paneWindow.length > 1}
+                showPrev={i === paneWindow[0]} showNext={i === paneWindow[paneWindow.length - 1]}
                 onSelect={() => showSet(s)}
                 onPrev={() => showSet(dated[schedIndex - 1])} onNext={() => showSet(dated[schedIndex + 1])}
                 positions={positions} members={members}
