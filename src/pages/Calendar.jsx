@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
@@ -8,6 +8,22 @@ import { sortPositions, ensureStandardPositions } from '../lib/positions'
 import { todayISO, formatSetTime } from '../lib/sets'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const CAL_COLLAPSE_KEY = 'presentgo.calendarCollapsed'
+
+// How many set panes fit side by side: phone 1, iPad portrait 2, wider 3.
+function usePaneCount(ref) {
+  const [n, setN] = useState(1)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => { const w = el.clientWidth; setN(w >= 960 ? 3 : w >= 600 ? 2 : 1) }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+  return n
+}
 
 export default function Calendar() {
   const { user } = useAuth()
@@ -16,7 +32,11 @@ export default function Calendar() {
   const [selected, setSelected] = useState(todayISO())
   const [schedId, setSchedId] = useState(null)   // set shown in the Team Schedule pane
   const [sending, setSending] = useState(false)
-  const [sendResult, setSendResult] = useState(null)
+  const [sendResult, setSendResult] = useState(null)   // { setId, ok, text }
+  const [calCollapsed, setCalCollapsed] = useState(() => { try { return localStorage.getItem(CAL_COLLAPSE_KEY) === '1' } catch { return false } })
+  const toggleCal = () => setCalCollapsed(c => { try { localStorage.setItem(CAL_COLLAPSE_KEY, c ? '0' : '1') } catch { /* ignore */ } return !c })
+  const panesRef = useRef(null)
+  const paneCount = usePaneCount(panesRef)
   const [positions, setPositions] = useState([])
   const [members, setMembers] = useState([])
   const [assignments, setAssignments] = useState([])
@@ -66,9 +86,10 @@ export default function Calendar() {
   // Before automatic email is set up: open a ready-written email in the mail app, one person per tap.
   const mailAppFallback = async ids => {
     const a = assignments.find(x => x.id === ids[0])
+    const sendSetId = a?.set_id
     const m = members.find(x => x.id === a?.member_id), p = positions.find(x => x.id === a?.position_id)
     const set = sets.find(x => x.id === a?.set_id)
-    if (!a?.invite_token || !m?.email) { setSendResult({ ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+    if (!a?.invite_token || !m?.email) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
     const link = `${window.location.origin}/respond/${a.invite_token}`
     const when = set?.service_date ? new Date(set.service_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''
     const subject = `Can you serve as ${p?.name || 'part of the team'}${when ? ` on ${when}` : ''}?`
@@ -76,11 +97,12 @@ export default function Calendar() {
     window.location.href = `mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     await markInvited([a.id])
     const left = ids.length - 1
-    setSendResult({ ok: true, text: `Opened an email to ${m.name} in your mail app.${left ? ` Tap Email invites again for the next person (${left} left).` : ''}` })
+    setSendResult({ setId: sendSetId, ok: true, text: `Opened an email to ${m.name} in your mail app.${left ? ` Tap Email invites again for the next person (${left} left).` : ''}` })
   }
 
   const sendInvites = async ids => {
     if (!ids.length) return
+    const sendSetId = assignments.find(a => a.id === ids[0])?.set_id
     setSending(true); setSendResult(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -91,15 +113,15 @@ export default function Calendar() {
       })
       const out = await r.json().catch(() => ({}))
       if (r.status === 501) { await mailAppFallback(ids); return }
-      if (r.status === 409) { setSendResult({ ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
-      if (!r.ok) { setSendResult({ ok: false, text: 'Could not send the emails. Please try again.' }); return }
+      if (r.status === 409) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+      if (!r.ok) { setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Please try again.' }); return }
       const now = new Date().toISOString()
       setAssignments(prev => prev.map(a => (out.sent.includes(a.id) && (a.status || 'draft') !== 'accepted' ? { ...a, status: 'invited', invited_at: now } : a)))
       const parts = [`Sent ${out.sent.length} invite${out.sent.length === 1 ? '' : 's'}.`]
       if (out.failed?.length) parts.push(`${out.failed.length} couldn't be sent.`)
-      setSendResult({ ok: !out.failed?.length, text: parts.join(' ') })
+      setSendResult({ setId: sendSetId, ok: !out.failed?.length, text: parts.join(' ') })
     } catch {
-      setSendResult({ ok: false, text: 'Could not send the emails. Check your connection and try again.' })
+      setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Check your connection and try again.' })
     } finally { setSending(false) }
   }
 
@@ -150,6 +172,15 @@ export default function Calendar() {
     const d = new Date(s.service_date + 'T00:00:00')
     setCursor(new Date(d.getFullYear(), d.getMonth(), 1))
   }
+  // Panes shown: phone = selected; 2 = selected + next; 3 = previous, selected, next.
+  const paneWindow = useMemo(() => {
+    if (!dated.length) return [-1]
+    const n = Math.min(paneCount, dated.length)
+    let start = n >= 3 ? schedIndex - 1 : schedIndex
+    start = Math.max(0, Math.min(start, dated.length - n))
+    return Array.from({ length: n }, (_, k) => start + k)
+  }, [dated.length, paneCount, schedIndex])
+
   const pickDay = iso => {
     setSelected(iso)
     const first = (setsByDate[iso] || [])[0]
@@ -158,17 +189,20 @@ export default function Calendar() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-6 grid lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start">
-        <div className="space-y-4">
+      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4">
           <section className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-              <h1 className="font-semibold">{monthLabel}</h1>
+            <div className={`flex items-center justify-between px-3 py-2 ${calCollapsed ? '' : 'border-b border-border'}`}>
+              <button onClick={toggleCal} aria-expanded={!calCollapsed} className="flex items-center gap-2 min-w-0 text-left">
+                <ChevronDown size={16} className={`text-muted transition-transform shrink-0 ${calCollapsed ? '-rotate-90' : ''}`} />
+                <h1 className="font-semibold truncate">{monthLabel}</h1>
+              </button>
               <div className="flex items-center gap-1">
                 <button onClick={goToday} className="btn-ghost !py-1 !px-2.5 text-xs">Today</button>
                 <button onClick={() => shift(-1)} className="btn-ghost p-1.5" aria-label="Previous month"><ChevronLeft size={16} /></button>
                 <button onClick={() => shift(1)} className="btn-ghost p-1.5" aria-label="Next month"><ChevronRight size={16} /></button>
               </div>
             </div>
+            {!calCollapsed && <>
             <div className="grid grid-cols-7 border-b border-border">
               {WEEKDAYS.map(w => <div key={w} className="py-1 text-center text-[10px] uppercase tracking-widest text-muted">{w}</div>)}
             </div>
@@ -197,17 +231,26 @@ export default function Calendar() {
                 )
               })}
             </div>
+            </>}
           </section>
 
+        {/* Who's Serving: the selected set, plus the previous and next sets when there's room */}
+        <div ref={panesRef} className="grid gap-4 items-start" style={{ gridTemplateColumns: `repeat(${Math.min(paneCount, Math.max(dated.length, 1))}, minmax(0, 1fr))` }}>
+          {paneWindow.map(i => {
+            const s = dated[i]
+            return (
+              <SchedulePane key={s ? s.id : 'none'} set={s || null} index={i} total={dated.length}
+                active={i === schedIndex} role={paneWindow.length > 1 ? (i < schedIndex ? 'Previous' : i > schedIndex ? 'Next' : 'Selected') : null}
+                onSelect={() => showSet(s)}
+                onPrev={() => showSet(dated[schedIndex - 1])} onNext={() => showSet(dated[schedIndex + 1])}
+                positions={positions} members={members}
+                assignments={s ? assignments.filter(a => a.set_id === s.id) : []}
+                onAdd={(pid, mid) => addAssignment(s.id, pid, mid)} onRemove={removeAssignment}
+                onSend={sendInvites} sending={sending} sendResult={s && sendResult?.setId === s.id ? sendResult : null} onRefresh={refreshAssignments} />
+            )
+          })}
         </div>
-
-        <SchedulePane set={schedSet} index={schedIndex} total={dated.length}
-          onPrev={() => showSet(dated[schedIndex - 1])} onNext={() => showSet(dated[schedIndex + 1])}
-          positions={positions} members={members}
-          assignments={schedSet ? assignments.filter(a => a.set_id === schedSet.id) : []}
-          onAdd={(pid, mid) => addAssignment(schedSet.id, pid, mid)} onRemove={removeAssignment}
-          onSend={sendInvites} sending={sending} sendResult={sendResult} onRefresh={refreshAssignments} />
-        {teamError && <p className="text-red-400 text-xs lg:col-start-2">{teamError}</p>}
+        {teamError && <p className="text-red-400 text-xs">{teamError}</p>}
       </div>
     </Layout>
   )
