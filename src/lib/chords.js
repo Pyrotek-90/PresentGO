@@ -10,6 +10,12 @@ const CHORD_RE = /^([A-G][#b♭]?)((?:m|maj|min|dim|aug|sus|add|M|\d|\+|°|ø|-|
 
 const normNote = n => n.replace('♭', 'b')
 
+// Bar lines and rhythm marks allowed in a chord line: | || |: :| / // % and repeat counts.
+export const BAR_RE = /^(\|{1,2}:?|:?\|{1,2}|\/+|%|x\d+|\d+x)$/i
+export const isBarToken = tok => BAR_RE.test(tok)
+// A chord token, optionally in parentheses: "(D)" marks an optional / last-time chord.
+const isChordToken = tok => CHORD_RE.test(tok) || (/^\(.+\)$/.test(tok) && CHORD_RE.test(tok.slice(1, -1)))
+
 export function parseKey(str) {
   const m = (str || '').match(/^([A-G])([#♭b]?)\s*(Major|Minor)?/i)
   if (!m) return null
@@ -58,7 +64,8 @@ function transposeNote(note, semis, flats) {
 export function isChordLine(line) {
   const t = line.trim()
   if (!t || t.startsWith('[')) return false
-  return t.split(/\s+/).every(tok => CHORD_RE.test(tok))
+  const toks = t.split(/\s+/)
+  return toks.some(isChordToken) && toks.every(tok => isChordToken(tok) || isBarToken(tok))
 }
 
 export function hasChords(chart) {
@@ -73,6 +80,8 @@ export function transposeChart(chart, fromKey, toKey) {
   const flats = useFlats(toKey)
 
   const shiftToken = tok => {
+    if (isBarToken(tok)) return tok
+    if (!CHORD_RE.test(tok)) return `(${shiftToken(tok.slice(1, -1))})`
     const m = tok.match(CHORD_RE)
     const root = transposeNote(m[1], semis, flats)
     const bass = m[3] ? `/${transposeNote(m[3], semis, flats)}` : ''

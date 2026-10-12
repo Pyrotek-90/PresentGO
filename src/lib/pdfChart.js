@@ -1,4 +1,4 @@
-import { isChordLine } from './chords'
+import { isChordLine, isBarToken } from './chords'
 import { assembleSong, parseChordProKey, titleCase } from './chordpro'
 
 // Reads a text-based PDF chord chart (SongSelect, Planning Center, PraiseCharts chord charts,
@@ -38,7 +38,8 @@ const median = arr => {
 }
 
 // Text runs of one page: drops empty runs and tiny marks (chord-diagram finger dots,
-// fret numbers) that are much smaller than the page's text.
+// fret numbers: very small AND only a character or two), keeps small header/footer text,
+// and joins raised chord extensions back onto their chord.
 function pageRuns(items) {
   const runs = items
     .filter(it => it.str && it.str.trim())
@@ -50,7 +51,27 @@ function pageRuns(items) {
       size: Math.abs(it.transform[3]) || it.height || 10,
     }))
   const body = median(runs.map(r => r.size))
-  return runs.filter(r => r.size >= body * 0.6)
+  return joinSuperscripts(runs.filter(r => !(r.size < body * 0.6 && r.str.trim().length <= 2)))
+}
+
+// SongSelect and similar charts print a chord's extension as a smaller raised run right
+// after the root: "Bm" + "7", "G" + "2(no3)", "Em" + "7(4)". Glue each back onto its chord,
+// dropping parenthesised details ("(4)", "(no3)") the team doesn't need.
+const CHORD_ROOT_RE = /^[A-G][#b♭]?(m|maj|min|dim|aug|sus)?$/
+const EXT_RE = /^(maj|m|min|sus|add|dim|aug|M|\d|\+|°|ø|#|b|♭|\(|\)|[a-z0-9])+$/
+function joinSuperscripts(runs) {
+  const used = new Set()
+  for (const s of runs) {
+    const t = s.str.trim()
+    if (!EXT_RE.test(t)) continue
+    const host = runs.find(c => c !== s && !used.has(c) && c.size > s.size * 1.1 && CHORD_ROOT_RE.test(c.str.trim())
+      && Math.abs(s.x - (c.x + c.w)) <= Math.max(3, c.size * 0.25) && s.y >= c.y - 0.5 && s.y - c.y <= c.size * 0.6)
+    if (!host) continue
+    host.str = host.str.trim() + t.replace(/\([^)]*\)/g, '')
+    host.w = s.x + s.w - host.x
+    used.add(s)
+  }
+  return runs.filter(r => !used.has(r))
 }
 
 // Two-column charts (e.g. chords on the left, a translation on the right): finds a left
@@ -139,11 +160,16 @@ function pageRows(items, pageNo) {
   ]
 }
 
+// Notes printed among the chords, e.g. "(Last x)", "(Repeat)", "(2x)": not chords.
+const stripNotes = text => text.replace(/\(([^)]*)\)/g, (m, inner) => (isChordLine(inner) ? m : ' '.repeat(m.length)))
+
 // Removes bar lines, slashes and repeat marks so "| G / / | D |" counts as a chord row.
 function chordRowTokens(text) {
-  const toks = text.trim().split(/\s+/).filter(t => !BAR_TOKEN_RE.test(t))
+  const toks = stripNotes(text).trim().split(/\s+/).filter(t => t && !BAR_TOKEN_RE.test(t))
   return toks
 }
+// A chord-only line as it should appear in the chart: bar lines and spacing kept, notes removed.
+const chordOnlyLine = raw => stripNotes(raw).replace(/\s+$/, '').replace(/^\s+/, '')
 function isChordRow(text) {
   const toks = chordRowTokens(text)
   return toks.length > 0 && isChordLine(toks.join(' '))
@@ -181,6 +207,7 @@ function alignChords(chordText, lyricRaw) {
   const lyric = cleanLyric(lyricRaw.slice(indent))
   let chords = ''
   const re = /\S+/g
+  chordText = stripNotes(chordText)
   let m
   while ((m = re.exec(chordText))) {
     if (BAR_TOKEN_RE.test(m[0])) continue
@@ -189,6 +216,9 @@ function alignChords(chordText, lyricRaw) {
   }
   return { chords, lyric: lyric.text }
 }
+
+// Some PDFs space out letters after certain capitals ("C hris", "W orship"); rejoin them.
+const fixKerning = t => t.replace(/\b([B-HJ-Z]) (?=[a-z]{2,})/g, '$1').replace(/\bw (?=ith\b)/g, 'w')
 
 const normTitle = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
@@ -218,7 +248,7 @@ export function chartFromTextItems(pages) {
     const ccli = t.match(CCLI_RE)
     if (ccli && !meta.ccli) meta.ccli = ccli[1]
     if (FOOTER_RE.test(t)) {
-      if (!meta.copyright && /©|\(c\)|copyright/i.test(t)) meta.copyright = t.replace(/^.*?(©|\(c\)|copyright)/i, '©').replace(/\s{2,}/g, ' ').slice(0, 300)
+      if (!meta.copyright && /©|\(c\)|copyright/i.test(t)) meta.copyright = fixKerning(t).replace(/^.*?(©|\(c\)|copyright)/i, '©').replace(/\s{2,}/g, ' ').slice(0, 300)
       return false
     }
     return true
@@ -240,18 +270,25 @@ export function chartFromTextItems(pages) {
   const headerEnd = firstBody < 0 ? 0 : firstBody
   const header = rows.slice(0, headerEnd)
   for (const r of header) {
-    const t = r.text.trim().replace(/\s{2,}/g, ' ')
+    const t = fixKerning(r.text.trim().replace(/\s{2,}/g, ' '))
     let used = false
     const k = t.match(KEY_RE)
     if (k) { meta.key = parseChordProKey(k[1]); used = true }
     const tm = t.match(TEMPO_RE)
     if (tm) { meta.bpm = String(tm[1] || tm[2]); used = true }
     if (used || /\btime\s*[:\u2013-]?\s*\d+\s*\/\s*\d+/i.test(t)) continue
-    if (/recorded by|artist\s*:/i.test(t)) { if (!meta.artist) meta.artist = t.replace(/^.*?(recorded by|artist\s*:)\s*/i, '') }
-    else if (!meta.author && t.length <= 160) meta.author = t
-      .replace(/^(words\s*(and|&)\s*music|words|music|written)?\s*(by)?\s*:?\s*/i, '')
-      .replace(/[,;|]?\s*\b(words|music)(\s*(and|&)\s*music)?\s*by\s*:?\s*/gi, ', ')
-      .replace(/^[,\s]+|[,\s]+$/g, '')
+    const artist = t.match(/(?:recording|recorded|performed|sung)\s+by\s*:?\s*(.+)$|^artist\s*:\s*(.+)$/i)
+    if (artist) {
+      if (!meta.artist) meta.artist = (artist[1] || artist[2]).replace(/\)+\s*$/, '').replace(/[,;]?\s*\b(feat\.?|featuring|ft\.?)\s.*$/i, '').trim()
+      continue
+    }
+    // Writer lines: "Words and Music by A | B", "Original Words by C", "Addt'l. Words and Music by D".
+    const byLine = t.match(/\b(?:words|music|lyrics|written|composed)\b[^:]*?\bby\s*:?\s*(.+)$/i)
+    const names = byLine ? byLine[1] : (!meta.author && t.length <= 160 ? t : '')
+    if (!names) continue
+    const list = names.split(/\s*(?:\||,|;|&|\band\b)\s*/i).map(n => n.replace(/^[()\s]+|[()\s]+$/g, '')).filter(Boolean)
+    const have = meta.author ? meta.author.split(/,\s*/) : []
+    meta.author = [...new Set([...have, ...list])].join(', ')
   }
   rows = rows.slice(headerEnd)
 
@@ -265,9 +302,6 @@ export function chartFromTextItems(pages) {
     return !/^(key|tempo|time|bpm)\b\s*[:\u2013\u2014-]?\s*\S+(\s*[|·,]\s*(key|tempo|time|bpm)\b.*)?$/i.test(t)
   })
 
-  const bodyRows = rows.filter(r => !isChordRow(r.text))
-  const twoCol = bodyRows.filter(r => /\S {10,}\S/.test(r.text.trim())).length
-  if (bodyRows.length > 6 && twoCol / bodyRows.length > 0.3) warnings.push('two_column')
 
   const sections = []
   let cur = null
@@ -300,7 +334,7 @@ export function chartFromTextItems(pages) {
     const hp = t.match(SECTION_PREFIX_RE)
     if (hp && isChordRow(hp[3])) {
       open(titleCase(`${hp[1]}${hp[2] ? ' ' + hp[2] : ''}`.toLowerCase()))
-      cur.rows.push({ chords: chordRowTokens(hp[3]).join(' '), lyric: '' })
+      cur.rows.push({ chords: chordOnlyLine(hp[3]), lyric: '' })
       continue
     }
 
@@ -313,7 +347,7 @@ export function chartFromTextItems(pages) {
         cur.rows.push({ ...pair, lyric: pair.lyric.replace(REPEAT_RE, '') })
         i++
       } else {
-        cur.rows.push({ chords: chordRowTokens(raw).join(' '), lyric: '' })
+        cur.rows.push({ chords: chordOnlyLine(raw), lyric: '' })
       }
       continue
     }
