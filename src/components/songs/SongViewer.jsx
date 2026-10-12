@@ -110,7 +110,8 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
   const wantEnd = useRef(!!startAtEnd)
   useEffect(() => { onModeChange?.(mode) }, [mode])
   useEffect(() => { if (wantEnd.current) { const t = setTimeout(() => { wantEnd.current = false }, 400); return () => clearTimeout(t) } }, [])
-  const [activeKey, setActiveKey] = useState(initialKey || keys[0] || '')
+  // A set's chosen key wins; otherwise the song's starred (preferred) key, then the original.
+  const [activeKey, setActiveKey] = useState(initialKey || (keys.includes(meta.preferred_key) ? meta.preferred_key : '') || keys[0] || '')
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -382,7 +383,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
             <div className="flex items-center gap-1 shrink-0">
               <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
               {keys.map(k => (
-                <button key={k} onClick={() => setActiveKey(k)} title={k}
+                <button key={k} onClick={() => setActiveKey(k)} title={[k, meta.preferred_key === k && '★ preferred', meta.key_notes?.[k]].filter(Boolean).join(' · ')}
                   className={`shrink-0 min-w-[2.25rem] px-2 h-8 rounded-md border text-sm font-semibold transition-colors ${
                     activeKey === k ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
                   }`}>{shortKey(k)}</button>
