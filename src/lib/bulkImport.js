@@ -111,6 +111,7 @@ export async function readChart(entry) {
     const notes = []
     if (parsed.warnings?.includes('two_column')) notes.push('Looks like a 2-column chart — check the chord placement, or re-download as 1 column.')
     if (!hasChords(song.chordChart)) notes.push('No chords found — lyrics only.')
+    if (parsed.translations?.length) notes.push(`${parsed.translations.map(t => t.title).join(' and ')} saved with the song.`)
     return { ...entry, status: 'ready', song, message: notes.join(' ') }
   } catch (err) {
     console.error('chart read failed', entry.path, err)
@@ -167,6 +168,7 @@ export function songPayload(entry, userId, linesPerSlide = 2) {
       copyright: s.copyright || '',
       youtube_url: '',
       transposed_keys: [],
+      ...(s.translations?.length ? { translations: s.translations } : {}),
       import_source: entry.kind === 'pdf' ? 'pdf' : 'chordpro',
       import_file: entry.path,
     },
