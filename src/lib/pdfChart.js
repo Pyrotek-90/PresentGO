@@ -38,7 +38,8 @@ const median = arr => {
 }
 
 // Text runs of one page: drops empty runs and tiny marks (chord-diagram finger dots,
-// fret numbers: very small AND only a character or two), keeps small header/footer text,
+// strokes: very small symbols only a character or two long), keeps small header/footer text
+// and small letters or numbers such as a footer's "KEY: C",
 // and joins raised chord extensions back onto their chord.
 function pageRuns(items) {
   const runs = items
@@ -51,7 +52,7 @@ function pageRuns(items) {
       size: Math.abs(it.transform[3]) || it.height || 10,
     }))
   const body = median(runs.map(r => r.size))
-  return joinSuperscripts(runs.filter(r => !(r.size < body * 0.6 && r.str.trim().length <= 2)))
+  return joinSuperscripts(runs.filter(r => !(r.size < body * 0.6 && r.str.trim().length <= 2 && !/^[A-Za-z0-9]/.test(r.str.trim()))))
 }
 
 // SongSelect and similar charts print a chord's extension as a smaller raised run right
@@ -140,25 +141,37 @@ function dropDiagramLegend(rows) {
   return isChordRow(last.text) && prev.y - last.y > lineGap * 2.5 ? rows.slice(0, -1) : rows
 }
 
-// One page in reading order. Two columns: the header lines above both columns first,
-// then the whole left column, then the whole right column.
+// One page in reading order: header lines (title, writers), then the song (left column,
+// then right column when the page has two), then footer lines (page number, website,
+// Key / Tempo printed at the bottom). Footer rows are marked so they never become lyrics.
 function pageRows(items, pageNo) {
   const runs = pageRuns(items)
   if (!runs.length) return []
-  const split = findGutter(runs)
-  if (split == null) return dropDiagramLegend(runsToRows(runs, pageNo))
+  const body = median(runs.map(r => r.size))
+  const bodyRuns = runs.filter(r => r.size >= body * 0.8 && r.size <= body * 1.25)
+  const top = Math.max(...bodyRuns.map(r => r.y))
+  const bottom = Math.min(...bodyRuns.map(r => r.y))
+  const footer = runs.filter(r => r.y < bottom - 1)
+  let mid = runs.filter(r => r.y >= bottom - 1)
 
-  const colX = Math.min(...runs.filter(r => r.x >= split).map(r => r.x))
-  const rightTop = Math.max(...runs.filter(r => r.x >= split && r.x <= colX + 6).map(r => r.y + r.size * 0.5))
-  // Header = everything above where the right column starts (title, Key / Tempo).
-  const header = runs.filter(r => r.y > rightTop + 2)
-  const body = runs.filter(r => r.y <= rightTop + 2)
+  const split = findGutter(mid.filter(r => r.y <= top + 1))
+  const tag = zone => rows => rows.map(r => ({ ...r, zone }))
+  const footerRows = tag('footer')(runsToRows(footer, pageNo))
+  if (split == null) return [...dropDiagramLegend(runsToRows(mid, pageNo)), ...footerRows]
+
+  // Two columns: everything above where the right column starts is header (title, Key / Tempo).
+  const colX = Math.min(...mid.filter(r => r.x >= split).map(r => r.x))
+  const rightTop = Math.max(...mid.filter(r => r.x >= split && r.x <= colX + 6).map(r => r.y + r.size * 0.5))
+  const header = mid.filter(r => r.y > rightTop + 2)
+  mid = mid.filter(r => r.y <= rightTop + 2)
   return [
     ...runsToRows(header, pageNo),
-    ...dropDiagramLegend(runsToRows(body.filter(r => r.x < split), pageNo)),
-    ...dropDiagramLegend(runsToRows(body.filter(r => r.x >= split), pageNo)),
+    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x < split), pageNo)),
+    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x >= split), pageNo)),
+    ...footerRows,
   ]
 }
+
 
 // Notes printed among the chords, e.g. "(Last x)", "(Repeat)", "(2x)": not chords.
 const stripNotes = text => text.replace(/\(([^)]*)\)/g, (m, inner) => (isChordLine(inner) ? m : ' '.repeat(m.length)))
@@ -242,9 +255,19 @@ export function chartFromTextItems(pages) {
   const meta = { title: '', artist: '', author: '', ccli: '', key: '', bpm: '', copyright: '' }
   const warnings = []
 
-  // Footer and licensing lines: keep the CCLI number and copyright, drop the rest.
+  // Footer and licensing lines: keep the CCLI number, copyright, Key and Tempo; drop the rest.
   rows = rows.filter(r => {
     const t = r.text.trim()
+    if (r.zone === 'footer') {
+      const ccliF = t.match(CCLI_RE)
+      if (ccliF && !meta.ccli) meta.ccli = ccliF[1]
+      const kF = t.match(KEY_RE)
+      if (kF && !meta.key) meta.key = parseChordProKey(kF[1])
+      const tF = t.match(TEMPO_RE)
+      if (tF && !meta.bpm) meta.bpm = String(tF[1] || tF[2])
+      if (!meta.copyright && /©|\(c\)|copyright/i.test(t)) meta.copyright = fixKerning(t).replace(/^.*?(©|\(c\)|copyright)/i, '©').replace(/\s{2,}/g, ' ').slice(0, 300)
+      return false
+    }
     const ccli = t.match(CCLI_RE)
     if (ccli && !meta.ccli) meta.ccli = ccli[1]
     if (FOOTER_RE.test(t)) {
@@ -284,6 +307,7 @@ export function chartFromTextItems(pages) {
     }
     // Writer lines: "Words and Music by A | B", "Original Words by C", "Addt'l. Words and Music by D".
     const byLine = t.match(/\b(?:words|music|lyrics|written|composed)\b[^:]*?\bby\s*:?\s*(.+)$/i)
+    if (!byLine && /\b(scripture|reference|capo|ccli|copyright|©|bpm|tempo)\b/i.test(t)) continue
     const names = byLine ? byLine[1] : (!meta.author && t.length <= 160 ? t : '')
     if (!names) continue
     const list = names.split(/\s*(?:\||,|;|&|\band\b)\s*/i).map(n => n.replace(/^[()\s]+|[()\s]+$/g, '')).filter(Boolean)
