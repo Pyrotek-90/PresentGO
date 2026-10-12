@@ -210,11 +210,11 @@ export default function GetStarted() {
       <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-8 pb-16">
         <header className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wider text-accent-light">Get started</p>
-          <h1 className="text-2xl font-semibold text-primary">Bring your songbook into PresentGO</h1>
+          <h1 className="text-2xl font-semibold text-primary">Bring your songbook into myStaff</h1>
           <p className="text-sm text-muted leading-relaxed">
             The fastest way to start is with the charts you already use. Download the ChordPro or PDF chord charts your
             church is licensed for — from SongSelect, Planning Center, or PraiseCharts — into one folder on your computer,
-            then point PresentGO at that folder. Each chart becomes a song with lyrics, slides, chords, and key, ready for your next set.
+            then point myStaff at that folder. Each chart becomes a song with lyrics, slides, chords, and key, ready for your next set.
           </p>
         </header>
 
@@ -226,7 +226,7 @@ export default function GetStarted() {
           <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted space-y-1.5">
             <p className="text-primary font-medium flex items-center gap-2"><FileText size={14} className="text-accent-light" /> What imports best</p>
             <p><span className="text-primary">ChordPro</span> — exact chords, key, tempo, writers, and CCLI number. Use it whenever it’s offered.</p>
-            <p><span className="text-primary">Text PDFs</span> (chord sheets printed from an app) — PresentGO reads the lyrics and chords; give each one a quick look.</p>
+            <p><span className="text-primary">Text PDFs</span> (chord sheets printed from an app) — myStaff reads the lyrics and chords; give each one a quick look.</p>
             <p><span className="text-primary">Scanned pages and sheet music</span> have no readable text. They’ll be listed so you can add those songs by hand.</p>
           </div>
         </section>

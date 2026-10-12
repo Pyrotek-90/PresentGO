@@ -165,7 +165,7 @@ export default function Team() {
                 <div className="rounded-lg border border-border bg-card p-3 space-y-2 text-xs text-muted">
                   <p className="text-primary font-medium">This browser can't open your contacts list yet.</p>
                   {isApple ? (
-                    <p><span className="text-primary">To pick straight from Contacts:</span> open the iPhone <b>Settings</b> app → <b>Apps</b> → <b>Safari</b> → <b>Advanced</b> → <b>Feature Flags</b> and turn on <b>Contact Picker API</b>. Then reopen PresentGO and tap Import from Contacts again.</p>
+                    <p><span className="text-primary">To pick straight from Contacts:</span> open the iPhone <b>Settings</b> app → <b>Apps</b> → <b>Safari</b> → <b>Advanced</b> → <b>Feature Flags</b> and turn on <b>Contact Picker API</b>. Then reopen myStaff and tap Import from Contacts again.</p>
                   ) : (
                     <p>Picking straight from contacts works in Chrome on Android.</p>
                   )}

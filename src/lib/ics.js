@@ -1,4 +1,4 @@
-// Builds an iCalendar (.ics) document from PresentGO sets. Node- and browser-safe.
+// Builds an iCalendar (.ics) document from myStaff sets. Node- and browser-safe.
 
 const pad = n => String(n).padStart(2, '0')
 const esc = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
@@ -71,9 +71,9 @@ function eventLines(set, baseUrl) {
   return lines
 }
 
-export function buildIcs(sets, { baseUrl = '', calendarName = 'PresentGO' } = {}) {
+export function buildIcs(sets, { baseUrl = '', calendarName = 'myStaff' } = {}) {
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//PresentGO//Sets//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//myStaff//Sets//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     `X-WR-CALNAME:${esc(calendarName)}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
     ...sets.flatMap(s => eventLines(s, baseUrl)),
     'END:VCALENDAR',

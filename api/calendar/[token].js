@@ -22,9 +22,9 @@ export default async function handler(req, res) {
     const host = req.headers['x-forwarded-host'] || req.headers.host
     const baseUrl = host ? `https://${host}` : ''
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
-    res.setHeader('Content-Disposition', 'inline; filename="presentgo.ics"')
+    res.setHeader('Content-Disposition', 'inline; filename="mystaff.ics"')
     res.setHeader('Cache-Control', 'public, max-age=300')
-    return res.status(200).send(buildIcs(sets, { baseUrl, calendarName: 'PresentGO Sets' }))
+    return res.status(200).send(buildIcs(sets, { baseUrl, calendarName: 'myStaff Sets' }))
   } catch (err) {
     console.error('calendar feed error:', err)
     return res.status(502).send('Could not load sets')

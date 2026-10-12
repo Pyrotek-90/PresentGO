@@ -64,8 +64,8 @@ export default function Auth() {
             <Logo size={38} color="var(--color-accent)" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold">PresentGO</h1>
-            <p className="text-muted text-sm mt-1">Create and display presentations in a breeze.</p>
+            <h1 className="text-2xl font-bold">myStaff</h1>
+            <p className="text-muted text-sm mt-1 italic">To the Chief Musician</p>
           </div>
         </div>
 
@@ -153,7 +153,7 @@ export default function Auth() {
         </div>
 
         <p className="text-center text-xs text-muted">
-          PresentGO · Create and display presentations in a breeze.
+          myStaff · Chord charts, worship sets &amp; presentation
         </p>
       </div>
     </div>

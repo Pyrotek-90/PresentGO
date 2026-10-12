@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "PresentGO Dev Server",
+      "name": "myStaff Dev Server",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
@@ -12,7 +12,7 @@
       "autoPort": false
     },
     {
-      "name": "PresentGO Preview (production build)",
+      "name": "myStaff Preview (production build)",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
         "vite",

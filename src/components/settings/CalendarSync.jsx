@@ -97,7 +97,7 @@ export default function CalendarSync() {
           </div>
           <ul className="text-[11px] text-muted space-y-1 list-disc pl-4">
             <li>Anyone with this link can see your set names, times and locations, so keep it private. Reset it any time to cut off old copies.</li>
-            <li>It's read-only. Changes you make in PresentGO appear in your calendar after it next refreshes (Apple: within the hour; Google: can take several hours).</li>
+            <li>It's read-only. Changes you make in myStaff appear in your calendar after it next refreshes (Apple: within the hour; Google: can take several hours).</li>
             {isLocal && <li className="text-amber-400/90">You're on localhost, so this link won't work from Google or Apple. Open Settings on your deployed site to get a working link.</li>}
           </ul>
         </div>

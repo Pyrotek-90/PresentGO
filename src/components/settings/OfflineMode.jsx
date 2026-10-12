@@ -90,7 +90,7 @@ export default function OfflineMode() {
             </div>
             {usage?.quota > 0 && (
               <p className="text-[11px] text-muted">
-                That's {((total / usage.quota) * 100).toFixed(total / usage.quota < 0.01 ? 2 : 1)}% of the {formatBytes(usage.quota)} this browser lets PresentGO use
+                That's {((total / usage.quota) * 100).toFixed(total / usage.quota < 0.01 ? 2 : 1)}% of the {formatBytes(usage.quota)} this browser lets myStaff use
                 {usage.usage != null && usage.usage > total ? ` (${formatBytes(usage.usage)} including other site data)` : ''}.
               </p>
             )}
@@ -115,7 +115,7 @@ export default function OfflineMode() {
           {error && <p className="text-xs text-red-400">{error}</p>}
 
           <ul className="text-[11px] text-muted space-y-1 list-disc pl-4">
-            <li>Everything refreshes automatically each time you open PresentGO with a connection. Open it once before each service while online.</li>
+            <li>Everything refreshes automatically each time you open myStaff with a connection. Open it once before each service while online.</li>
             <li>Offline you can browse, view songs and charts, and run Presentation Mode. Changes to sets and songs can't be saved until you reconnect.</li>
             <li>To drive the TV offline, keep the controller and the display in the same browser on one device.</li>
             <li>On iPhone and iPad, tap Share → <strong className="text-primary">Add to Home Screen</strong> so Safari doesn't clear offline data after a week of non-use.</li>

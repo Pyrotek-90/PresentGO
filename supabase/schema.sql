@@ -1,5 +1,5 @@
 -- ============================================================
--- PresentGO — Supabase Database Schema
+-- myStaff — Supabase Database Schema
 -- Run this in your Supabase project → SQL Editor
 -- ============================================================
 

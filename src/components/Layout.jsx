@@ -51,10 +51,10 @@ export default function Layout({ children }) {
     <div className="flex h-full flex-col">
       {/* Top nav */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
-        <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="PresentGO home" title="Home"
+        <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="myStaff home" title="Home"
           className="flex items-center gap-3 rounded-lg hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <Tv className="text-accent" size={22} />
-          <span className="text-lg font-semibold tracking-tight text-primary">PresentGO</span>
+          <span className="text-lg font-semibold tracking-tight text-primary">myStaff</span>
         </Link>
 
         {/* Desktop nav */}

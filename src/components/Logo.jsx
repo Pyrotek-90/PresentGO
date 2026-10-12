@@ -1,5 +1,5 @@
 /**
- * PresentGO Logo — a wireless presentation screen icon
+ * myStaff logo — a wireless presentation screen icon
  * A display with a play arrow and signal arcs, communicating "wireless presentation"
  */
 export default function Logo({ size = 32, color = 'currentColor' }) {

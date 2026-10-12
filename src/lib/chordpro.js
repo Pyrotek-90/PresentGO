@@ -1,7 +1,7 @@
 import { formatKey } from './chords'
 
 // Parses a ChordPro file (as downloaded from SongSelect, PraiseCharts, OnSong, etc.) into
-// PresentGO's song shape: raw lyrics with [Section] headers, a chords-over-lyrics chart whose
+// myStaff's song shape: raw lyrics with [Section] headers, a chords-over-lyrics chart whose
 // lyric lines match the raw lyrics exactly, and song metadata.
 
 const DIRECTIVE_RE = /^\{\s*([a-z_]+)\s*(?::\s*(.*?))?\s*\}$/i

@@ -42,7 +42,7 @@ export default function Respond() {
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 space-y-5">
         <div className="flex items-center gap-2">
           <Tv className="text-accent" size={20} />
-          <span className="font-semibold tracking-tight">PresentGO</span>
+          <span className="font-semibold tracking-tight">myStaff</span>
         </div>
 
         {state === 'loading' && <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}
