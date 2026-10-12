@@ -1131,11 +1131,6 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       setKeyRoot(k.root); setKeyAccidental(k.accidental)
       setSongKey(formatKey(k.root, k.accidental, k.mode))
     }
-    const togglePending = k => setPendingKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
-    const commitKeys = () => {
-      setTransposedKeys(prev => [...prev, ...pendingKeys.filter(k => !prev.includes(k))])
-      setPendingKeys([]); setWantTransposed(false)
-    }
     const removeKey = k => setTransposedKeys(prev => prev.filter(x => x !== k))
     return (
     <div className="space-y-5">
@@ -1192,22 +1187,20 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
         {!songKey && <p className="text-[11px] text-muted">Set the Original Key on the Chords step to add transposed keys.</p>}
         {wantTransposed && keyOptions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            {keyOptions.map(k => {
-              const added = transposedKeys.includes(k)
-              const picked = pendingKeys.includes(k)
-              return (
-                <button key={k} type="button" disabled={added} onClick={() => togglePending(k)}
-                  className={`px-2 h-7 rounded-md border text-xs font-medium transition-colors ${
-                    added ? 'border-border text-muted/40 cursor-default' :
-                    picked ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                  }`}>{added && <Check size={9} className="inline mr-0.5" />}{k.replace(/ (Major|Minor)$/, '')}</button>
-              )
-            })}
-            <button type="button" disabled={!pendingKeys.length} onClick={commitKeys}
-              className="btn-primary !h-7 !py-0 !px-3 text-xs ml-1 disabled:opacity-40">
-              {pendingKeys.length ? `Add ${pendingKeys.length} key${pendingKeys.length > 1 ? 's' : ''}` : 'Select keys to add'}
-            </button>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-1">
+              {keyOptions.map(k => {
+                const added = transposedKeys.includes(k)
+                return (
+                  <button key={k} type="button" aria-pressed={added}
+                    onClick={() => (added ? (removeKey(k), preferredKey === k && setPreferredKey('')) : setTransposedKeys(prev => [...prev, k]))}
+                    className={`px-2 h-8 min-w-[2.25rem] rounded-md border text-xs font-medium transition-colors ${
+                      added ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                    }`}>{added && <Check size={9} className="inline mr-0.5" />}{k.replace(/ (Major|Minor)$/, '')}</button>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-muted">Tap a key to add it (tap again to remove). Star your preferred key and add notes below.</p>
           </div>
         )}
         {songKey && (
