@@ -416,8 +416,9 @@ export default function SetEditor() {
               <span className="text-xs text-muted whitespace-nowrap">{items.length}<span className="hidden sm:inline"> item{items.length !== 1 ? 's' : ''}</span></span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <button onClick={() => setShowAdd(true)} className="btn-secondary flex items-center gap-1 !py-1 !px-2.5 text-sm whitespace-nowrap" aria-label="Add item">
-                <Plus size={14} /> Item
+              <button onClick={() => setShowAdd(true)} aria-label="Add item"
+                className="flex items-center gap-1 h-8 px-2.5 sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium whitespace-nowrap transition-colors hover:bg-accent/10">
+                <Plus size={14} /><span className="hidden sm:inline">Add</span> Item
               </button>
               <button onClick={() => setViewerOpen(true)} disabled={orderedSongs.length === 0}
                 title="Song Viewer: step through the songs in order" aria-label="Song Viewer"
@@ -425,8 +426,8 @@ export default function SetEditor() {
                 <BookOpen size={14} /><span className="hidden sm:inline">Song Viewer</span>
               </button>
               <button onClick={openPresent} disabled={items.length === 0} title="Present" aria-label="Present"
-                className="flex items-center justify-center h-8 w-9 rounded-lg border border-accent/50 text-accent-light transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
-                <MonitorPlay size={15} />
+                className="flex items-center justify-center gap-1.5 h-8 w-9 sm:w-auto sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
+                <MonitorPlay size={15} /><span className="hidden sm:inline">Present</span>
               </button>
             </div>
           </div>
