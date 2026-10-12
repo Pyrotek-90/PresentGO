@@ -80,7 +80,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
               : <><ListPlus size={14} /> <span className="hidden sm:inline">+ To Set</span></>}
           </button>
           <Link to="/get-started" title="Import a folder of ChordPro or PDF charts" aria-label="Import songs"
-            className="flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-3 rounded-lg border border-border text-sm font-medium text-muted whitespace-nowrap hover:text-primary hover:border-accent/50 transition-colors">
+            className="flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-3 rounded-lg border border-accent/50 text-sm font-medium text-accent-light whitespace-nowrap hover:bg-accent/10 transition-colors">
             <Upload size={14} /> <span className="hidden sm:inline">Import</span>
           </Link>
           <button onClick={onNew} title="New song" aria-label="New song"
