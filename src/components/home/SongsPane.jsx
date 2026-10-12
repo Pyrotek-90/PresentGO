@@ -7,7 +7,9 @@ import { formatSetDate, todayISO } from '../../lib/sets'
 const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
 const songKeys = song => {
   const m = song.metadata || {}
+  const pref = m.preferred_key ? shortKey(m.preferred_key) : ''
   return [...new Set([m.original_key || m.key, ...(m.transposed_keys || [])].filter(Boolean).map(shortKey))]
+    .map(k => (k === pref ? `${k} ★` : k))
 }
 
 export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onCreateSet, onAdd, onEdit, onView, onNew }) {

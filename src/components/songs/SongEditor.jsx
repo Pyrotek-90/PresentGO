@@ -7,7 +7,7 @@ import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
-  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp, Save,
+  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp, Save, Star,
 } from 'lucide-react'
 
 // ─── Wizard steps ─────────────────────────────────────────────────────────────
@@ -392,6 +392,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [themeInput, setThemeInput] = useState('')
   const [author, setAuthor]     = useState(song?.metadata?.author || '')
   const [transposedKeys, setTransposedKeys] = useState(song?.metadata?.transposed_keys || [])
+  const [keyNotes, setKeyNotes] = useState(song?.metadata?.key_notes || {})          // { "A Major": "Male key" }
+  const [preferredKey, setPreferredKey] = useState(song?.metadata?.preferred_key || '')
   const [youtubeUrl, setYoutubeUrl] = useState(song?.metadata?.youtube_url || '')
   const [yt, setYt] = useState({ status: 'idle', results: [] }) // idle | loading | done | error | unconfigured
   const [wantTransposed, setWantTransposed] = useState(false) // key picker open
@@ -685,6 +687,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       lines_per_slide: linesPerSlide,
       slides,
       metadata: {
+        ...(song?.metadata || {}),   // keep fields this editor doesn't show (translations, import details)
         key: songKey,
         chord_chart: rawLyrics.trim() ? reconcileChart(rawLyrics, chordChart) : chordChart,
         bpm,
@@ -693,6 +696,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         youtube_url: youtubeUrl.trim(),
         original_key: songKey,
         transposed_keys: transposedKeys,
+        key_notes: Object.fromEntries(Object.entries(keyNotes).filter(([k, v]) => v && (k === songKey || transposedKeys.includes(k)))),
+        preferred_key: preferredKey && (preferredKey === songKey || transposedKeys.includes(preferredKey)) ? preferredKey : '',
       },
     }
 
@@ -1144,45 +1149,50 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
       )}
 
-      {/* Licensing details — used on slides and in the CCLI report */}
-      <div className="grid grid-cols-1 sm:grid-cols-[12rem] gap-3">
-        <div>
-          <label className="label !mb-1">CCLI Song #</label>
-          <input className="input" inputMode="numeric" placeholder="22025" value={ccliNumber}
-            onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
+      {/* Song details: key from the Chords step, tempo, CCLI # */}
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="min-w-0">
+            <span className="label !mb-1">Original Key</span>
+            {songKey ? (
+              <button type="button" onClick={() => setStep(4)} title="Change on the Chords step"
+                className="h-10 w-full flex items-center px-3 rounded-lg border border-border bg-surface text-sm font-semibold text-left truncate hover:border-accent/50">
+                {songKey.replace('♭', '♭')}
+              </button>
+            ) : (
+              <button type="button" onClick={() => setStep(4)} className="h-10 w-full px-3 rounded-lg border border-dashed border-border text-xs text-muted text-left hover:text-primary">Set on Chords step</button>
+            )}
+          </div>
+          <label className="block min-w-0">
+            <span className="label !mb-1">BPM</span>
+            <input className="input !h-10" type="number" inputMode="numeric" min="40" max="240" placeholder="75"
+              value={bpm} onChange={e => setBpm(e.target.value)} />
+          </label>
+          <label className="block min-w-0">
+            <span className="label !mb-1">CCLI Song #</span>
+            <input className="input !h-10" inputMode="numeric" placeholder="22025" value={ccliNumber}
+              onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
+          </label>
         </div>
       </div>
 
-      {/* Tempo + keys — one-line bar */}
-      <div className="rounded-xl border border-border bg-card px-3 py-2 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
-          <span className="text-[10px] uppercase tracking-widest text-muted">BPM</span>
-          <input className="input !w-16 !h-8 !py-0 !px-2 text-sm" type="number" min="40" max="240" placeholder="75"
-            value={bpm} onChange={e => setBpm(e.target.value)} />
-          <span className="h-5 w-px bg-border mx-1" />
-          <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
-          <select className="input !w-[4.5rem] !h-8 !py-0 !px-2 text-sm" value={origNote} onChange={e => setOriginalKey(e.target.value, keyMode)}>
-            <option value="">—</option>
-            {NOTE_OPTIONS.map(n => <option key={n} value={n}>{n.replace('b', '♭')}</option>)}
-          </select>
-          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={keyMode} onChange={e => setOriginalKey(origNote, e.target.value)}>
-            <option>Major</option><option>Minor</option>
-          </select>
-          <span className="h-5 w-px bg-border mx-1" />
-          <span className="text-[10px] uppercase tracking-widest text-muted">Transpose to</span>
+      {/* Transposed keys, each with a star (preferred key) and a note (e.g. Male key) */}
+      <div className="rounded-xl border border-border bg-card p-3 space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-semibold mr-auto">Transposed Keys</p>
           <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={effTMode} disabled={!keyOptions.length}
-            onChange={e => setTMode(e.target.value)}>
+            onChange={e => setTMode(e.target.value)} aria-label="Major or minor">
             <option>Major</option><option>Minor</option>
           </select>
           <button type="button" disabled={!keyOptions.length}
             onClick={() => { setWantTransposed(v => !v); setPendingKeys([]) }}
             className="h-8 px-3 rounded-lg border border-accent/50 bg-accent/10 text-xs font-medium text-accent-light hover:bg-accent/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1">
-            <Plus size={12} /> {wantTransposed ? 'Close' : 'Add Keys'}
+            {wantTransposed ? <X size={12} /> : <Plus size={12} />} {wantTransposed ? 'Close' : 'Add Keys'}
           </button>
         </div>
-        {!songKey && <p className="text-[11px] text-muted">Pick an Original Key to enable transposed keys and chord charts.</p>}
+        {!songKey && <p className="text-[11px] text-muted">Set the Original Key on the Chords step to add transposed keys.</p>}
         {wantTransposed && keyOptions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1">
             {keyOptions.map(k => {
               const added = transposedKeys.includes(k)
               const picked = pendingKeys.includes(k)
@@ -1196,22 +1206,43 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             })}
             <button type="button" disabled={!pendingKeys.length} onClick={commitKeys}
               className="btn-primary !h-7 !py-0 !px-3 text-xs ml-1 disabled:opacity-40">
-              {pendingKeys.length ? `Add ${pendingKeys.length} key${pendingKeys.length > 1 ? 's' : ''} to song` : 'Select keys to add'}
+              {pendingKeys.length ? `Add ${pendingKeys.length} key${pendingKeys.length > 1 ? 's' : ''}` : 'Select keys to add'}
             </button>
           </div>
         )}
-        {transposedKeys.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] uppercase tracking-widest text-muted">Added keys</span>
-            {transposedKeys.map(k => (
-              <span key={k} className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 rounded-full bg-accent/15 border border-accent/30 text-xs text-accent-light">
-                {k}
-                <button type="button" onClick={() => removeKey(k)} className="hover:text-red-400 transition-colors"><X size={10} /></button>
-              </span>
-            ))}
-            {!hasChords(chordChart) && <span className="text-[11px] text-amber-400/80">No chords entered yet.</span>}
-          </div>
+        {songKey && (
+          <ul className="divide-y divide-border/60">
+            {[songKey, ...transposedKeys.filter(k => k !== songKey)].map(k => {
+              const original = k === songKey
+              const star = preferredKey === k
+              return (
+                <li key={k} className="flex items-center gap-2 py-1.5">
+                  <button type="button" onClick={() => setPreferredKey(star ? '' : k)}
+                    aria-label={star ? `Unstar ${k}` : `Star ${k} as the preferred key`} title={star ? 'Preferred key' : 'Star as preferred key'}
+                    className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${star ? 'text-amber-400' : 'text-muted hover:text-amber-300'}`}>
+                    <Star size={16} fill={star ? 'currentColor' : 'none'} />
+                  </button>
+                  <span className="w-20 shrink-0 text-sm font-semibold">{k.replace(/ Major$/, '').replace(/ Minor$/, 'm')}
+                    {original && <span className="block text-[10px] font-normal text-muted">Original</span>}
+                  </span>
+                  <input className="input !h-8 !py-0 text-sm flex-1 min-w-0" placeholder="Note, e.g. Male key"
+                    value={keyNotes[k] || ''} onChange={e => setKeyNotes(n => ({ ...n, [k]: e.target.value }))} aria-label={`Note for ${k}`} />
+                  <div className="hidden sm:flex gap-1 shrink-0">
+                    {['Male', 'Female'].map(q => (
+                      <button key={q} type="button" onClick={() => setKeyNotes(n => ({ ...n, [k]: `${q} key` }))}
+                        className={`px-2 h-7 rounded-md border text-[11px] transition-colors ${keyNotes[k] === `${q} key` ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-primary'}`}>{q}</button>
+                    ))}
+                  </div>
+                  {original ? <span className="w-7 shrink-0" /> : (
+                    <button type="button" onClick={() => { removeKey(k); if (star) setPreferredKey('') }} aria-label={`Remove ${k}`}
+                      className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-red-400 hover:bg-[#2e2e2e]"><X size={14} /></button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
         )}
+        {transposedKeys.length > 0 && !hasChords(chordChart) && <p className="text-[11px] text-amber-400/80">No chords entered yet.</p>}
       </div>
 
       {/* Themes / categories */}
@@ -1309,7 +1340,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-4 pt-3 sm:pt-6 bg-black/70">
       <div className={`bg-surface border border-border rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col ${step === 1 ? 'h-[92vh]' : ''}`}>
 
         {/* Header */}
