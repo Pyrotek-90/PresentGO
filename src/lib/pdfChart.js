@@ -16,6 +16,13 @@ const CCLI_RE = /CCLI\s*Song\s*(?:#|No\.?|Number)?\s*:?\s*(\d{3,8})/i
 const KEY_RE = /\bKey\s*(?:of|[:\u2013\u2014-])?\s*([A-G](?:#|b|♭)?m?)(?![a-z#])/i
 const TEMPO_RE = /(?:\bTempo\s*[:\u2013\u2014-]?\s*(\d{2,3})\b|\b(\d{2,3})\s*bpm\b)/i
 const BAR_TOKEN_RE = /^(\||\|\||\/+|%|-+|\.+|\(?x\s*\d+\)?|\(|\))$/i
+// "----- ENGLISH TRANSLATION -----", "English Singable Version", "Meaning": everything after
+// it is a translation of the song, kept separately from the chart.
+const DIVIDER_RE = /^[-–—=_~*•\s]{3,}(.+?)[-–—=_~*•\s]{3,}$/
+const TRANSLATION_RE = /\b(translation|translated|singable|meaning|english\s+version|transliteration)\b/i
+// Repeat marks at the end of a lyric line: "2X", "x2", "(2x)", "×3".
+const REPEAT_RE = /\s+\(?\s*(?:[x×]\s*\d+|\d+\s*[x×])\s*\)?\s*$/i
+const PAGE_NO_RE = /^\d{1,3}$/
 
 async function loadPdfjs() {
   const pdfjs = await import('pdfjs-dist')
@@ -30,8 +37,9 @@ const median = arr => {
   return s[Math.floor(s.length / 2)]
 }
 
-// Groups a page's text runs into rows and lays each row out on a character grid.
-function pageRows(items, pageNo) {
+// Text runs of one page: drops empty runs and tiny marks (chord-diagram finger dots,
+// fret numbers) that are much smaller than the page's text.
+function pageRuns(items) {
   const runs = items
     .filter(it => it.str && it.str.trim())
     .map(it => ({
@@ -41,13 +49,39 @@ function pageRows(items, pageNo) {
       w: it.width,
       size: Math.abs(it.transform[3]) || it.height || 10,
     }))
-  if (!runs.length) return []
+  const body = median(runs.map(r => r.size))
+  return runs.filter(r => r.size >= body * 0.6)
+}
 
+// Two-column charts (e.g. chords on the left, a translation on the right): finds a left
+// edge that many runs share, with nothing on the page crossing it. Returns that x or null.
+function findGutter(runs) {
+  if (runs.length < 12) return null
+  const minX = Math.min(...runs.map(r => r.x))
+  const maxX = Math.max(...runs.map(r => r.x + r.w))
+  const starts = {}
+  for (const r of runs) { const k = Math.round(r.x / 3) * 3; starts[k] = (starts[k] || 0) + 1 }
+  const candidates = Object.entries(starts)
+    .map(([k, n]) => ({ x: Number(k), n }))
+    .filter(c => c.n >= 5 && c.x > minX + (maxX - minX) * 0.25 && c.x < minX + (maxX - minX) * 0.75)
+    .sort((a, b) => b.n - a.n)
+  for (const c of candidates) {
+    const split = c.x - 4
+    const crosses = runs.some(r => r.x < split && r.x + r.w > split + 2)
+    const left = runs.filter(r => r.x < split).length
+    if (!crosses && left >= 5) return split
+  }
+  return null
+}
+
+// Groups runs into rows and lays each row out on a character grid.
+function runsToRows(runs, pageNo) {
+  if (!runs.length) return []
   const widths = runs.filter(r => r.str.trim().length >= 4).map(r => r.w / r.str.length)
   const charW = median(widths) || median(runs.map(r => r.size)) * 0.5 || 5
   const left = Math.min(...runs.map(r => r.x))
 
-  runs.sort((a, b) => b.y - a.y || a.x - b.x)
+  runs = [...runs].sort((a, b) => b.y - a.y || a.x - b.x)
   const rows = []
   for (const r of runs) {
     const row = rows[rows.length - 1]
@@ -71,8 +105,38 @@ function pageRows(items, pageNo) {
       text += r.str
       prevEnd = r.x + r.w
     }
-    return { text: text.replace(/\s+$/, ''), size: row.size, page: pageNo }
+    return { text: text.replace(/\s+$/, ''), size: row.size, y: row.y, page: pageNo }
   }).filter(r => r.text.trim())
+}
+
+// A chord-only row standing alone well below the rest of a column is a chord-diagram
+// legend (the G / Am / D boxes printed at the bottom of many charts), not part of the song.
+function dropDiagramLegend(rows) {
+  if (rows.length < 3) return rows
+  const last = rows[rows.length - 1], prev = rows[rows.length - 2]
+  const gaps = rows.slice(1).map((r, i) => rows[i].y - r.y).filter(g => g > 0)
+  const lineGap = median(gaps) || last.size * 1.2
+  return isChordRow(last.text) && prev.y - last.y > lineGap * 2.5 ? rows.slice(0, -1) : rows
+}
+
+// One page in reading order. Two columns: the header lines above both columns first,
+// then the whole left column, then the whole right column.
+function pageRows(items, pageNo) {
+  const runs = pageRuns(items)
+  if (!runs.length) return []
+  const split = findGutter(runs)
+  if (split == null) return dropDiagramLegend(runsToRows(runs, pageNo))
+
+  const colX = Math.min(...runs.filter(r => r.x >= split).map(r => r.x))
+  const rightTop = Math.max(...runs.filter(r => r.x >= split && r.x <= colX + 6).map(r => r.y + r.size * 0.5))
+  // Header = everything above where the right column starts (title, Key / Tempo).
+  const header = runs.filter(r => r.y > rightTop + 2)
+  const body = runs.filter(r => r.y <= rightTop + 2)
+  return [
+    ...runsToRows(header, pageNo),
+    ...dropDiagramLegend(runsToRows(body.filter(r => r.x < split), pageNo)),
+    ...dropDiagramLegend(runsToRows(body.filter(r => r.x >= split), pageNo)),
+  ]
 }
 
 // Removes bar lines, slashes and repeat marks so "| G / / | D |" counts as a chord row.
@@ -191,9 +255,15 @@ export function chartFromTextItems(pages) {
   }
   rows = rows.slice(headerEnd)
 
-  // Running headers on later pages (title or writers repeated).
+  // Running headers on later pages (title, Key / Tempo or writers repeated) and page numbers.
   const titleKey = normTitle(meta.title)
-  rows = rows.filter(r => !(r.page > 1 && titleKey && normTitle(r.text).startsWith(titleKey)))
+  rows = rows.filter(r => {
+    const t = r.text.trim()
+    if (PAGE_NO_RE.test(t)) return false
+    if (r.page === 1) return true
+    if (titleKey && normTitle(t).startsWith(titleKey)) return false
+    return !/^(key|tempo|time|bpm)\b\s*[:\u2013\u2014-]?\s*\S+(\s*[|·,]\s*(key|tempo|time|bpm)\b.*)?$/i.test(t)
+  })
 
   const bodyRows = rows.filter(r => !isChordRow(r.text))
   const twoCol = bodyRows.filter(r => /\S {10,}\S/.test(r.text.trim())).length
@@ -202,10 +272,28 @@ export function chartFromTextItems(pages) {
   const sections = []
   let cur = null
   const open = label => { cur = { label, rows: [] }; sections.push(cur) }
+  const translations = []   // [{ title, sections: [{ label, lines }] }]
+  let tr = null
 
   for (let i = 0; i < rows.length; i++) {
     const raw = rows[i].text
     const t = raw.trim()
+
+    // Translation blocks: kept for slides, never part of the chord chart.
+    const div = t.match(DIVIDER_RE)
+    if ((div && TRANSLATION_RE.test(div[1])) || (TRANSLATION_RE.test(t) && t.length <= 40 && !isChordRow(raw))) {
+      tr = { title: titleCase((div ? div[1] : t).replace(/[:\-–—]+$/, '').trim().toLowerCase()), sections: [] }
+      translations.push(tr)
+      continue
+    }
+    if (tr) {
+      const th = t.match(SECTION_RE)
+      if (th) { tr.sections.push({ label: titleCase(`${th[1]}${th[2] ? ' ' + th[2] : ''}`.toLowerCase()), lines: [] }); continue }
+      if (isChordRow(raw)) continue
+      if (!tr.sections.length) tr.sections.push({ label: '', lines: [] })
+      tr.sections[tr.sections.length - 1].lines.push(cleanLyric(t).text.replace(REPEAT_RE, ''))
+      continue
+    }
 
     const h = t.match(SECTION_RE)
     if (h) { open(titleCase(`${h[1]}${h[2] ? ' ' + h[2] : ''}`.toLowerCase())); continue }
@@ -221,17 +309,25 @@ export function chartFromTextItems(pages) {
       const next = rows[i + 1]
       const nt = next?.text.trim() || ''
       if (next && next.page === rows[i].page && nt && !isChordRow(next.text) && !SECTION_RE.test(nt) && !SECTION_PREFIX_RE.test(nt)) {
-        cur.rows.push(alignChords(raw, next.text))
+        const pair = alignChords(raw, next.text)
+        cur.rows.push({ ...pair, lyric: pair.lyric.replace(REPEAT_RE, '') })
         i++
       } else {
         cur.rows.push({ chords: chordRowTokens(raw).join(' '), lyric: '' })
       }
       continue
     }
-    cur.rows.push({ chords: '', lyric: cleanLyric(t).text })
+    cur.rows.push({ chords: '', lyric: cleanLyric(t).text.replace(REPEAT_RE, '') })
   }
 
   const song = assembleSong(meta, sections)
   if (!song.rawLyrics.trim()) return { error: 'no_lyrics', ...song, warnings }
-  return { ...song, warnings }
+  const translationList = translations
+    .map(b => ({
+      title: b.title,
+      text: b.sections.filter(sec => sec.lines.length)
+        .map(sec => [sec.label ? `[${sec.label}]` : null, ...sec.lines].filter(l => l !== null).join('\n')).join('\n\n'),
+    }))
+    .filter(b => b.text.trim())
+  return { ...song, warnings, ...(translationList.length ? { translations: translationList } : {}) }
 }
