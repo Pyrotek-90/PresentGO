@@ -66,8 +66,8 @@ function Stepper({ current, maxReached, isNew, onSelect }) {
           <button type="button" onClick={() => canGo(s.num) && onSelect(s.num)} disabled={!canGo(s.num)}
             className="flex flex-col items-center gap-0.5 shrink-0 group disabled:cursor-default">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
-              s.num === current ? 'bg-accent/20 border-2 border-accent text-accent-light' :
-              (!isNew || s.num < current) && canGo(s.num) ? 'bg-accent text-white group-hover:bg-accent-hover' :
+              s.num === current ? 'bg-accent text-white ring-2 ring-accent/40' :
+              (!isNew || s.num < current) && canGo(s.num) ? 'bg-accent/20 border-2 border-accent text-accent-light group-hover:bg-accent/30' :
               'bg-transparent border border-border text-muted'
             }`}>
               {s.num !== current && canGo(s.num) && (!isNew ? false : s.num < current) ? <Check size={11} /> : s.num}
@@ -1143,11 +1143,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       )}
 
       {/* Licensing details — used on slides and in the CCLI report */}
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_10rem] gap-3">
-        <div>
-          <label className="label !mb-1">Writers</label>
-          <input className="input" placeholder="John Newton, Edwin O. Excell" value={author} onChange={e => setAuthor(e.target.value)} />
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[12rem] gap-3">
         <div>
           <label className="label !mb-1">CCLI Song #</label>
           <input className="input" inputMode="numeric" placeholder="22025" value={ccliNumber}
