@@ -35,7 +35,7 @@ const dateLabel = s => s.service_date
 // One set at a time: who's serving, in which position, and whether they've said yes.
 // `set` is the set shown; `onPrev` / `onNext` step through sets by date.
 export default function SchedulePane({ set, index, total, onPrev, onNext, positions, members, assignments,
-  onAdd, onRemove, onSend, sending, sendResult, onRefresh }) {
+  onAdd, onRemove, onSend, sending, sendResult, onRefresh, active = true, role = null, onSelect }) {
   const [memberId, setMemberId] = useState('')
   const [positionId, setPositionId] = useState('')
   const [addError, setAddError] = useState(null)
@@ -80,13 +80,17 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
   const noEmail = toSend.filter(a => !memById[a.member_id]?.email)
 
   return (
-    <section className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="flex items-center gap-1 px-2 py-2 border-b border-border">
+    <section className={`rounded-xl border bg-card overflow-hidden min-w-0 ${active && role ? 'border-accent/60 ring-1 ring-accent/30' : 'border-border'}`}>
+      <div className={`flex items-center gap-1 px-2 py-2 border-b border-border ${active && role ? 'bg-accent/10' : ''}`}>
         <button onClick={onPrev} disabled={!set || index <= 0} className="btn-ghost p-1.5 disabled:opacity-30" aria-label="Previous set"><ChevronLeft size={16} /></button>
         <div className="flex-1 min-w-0 text-center">
           {set ? (
             <>
-              <p className="text-[10px] uppercase tracking-widest text-muted">Who's Serving</p>
+              {onSelect && !active ? (
+                <button onClick={onSelect} className="text-[10px] uppercase tracking-widest text-muted hover:text-accent-light" title="Select this set">{role || "Who's Serving"}</button>
+              ) : (
+                <p className={`text-[10px] uppercase tracking-widest ${active && role ? 'text-accent-light' : 'text-muted'}`}>{role || "Who's Serving"}</p>
+              )}
               <Link to={`/sets/${set.id}`} className="inline-flex items-center gap-1 max-w-full font-semibold hover:text-accent-light" title="Open set">
                 <span className="truncate">{set.name}</span><ExternalLink size={12} className="shrink-0 text-muted" />
               </Link>
