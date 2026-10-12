@@ -7,7 +7,7 @@ import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
-  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp,
+  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp, Save,
 } from 'lucide-react'
 
 // ─── Wizard steps ─────────────────────────────────────────────────────────────
@@ -59,16 +59,21 @@ const PRESET_LABELS = [
 // ─── Progress stepper ─────────────────────────────────────────────────────────
 function Stepper({ current, maxReached, isNew, onSelect }) {
   const canGo = n => !isNew || n <= maxReached
+  // Five equal columns so the bubbles are evenly spaced at any width; each line runs from
+  // one bubble's edge to the next one's.
   return (
-    <div className="flex items-center px-4 py-3 border-b border-border bg-card/50 shrink-0">
+    <div className="grid grid-cols-5 px-2 sm:px-4 py-3 border-b border-border bg-card/50 shrink-0">
       {STEPS.map((s, i) => (
-        <div key={s.num} className="flex items-center flex-1 min-w-0 last:flex-none">
+        <div key={s.num} className="relative flex justify-center min-w-0">
+          {i < STEPS.length - 1 && (
+            <div aria-hidden="true" className={`absolute top-3 left-[calc(50%+16px)] right-[calc(-50%+16px)] h-px transition-colors ${canGo(s.num + 1) ? 'bg-accent/60' : 'bg-border'}`} />
+          )}
           <button type="button" onClick={() => canGo(s.num) && onSelect(s.num)} disabled={!canGo(s.num)}
-            className="flex flex-col items-center gap-0.5 shrink-0 group disabled:cursor-default">
+            className="relative flex flex-col items-center gap-0.5 group disabled:cursor-default">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
               s.num === current ? 'bg-accent text-white ring-2 ring-accent/40' :
               (!isNew || s.num < current) && canGo(s.num) ? 'bg-accent/20 border-2 border-accent text-accent-light group-hover:bg-accent/30' :
-              'bg-transparent border border-border text-muted'
+              'bg-card border border-border text-muted'
             }`}>
               {s.num !== current && canGo(s.num) && (!isNew ? false : s.num < current) ? <Check size={11} /> : s.num}
             </div>
@@ -77,9 +82,6 @@ function Stepper({ current, maxReached, isNew, onSelect }) {
               canGo(s.num) ? 'text-[#aaa] group-hover:text-[#f5f5f5]' : 'text-muted/50'
             }`}>{s.label}</span>
           </button>
-          {i < STEPS.length - 1 && (
-            <div className={`flex-1 h-px mx-1.5 mb-3.5 transition-colors ${canGo(s.num + 1) ? 'bg-accent/60' : 'bg-border'}`} />
-          )}
         </div>
       ))}
     </div>
@@ -1334,20 +1336,22 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
 
         {/* Footer navigation */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-border shrink-0 gap-3">
+        <div className="flex items-center justify-between px-3 sm:px-5 py-3 border-t border-border shrink-0 gap-2 sm:gap-3">
           <div className="flex items-center gap-2">
             {step > 1 && (
-              <button onClick={() => setStep(s => s - 1)} className="btn-secondary flex items-center gap-1.5">
-                <ArrowLeft size={14} /> Back
+              <button onClick={() => setStep(s => s - 1)} aria-label="Back" title="Back"
+                className="btn-secondary flex items-center justify-center gap-1.5 !px-3 sm:!px-4 h-9">
+                <ArrowLeft size={15} /><span className="hidden sm:inline">Back</span>
               </button>
             )}
             {song?.id && onDelete && (
               <button onClick={() => { if (confirmDelete) { onDelete(song); onClose() } else setConfirmDelete(true) }}
                 onBlur={() => setConfirmDelete(false)}
-                className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm transition-colors ${
+                aria-label={confirmDelete ? 'Tap again to delete this song' : 'Delete song'} title={confirmDelete ? 'Tap again to delete' : 'Delete song'}
+                className={`flex items-center justify-center gap-1.5 h-9 w-9 sm:w-auto sm:px-3 rounded-lg border text-sm transition-colors ${
                   confirmDelete ? 'border-red-600 bg-red-700 text-white' : 'border-border text-muted hover:text-red-400 hover:border-red-500/50'
                 }`}>
-                <Trash2 size={14} /> {confirmDelete ? 'Click again to delete' : 'Delete'}
+                <Trash2 size={15} /><span className="hidden sm:inline">{confirmDelete ? 'Click again to delete' : 'Delete'}</span>
               </button>
             )}
           </div>
@@ -1355,20 +1359,25 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           <div className="flex items-center gap-2">
             {/* Save is always available once we have lyrics */}
             {rawLyrics.trim() && (
-              <button onClick={handleSave} disabled={saving} className="btn-secondary">
-                {saving ? 'Saving…' : 'Save Song'}
+              <button onClick={handleSave} disabled={saving} aria-label="Save song" title="Save song"
+                className="btn-secondary flex items-center justify-center gap-1.5 !px-3 sm:!px-4 h-9">
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                <span className="hidden sm:inline">{saving ? 'Saving…' : 'Save Song'}</span>
               </button>
             )}
 
             {step < 5 ? (
               <button onClick={() => goTo(step + 1)} disabled={!canAdvance()}
-                className="btn-primary flex items-center gap-1.5 disabled:opacity-40">
-                {step === 1 ? 'Format Slides' : step === 2 ? 'Arrange' : step === 3 ? 'Add Chords' : 'Song Details'}
-                <ChevronRight size={15} />
+                aria-label={step === 1 ? 'Next: Format Slides' : step === 2 ? 'Next: Arrange' : step === 3 ? 'Next: Add Chords' : 'Next: Song Details'}
+                className="btn-primary flex items-center justify-center gap-1.5 !px-3 sm:!px-4 h-9 disabled:opacity-40">
+                <span className="hidden sm:inline">{step === 1 ? 'Format Slides' : step === 2 ? 'Arrange' : step === 3 ? 'Add Chords' : 'Song Details'}</span>
+                <ChevronRight size={16} />
               </button>
             ) : (
-              <button onClick={handleSave} disabled={saving} className="btn-primary">
-                {saving ? 'Saving…' : 'Save & Finish'}
+              <button onClick={handleSave} disabled={saving} aria-label="Save and finish" title="Save & Finish"
+                className="btn-primary flex items-center justify-center gap-1.5 !px-3 sm:!px-4 h-9">
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={16} />}
+                <span className="hidden sm:inline">{saving ? 'Saving…' : 'Save & Finish'}</span>
               </button>
             )}
           </div>
