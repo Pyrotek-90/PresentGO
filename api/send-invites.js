@@ -29,7 +29,7 @@ function emailFor({ member, position, set, link, inviter }) {
     </table>
     <p style="margin:0 0 8px;font-size:15px">Can you make it?</p>
     ${btn(`${link}?r=accepted`, 'Accept', '#16a34a')}${btn(`${link}?r=declined`, 'Decline', '#dc2626')}
-    <p style="margin:20px 0 0;font-size:12px;color:#a1a1aa">Sent with myStaff. Reply to this email to reach ${esc(inviter)}.</p>
+    <p style="margin:20px 0 0;font-size:12px;color:#a1a1aa">Sent with StaffList. Reply to this email to reach ${esc(inviter)}.</p>
   </div></body></html>`
   const text = `Hi ${first},\n\n${inviter} has asked you to serve as ${position.name} for ${set.name}.\n${whenText ? `When: ${whenText}\n` : ''}${where ? `Where: ${where}\n` : ''}\nAccept: ${link}?r=accepted\nDecline: ${link}?r=declined\n`
   return { subject, html, text }

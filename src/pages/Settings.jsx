@@ -284,7 +284,7 @@ export default function Settings() {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted pb-6">
-          myStaff v0.1.0 · Built for worship
+          StaffList v0.1.0 · Built for worship
         </p>
 
       </div>

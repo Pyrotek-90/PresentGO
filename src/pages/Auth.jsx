@@ -61,10 +61,10 @@ export default function Auth() {
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
           <div className="w-16 h-16 rounded-2xl bg-accent/20 border border-accent/40 flex items-center justify-center">
-            <Logo size={38} color="var(--color-accent)" />
+            <Logo size={40} className="text-accent" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold">myStaff</h1>
+            <h1 className="text-2xl font-bold">StaffList</h1>
             <p className="text-muted text-sm mt-1 italic">To the Chief Musician</p>
           </div>
         </div>
@@ -153,7 +153,7 @@ export default function Auth() {
         </div>
 
         <p className="text-center text-xs text-muted">
-          myStaff · Chord charts, worship sets &amp; presentation
+          StaffList · Chord charts, worship sets &amp; presentation
         </p>
       </div>
     </div>

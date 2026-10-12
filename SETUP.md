@@ -1,4 +1,4 @@
-# myStaff — Setup Guide
+# StaffList — Setup Guide
 
 ## 1. Install dependencies
 
@@ -70,7 +70,7 @@ Same as Vercel — connect your repo and add env vars in **Site Settings → Env
 | TV Display | Screen mirroring / AirPlay (browser window) |
 | Remote control | BroadcastChannel API (same browser) |
 
-## Using myStaff
+## Using StaffList
 
 1. **Create a Set** from the dashboard (e.g. "Sunday March 23")
 2. **Add Items** — songs from your library, welcome slides, announcements, or blank slides

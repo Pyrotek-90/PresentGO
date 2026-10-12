@@ -1,5 +1,5 @@
 -- ============================================================
--- myStaff — Supabase Database Schema
+-- StaffList — Supabase Database Schema
 -- Run this in your Supabase project → SQL Editor
 -- ============================================================
 

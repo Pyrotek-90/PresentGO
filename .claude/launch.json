@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "myStaff Dev Server",
+      "name": "StaffList Dev Server",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
@@ -12,7 +12,7 @@
       "autoPort": false
     },
     {
-      "name": "myStaff Preview (production build)",
+      "name": "StaffList Preview (production build)",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
         "vite",

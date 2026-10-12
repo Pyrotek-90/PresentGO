@@ -1,4 +1,4 @@
--- myStaff: team invites with Accept / Decline (run once in Supabase → SQL Editor)
+-- StaffList: team invites with Accept / Decline (run once in Supabase → SQL Editor)
 
 -- 1. Each set assignment gets a status, a private invite token, and when it was sent / answered.
 alter table public.set_assignments

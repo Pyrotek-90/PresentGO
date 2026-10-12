@@ -293,7 +293,7 @@ function GooglePhotosPicker({ userId, onSelect, onClose, mode = 'images' }) {
               <div className="space-y-1.5">
                 <p className="font-medium">Sign in with Google to access Google Photos</p>
                 <p className="text-sm text-muted max-w-sm">
-                  Google Photos access uses the same Google account you sign in to myStaff with.
+                  Google Photos access uses the same Google account you sign in to StaffList with.
                   Sign out and sign back in with Google to enable this.
                 </p>
               </div>
@@ -303,7 +303,7 @@ function GooglePhotosPicker({ userId, onSelect, onClose, mode = 'images' }) {
                   <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="text-accent-light underline">console.cloud.google.com</a></li>
                   <li>APIs &amp; Services → Enable <strong className="text-primary">Photos Library API</strong></li>
                   <li>Add the scope <code className="bg-card px-1 rounded text-accent-light">photoslibrary.readonly</code> to your OAuth consent screen</li>
-                  <li>Sign in to myStaff with Google — Photos access is automatic</li>
+                  <li>Sign in to StaffList with Google — Photos access is automatic</li>
                 </ol>
               </div>
             </div>

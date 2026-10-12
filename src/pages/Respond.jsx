@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { Tv, Check, X, CalendarDays, MapPin, Music } from 'lucide-react'
+import { Check, X, CalendarDays, MapPin, Music } from 'lucide-react'
+import Logo from '../components/Logo'
 import { supabase } from '../lib/supabase'
 import { formatSetTime } from '../lib/sets'
 
@@ -41,8 +42,8 @@ export default function Respond() {
     <div className="min-h-[100dvh] bg-black text-[#f5f5f5] flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 space-y-5">
         <div className="flex items-center gap-2">
-          <Tv className="text-accent" size={20} />
-          <span className="font-semibold tracking-tight">myStaff</span>
+          <Logo className="text-accent" size={24} />
+          <span className="font-semibold tracking-tight">StaffList</span>
         </div>
 
         {state === 'loading' && <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}

@@ -1,4 +1,4 @@
-// myStaff offline support. Registered only when Offline mode is on in Settings.
+// StaffList offline support. Registered only when Offline mode is on in Settings.
 const APP = 'presentgo-app-v1'
 const MEDIA = 'presentgo-media-v1'
 
