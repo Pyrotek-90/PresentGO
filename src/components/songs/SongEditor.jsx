@@ -1435,12 +1435,11 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
                 <p className="text-sm font-semibold">Add to your Rotation List?</p>
                 <p className="text-[11px] text-muted leading-snug">Songs the team plays regularly. Filter the Song Library to just these.</p>
               </div>
-              <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
-                {[['Yes', true], ['No', false]].map(([label, v]) => (
-                  <button key={label} type="button" aria-pressed={rotation === v} onClick={() => setRotation(v)}
-                    className={`px-3.5 h-8 text-sm font-medium transition-colors ${rotation === v ? 'bg-accent text-white' : 'text-muted hover:text-[#f5f5f5]'}`}>{label}</button>
-                ))}
-              </div>
+              <button type="button" role="switch" aria-checked={rotation === true} aria-label="Add to Rotation List"
+                onClick={() => setRotation(rotation !== true)}
+                className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 ${rotation === true ? 'bg-accent' : 'bg-stone-400'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${rotation === true ? 'translate-x-6' : 'translate-x-0'}`} />
+              </button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border">

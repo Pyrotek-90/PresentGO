@@ -109,6 +109,18 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
 
   const hiddenCount = tagged.length - inView.length
 
+  // Occasions / languages added from the sort menu show as bubbles; tap one to hide those songs again.
+  const includeBubbles = include.map(k => {
+    const name = k.slice(k.indexOf(':') + 1)
+    const n = k.startsWith('occ:') ? occasionCounts.find(([o]) => o === name)?.[1] : languageCounts.find(([l]) => l === name)?.[1]
+    return (
+      <button key={k} onClick={() => toggleInclude(k)} title={`Hide ${name} songs`}
+        className="flex items-center gap-1 pl-2.5 pr-2 h-6 rounded-full border border-amber-500 bg-amber-500 text-black text-[11px] font-medium">
+        {name} <span className="opacity-70">{n || 0}</span> <X size={10} />
+      </button>
+    )
+  })
+
   const toggleTheme = t => setActiveThemes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
 
   const handleAdd = async song => {
@@ -234,12 +246,16 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             </div>
           </div>
         )}
+        {!showFilters && include.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">{includeBubbles}</div>
+        )}
         {showFilters && (
           <div className="flex flex-wrap items-center gap-1">
             <button onClick={() => setRotationOnly(v => !v)} aria-pressed={rotationOnly}
               className={`px-2.5 h-6 rounded-full border text-[11px] font-medium transition-colors ${
                 rotationOnly ? 'border-accent bg-accent text-white' : 'border-accent/50 text-accent-light hover:bg-accent/10'
               }`}>Rotation List <span className="opacity-70">{rotationCount}</span></button>
+            {includeBubbles}
             <span className="w-px h-4 bg-border mx-0.5" />
             {themeCounts.map(([t, n]) => (
               <button key={t} onClick={() => toggleTheme(t)} disabled={!n && !activeThemes.includes(t)}
@@ -288,9 +304,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
                   {/* keys stay visible: they sit at the right and never get cut off */}
                   {songKeys(song).length > 0 && (
                     <span className="ml-auto shrink-0 text-xs text-muted">
-                      {songKeys(song).map(({ k, pref }, i) => (
-                        <span key={k}>{i > 0 && ', '}<span className={pref ? 'text-accent-light font-semibold' : ''} title={pref ? 'Preferred key' : undefined}>{k}</span></span>
-                      ))}
+                      {songKeys(song).map(({ k }) => k).join(', ')}
                     </span>
                   )}
                 </button>
