@@ -5,7 +5,7 @@ import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/c
 import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
 import ArrangementBuilder from './ArrangementBuilder'
-import { looksNonEnglish, scriptLanguage } from '../../lib/language'
+import { looksNonEnglish, guessLanguage } from '../../lib/language'
 import { translationForSlides } from '../../lib/translationLines'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
@@ -365,16 +365,17 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const lyricsForeign = useMemo(() => looksNonEnglish(rawLyrics), [rawLyrics])
   // Name of the lyrics' language, shown on the first tab (e.g. "Hindi").
   const [language, setLanguage] = useState(song?.metadata?.language || song?.metadata?.translations?.find(t => t.from)?.from || '')
-  const lyricsLanguage = language || scriptLanguage(rawLyrics) || (lyricsForeign ? 'Original' : 'Lyrics')
+  const guessedLanguage = useMemo(() => guessLanguage(rawLyrics), [rawLyrics])
+  const lyricsLanguage = language || guessedLanguage || (lyricsForeign ? 'Original' : 'Lyrics')
   // Which translation goes under each lyric line on the slides ('' = none).
   const [slideTranslation, setSlideTranslation] = useState(song?.metadata?.slide_translation || '')
   const detectTried = useRef(false)
   useEffect(() => {
-    if (language || detectTried.current || !translations.length || !rawLyrics.trim() || scriptLanguage(rawLyrics)) return
+    if (language || detectTried.current || !translations.length || !rawLyrics.trim() || guessedLanguage) return
     detectTried.current = true
     fetch('/api/translate-lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lyrics: rawLyrics, detect: true }) })
       .then(r => (r.ok ? r.json() : null)).then(j => { if (j?.language) setLanguage(j.language) }).catch(() => {})
-  }, [translations.length, rawLyrics, language])
+  }, [translations.length, rawLyrics, language, guessedLanguage])
 
   // Slides step
   const [showSlides, setShowSlides] = useState(!!song?.slides?.length)
@@ -765,7 +766,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       metadata: {
         ...(song?.metadata || {}),   // keep fields this editor doesn't show (import details)
         translations: translations.filter(t => t.text?.trim()),
-        language,
+        language: language || guessedLanguage,
         slide_translation: translations.some(t => t.title === slideTranslation && t.text?.trim()) ? slideTranslation : '',
         key: songKey,
         chord_chart: rawLyrics.trim() ? reconcileChart(rawLyrics, chordChart) : chordChart,

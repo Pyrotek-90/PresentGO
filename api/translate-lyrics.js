@@ -53,6 +53,7 @@ ${lyrics}`,
     return res.json({ language, text })
   } catch (err) {
     console.error('translate-lyrics error:', err)
+    if (/credit balance/i.test(err.message || '')) return res.status(402).json({ error: 'AI features are paused — the Anthropic account behind StaffList is out of credits. Add credits in the Anthropic Console (Plans & Billing) and try again.' })
     return res.status(500).json({ error: err.message || 'Translation failed — try again.' })
   }
 }
