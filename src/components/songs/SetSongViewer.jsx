@@ -20,7 +20,7 @@ export default function SetSongViewer({ entries, startIndex = 0, onClose }) {
     index,
     total: entries.length,
     titles: entries.map(e => (e.note ? `${e.note.song_title} — Leader Note`
-      : e.key ? `${e.song.title} · ${e.key.replace(' Major', '').replace(' Minor', 'm')}` : e.song.title)),
+      : [e.song.title, e.key && e.key.replace(' Major', '').replace(' Minor', 'm'), e.lead].filter(Boolean).join(' · '))),
     onNext: () => go(index + 1),
     onPrev: () => go(index - 1, true),
     onJump: i => go(i),
@@ -33,6 +33,7 @@ export default function SetSongViewer({ entries, startIndex = 0, onClose }) {
       key={`${index}-${entry.song.id}`}
       song={entry.song}
       initialKey={entry.key}
+      lead={entry.lead}
       onClose={onClose}
       initialMode={mode.current}
       onModeChange={m => { mode.current = m }}

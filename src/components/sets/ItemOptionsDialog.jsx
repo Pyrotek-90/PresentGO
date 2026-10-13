@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { X, Pencil, Trash2, KeyRound, Check, ListOrdered, ChevronDown } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { X, Pencil, Trash2, KeyRound, Check, ListOrdered, ChevronDown, Mic } from 'lucide-react'
 import { transposeKeyOptions, parseKey } from '../../lib/chords'
 import { songSections, sameArrangement } from '../../lib/arrangement'
 import ArrangementBuilder from '../songs/ArrangementBuilder'
@@ -8,7 +9,7 @@ const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
 const toEntries = labels => labels.map(label => ({ id: crypto.randomUUID(), label }))
 
 // Opened from a program item: key and arrangement for this set (songs), edit, or remove it from the set.
-export default function ItemOptionsDialog({ item, title, song, onClose, onSetKey, onSetArrangement, onEdit, onRemove }) {
+export default function ItemOptionsDialog({ item, title, song, onClose, onSetKey, onSetArrangement, team = [], onSetLead, onEdit, onRemove }) {
   const [confirm, setConfirm] = useState(false)
   const isSong = item.type === 'song'
   const meta = song?.metadata || {}
@@ -32,6 +33,8 @@ export default function ItemOptionsDialog({ item, title, song, onClose, onSetKey
     const labels = next.map(e => e.label)
     onSetArrangement?.(sameArrangement(labels, sections.sequence) ? null : labels)
   }
+  const lead = item.content?.lead || null
+  const [leadOpen, setLeadOpen] = useState(false)
   const custom = arr.length > 0 && !sameArrangement(arr.map(e => e.label), sections?.sequence)
 
   return (
@@ -128,6 +131,45 @@ export default function ItemOptionsDialog({ item, title, song, onClose, onSetKey
                   <p className="text-[11px] text-muted">Used in the Song Viewer and on the screen for this set only. Reset goes back to the song's arrangement.</p>
                 </>
               )}
+            </section>
+          )}
+
+          {isSong && (
+            <section className="space-y-2">
+              <button onClick={() => setLeadOpen(o => !o)} aria-expanded={leadOpen} className="w-full flex items-center gap-2 text-left">
+                <Mic size={14} className="text-accent-light" />
+                <span className="text-sm font-medium">Lead singer</span>
+                <span className={`text-xs truncate ${lead ? 'text-accent-light font-medium' : 'text-muted'}`}>{lead ? lead.name : 'None'}</span>
+                <ChevronDown size={14} className={`ml-auto text-muted transition-transform ${leadOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {leadOpen && (team.length === 0 ? (
+                <p className="text-xs text-muted leading-relaxed">No one is assigned to this set yet. Add the team on the <Link to="/schedule" className="text-accent-light underline">Schedule</Link> page, then pick a lead singer here.</p>
+              ) : (
+                <>
+                  <ul className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border/60" role="radiogroup" aria-label="Lead singer">
+                    {[{ id: null, name: 'No lead singer' }, ...team].map(m => {
+                      const on = (lead?.member_id || null) === m.id
+                      return (
+                        <li key={m.id || 'none'}>
+                          <button role="radio" aria-checked={on} onClick={() => onSetLead?.(m.id ? { member_id: m.id, name: m.name } : null)}
+                            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${on ? 'bg-accent/15' : 'hover:bg-[#1a1a1a]'}`}>
+                            <span className={`w-[18px] h-[18px] shrink-0 rounded-full border-2 flex items-center justify-center ${on ? 'border-accent' : 'border-[#555]'}`}>
+                              {on && <span className="w-2 h-2 rounded-full bg-accent" />}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className={`block text-sm truncate ${m.id ? 'font-medium' : 'text-muted'} ${on ? 'text-accent-light' : ''}`}>{m.name}</span>
+                              {m.id && <span className="block text-[11px] text-muted truncate">{m.positions.join(', ')}</span>}
+                            </span>
+                            {m.status === 'declined' && <span className="shrink-0 text-[10px] text-red-300">Declined</span>}
+                            {m.status === 'invited' && <span className="shrink-0 text-[10px] text-amber-300/90">Waiting</span>}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <p className="text-[11px] text-muted">From the team on this set; singers are listed first. Shows on the set list and in the Song Viewer.</p>
+                </>
+              ))}
             </section>
           )}
 
