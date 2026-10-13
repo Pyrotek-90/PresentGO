@@ -340,7 +340,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
           <p className="truncate font-semibold leading-tight">{song.title}</p>
           {(song.artist || lead) && (
             <p className="truncate text-xs text-muted">
-              {lead && <span className="text-accent-light font-medium">Lead: {lead}</span>}{lead && song.artist && ' · '}{song.artist}
+              {lead && <span className="text-accent-light font-medium">Song Leader: {lead}</span>}{lead && song.artist && ' · '}{song.artist}
             </p>
           )}
         </div>
