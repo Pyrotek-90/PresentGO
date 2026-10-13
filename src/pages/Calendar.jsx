@@ -172,12 +172,11 @@ export default function Calendar() {
     const d = new Date(s.service_date + 'T00:00:00')
     setCursor(new Date(d.getFullYear(), d.getMonth(), 1))
   }
-  // Panes shown: phone = selected; 2 = selected + next; 3-4 = one before the selected set, then the next ones.
+  // Panes shown: the selected set (by default the next upcoming one) first, then the sets after it.
   const paneWindow = useMemo(() => {
     if (!dated.length) return [-1]
     const n = Math.min(paneCount, dated.length)
-    let start = n >= 3 ? schedIndex - 1 : schedIndex
-    start = Math.max(0, Math.min(start, dated.length - n))
+    const start = Math.max(0, Math.min(schedIndex, dated.length - n))
     return Array.from({ length: n }, (_, k) => start + k)
   }, [dated.length, paneCount, schedIndex])
 
@@ -234,7 +233,7 @@ export default function Calendar() {
             </>}
           </section>
 
-        {/* Who's Serving: the selected set, plus the previous and next sets when there's room */}
+        {/* Who's Serving: the selected set first, then the sets that follow when there's room */}
         <div ref={panesRef} className="grid gap-4 items-start" style={{ gridTemplateColumns: `repeat(${Math.min(paneCount, Math.max(dated.length, 1))}, minmax(0, 1fr))` }}>
           {paneWindow.map(i => {
             const s = dated[i]
