@@ -409,6 +409,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [bpm, setBpm]           = useState(song?.metadata?.bpm || '')
   const [themes, setThemes]     = useState(() => songThemes(song))
   const [occasions, setOccasions] = useState(() => songOccasions(song))
+  const [rotation, setRotation] = useState(song?.metadata?.rotation ?? null)   // true / false / null (not answered)
   const [addingTheme, setAddingTheme] = useState(false)
   const [themeInput, setThemeInput] = useState('')
   const [author, setAuthor]     = useState(song?.metadata?.author || '')
@@ -776,6 +777,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         bpm,
         themes,
         occasions,
+        rotation: rotation === true,
         author,
         youtube_url: youtubeUrl.trim(),
         original_key: songKey,
@@ -1291,111 +1293,129 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             </button>
           </div>
         )}
-        {songKey && (
-          <ul className="divide-y divide-border/60">
-            {[songKey, ...transposedKeys.filter(k => k !== songKey)].map(k => {
-              const original = k === songKey
-              const star = preferredKey === k
-              return (
-                <li key={k} className="flex items-center gap-2 py-1.5">
-                  <button type="button" onClick={() => setPreferredKey(star ? '' : k)}
-                    aria-label={star ? `Unstar ${k}` : `Star ${k} as the preferred key`} title={star ? 'Preferred key' : 'Star as preferred key'}
-                    className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${star ? 'text-amber-400' : 'text-muted hover:text-amber-300'}`}>
-                    <Star size={16} fill={star ? 'currentColor' : 'none'} />
-                  </button>
-                  <span className="w-20 shrink-0 text-sm font-semibold">{k.replace(/ Major$/, '').replace(/ Minor$/, 'm')}
-                    {original && <span className="block text-[10px] font-normal text-muted">Original</span>}
-                  </span>
-                  <input className="input !h-8 !py-0 text-sm flex-1 min-w-0" placeholder="Note, e.g. Male key"
-                    value={keyNotes[k] || ''} onChange={e => setKeyNotes(n => ({ ...n, [k]: e.target.value }))} aria-label={`Note for ${k}`} />
-                  <div className="hidden sm:flex gap-1 shrink-0">
-                    {['Male', 'Female'].map(q => (
-                      <button key={q} type="button" onClick={() => setKeyNotes(n => ({ ...n, [k]: `${q} key` }))}
-                        className={`px-2 h-7 rounded-md border text-[11px] transition-colors ${keyNotes[k] === `${q} key` ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-primary'}`}>{q}</button>
-                    ))}
-                  </div>
-                  {original ? <span className="w-7 shrink-0" /> : (
-                    <button type="button" onClick={() => { removeKey(k); if (star) setPreferredKey('') }} aria-label={`Remove ${k}`}
-                      className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-red-400 hover:bg-[#2e2e2e]"><X size={14} /></button>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        )}
+        {songKey && (() => {
+          const allKeys = [songKey, ...transposedKeys.filter(k => k !== songKey)]
+          const short = k => k.replace(/ Major$/, '').replace(/ Minor$/, 'm')
+          return (
+            <>
+              <ul className="divide-y divide-border/60">
+                {allKeys.map(k => {
+                  const original = k === songKey
+                  const pref = preferredKey === k
+                  return (
+                    <li key={k} className="flex items-center gap-2 py-1.5">
+                      <span className="w-16 shrink-0">
+                        <span className="block text-sm font-semibold">{short(k)}</span>
+                        <span className={`block text-[10px] ${pref ? 'text-accent-light font-semibold' : 'text-muted'}`}>
+                          {[pref && 'Preferred', original && 'Original'].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                      <input className="input !h-8 !py-0 text-sm flex-1 min-w-0" placeholder="Note, e.g. Male key"
+                        value={keyNotes[k] || ''} onChange={e => setKeyNotes(n => ({ ...n, [k]: e.target.value }))} aria-label={`Note for ${k}`} />
+                      <div className="hidden sm:flex gap-1 shrink-0">
+                        {['Male', 'Female'].map(q => (
+                          <button key={q} type="button" onClick={() => setKeyNotes(n => ({ ...n, [k]: `${q} key` }))}
+                            className={`px-2 h-7 rounded-md border text-[11px] transition-colors ${keyNotes[k] === `${q} key` ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-primary'}`}>{q}</button>
+                        ))}
+                      </div>
+                      {original ? <span className="w-7 shrink-0" /> : (
+                        <button type="button" onClick={() => { removeKey(k); if (pref) setPreferredKey('') }} aria-label={`Remove ${k}`}
+                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-red-400 hover:bg-[#2e2e2e]"><X size={14} /></button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="rounded-lg bg-surface border border-border px-2.5 py-2 space-y-1.5">
+                <p className="text-xs font-medium">Which key do you usually play this song in?</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {allKeys.map(k => (
+                    <button key={k} type="button" aria-pressed={preferredKey === k} onClick={() => setPreferredKey(preferredKey === k ? '' : k)}
+                      className={`min-w-[2.5rem] px-2.5 h-8 rounded-lg border text-sm font-semibold transition-colors ${
+                        preferredKey === k ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                      }`}>{short(k)}</button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted">The song opens in this key from the Song Library.{transposedKeys.length === 0 ? ' Add keys above to choose a different one.' : ''}</p>
+              </div>
+            </>
+          )
+        })()}
         {transposedKeys.length > 0 && !hasChords(chordChart) && <p className="text-[11px] text-amber-400/80">No chords entered yet.</p>}
       </div>
 
-      {/* Themes */}
-      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
-        <p className="text-sm font-semibold">Themes</p>
-        <div className="flex flex-wrap gap-1.5">
-          {[...THEMES, ...themes.filter(t => !THEMES.includes(t))].map(t => {
-            const on = themes.includes(t)
-            return (
-              <button key={t} type="button" aria-pressed={on}
-                onClick={() => setThemes(prev => (on ? prev.filter(x => x !== t) : [...prev, t]))}
-                className={`px-2.5 h-7 rounded-full border text-xs transition-colors ${on ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:border-accent/40 hover:text-[#f5f5f5]'}`}>
-                {t}
-              </button>
-            )
-          })}
-          {addingTheme ? (
-            <input autoFocus className="input !h-7 !py-0 !px-2.5 text-xs !w-36 !rounded-full" placeholder="New theme"
-              value={themeInput} onChange={e => setThemeInput(e.target.value)}
-              onBlur={() => addTheme(themeInput)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTheme(themeInput) } if (e.key === 'Escape') { setThemeInput(''); setAddingTheme(false) } }} />
-          ) : (
-            <button type="button" onClick={() => setAddingTheme(true)}
-              className="px-2.5 h-7 rounded-full border border-dashed border-border text-xs text-muted hover:text-[#f5f5f5] hover:border-accent/40 flex items-center gap-1">
-              <Plus size={11} /> Add
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Occasion */}
-      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
-        <p className="text-sm font-semibold">Occasion</p>
-        <div className="flex flex-wrap gap-1.5">
-          {OCCASIONS.map(o => {
-            const on = occasions.includes(o)
-            return (
-              <button key={o} type="button" aria-pressed={on}
-                onClick={() => setOccasions(prev => (on ? prev.filter(x => x !== o) : [...prev, o]))}
-                className={`px-2.5 h-7 rounded-full border text-xs transition-colors ${on ? 'border-amber-500/60 bg-amber-500/15 text-amber-300' : 'border-border text-muted hover:border-amber-500/40 hover:text-[#f5f5f5]'}`}>
-                {o}
-              </button>
-            )
-          })}
-        </div>
-        <p className="text-[11px] text-muted leading-snug">Songs with an occasion are hidden from the Song Library's main list. Show them any time from the library's sort menu (⇅).</p>
-      </div>
-
-      {/* Language */}
+      {/* Song Library: rotation, then Themes / Occasion / Language as vertical lists */}
       {(() => {
         const current = language || guessedLanguage || 'English'
         const main = user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE
-        const shown = [...new Set([main, current, ...LANGUAGES.slice(0, 8)])]
+        const langs = [...new Set([main, current, ...LANGUAGES.slice(0, 7)])]
+        const Row = ({ on, onClick, tone = 'accent', children }) => (
+          <button type="button" aria-pressed={on} onClick={onClick}
+            className={`w-full flex items-center gap-1.5 px-1.5 sm:px-2 h-8 rounded-lg border text-xs text-left transition-colors ${
+              on ? (tone === 'amber' ? 'border-amber-500/60 bg-amber-500/15 text-amber-200' : 'border-accent bg-accent/20 text-accent-light')
+                 : 'border-transparent text-muted hover:text-[#f5f5f5] hover:bg-[#232323]'
+            }`}>
+            <span className={`hidden sm:flex w-3.5 h-3.5 shrink-0 rounded items-center justify-center border ${on ? 'border-current' : 'border-border'}`}>{on && <Check size={10} />}</span>
+            <span className="truncate">{children}</span>
+          </button>
+        )
+        const hiddenBy = [...occasions, ...(current !== main ? [current] : [])]
         return (
-          <div className="rounded-xl border border-border bg-card p-3 space-y-2">
-            <p className="text-sm font-semibold">Language</p>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {shown.map(l => (
-                <button key={l} type="button" aria-pressed={current === l} onClick={() => setLanguage(l)}
-                  className={`px-2.5 h-7 rounded-full border text-xs transition-colors ${current === l ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:border-accent/40 hover:text-[#f5f5f5]'}`}>
-                  {l}
-                </button>
-              ))}
-              <select className="input !h-7 !py-0 !px-2 text-xs !w-auto !rounded-full" value="" aria-label="More languages"
-                onChange={e => e.target.value && setLanguage(e.target.value)}>
-                <option value="">More…</option>
-                {LANGUAGES.filter(l => !shown.includes(l)).map(l => <option key={l}>{l}</option>)}
-              </select>
+          <div className="rounded-xl border border-border bg-card p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Add to your Rotation List?</p>
+                <p className="text-[11px] text-muted leading-snug">Songs the team plays regularly. Filter the Song Library to just these.</p>
+              </div>
+              <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+                {[['Yes', true], ['No', false]].map(([label, v]) => (
+                  <button key={label} type="button" aria-pressed={rotation === v} onClick={() => setRotation(v)}
+                    className={`px-3.5 h-8 text-sm font-medium transition-colors ${rotation === v ? 'bg-accent text-white' : 'text-muted hover:text-[#f5f5f5]'}`}>{label}</button>
+                ))}
+              </div>
             </div>
-            {current !== main && (
-              <p className="text-[11px] text-muted leading-snug">Not in your library's main language ({main}), so it's hidden from the Song Library's main list. Show {current} songs from the sort menu (⇅).</p>
-            )}
+
+            <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border">
+              <div className="min-w-0 space-y-1 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted px-1">Themes</p>
+                {[...THEMES, ...themes.filter(t => !THEMES.includes(t))].map(t => (
+                  <Row key={t} on={themes.includes(t)} onClick={() => setThemes(prev => (prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]))}>{t}</Row>
+                ))}
+                {addingTheme ? (
+                  <input autoFocus className="input !h-8 !py-0 !px-2 text-xs" placeholder="New theme"
+                    value={themeInput} onChange={e => setThemeInput(e.target.value)} onBlur={() => addTheme(themeInput)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTheme(themeInput) } if (e.key === 'Escape') { setThemeInput(''); setAddingTheme(false) } }} />
+                ) : (
+                  <button type="button" onClick={() => setAddingTheme(true)}
+                    className="w-full flex items-center gap-1.5 px-2 h-8 rounded-lg border border-dashed border-border text-xs text-muted hover:text-[#f5f5f5]">
+                    <Plus size={11} /> Add
+                  </button>
+                )}
+              </div>
+              <div className="min-w-0 space-y-1 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted px-1">Occasion</p>
+                {OCCASIONS.map(o => (
+                  <Row key={o} tone="amber" on={occasions.includes(o)} onClick={() => setOccasions(prev => (prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]))}>{o}</Row>
+                ))}
+              </div>
+              <div className="min-w-0 space-y-1 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted px-1">Language</p>
+                {langs.map(l => (
+                  <Row key={l} tone={l === main ? 'accent' : 'amber'} on={current === l} onClick={() => setLanguage(l)}>{l}</Row>
+                ))}
+                <select className="input !h-8 !py-0 !px-2 text-xs" value="" aria-label="More languages"
+                  onChange={e => e.target.value && setLanguage(e.target.value)}>
+                  <option value="">More…</option>
+                  {LANGUAGES.filter(l => !langs.includes(l)).map(l => <option key={l}>{l}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <p className={`text-[11px] leading-snug rounded-lg px-2.5 py-1.5 ${hiddenBy.length ? 'bg-amber-500/10 text-amber-200/90' : 'text-muted'}`}>
+              {hiddenBy.length
+                ? `Hidden from the Song Library's main list (${hiddenBy.join(', ')}). Show it any time from the library's sort menu, or by searching.`
+                : `Occasion songs and songs not in ${main} are hidden from the Song Library's main list.`}
+            </p>
           </div>
         )
       })()}
@@ -1463,7 +1483,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   }
 
   // Unsaved-changes guard: closing with edits asks to Save or Discard instead of losing them.
-  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, occasions, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide, translations, language, slideTranslation])
+  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, occasions, rotation, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide, translations, language, slideTranslation])
   const initialSnapshot = useRef(null)
   if (initialSnapshot.current === null) initialSnapshot.current = snapshot
   const dirty = snapshot !== initialSnapshot.current
