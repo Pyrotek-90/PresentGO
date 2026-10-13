@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatModified, formatSetTime } from '../lib/sets'
 import { buildIcs } from '../lib/ics'
+import { nextDates, freqLabel, ruleSummary, sameRule, DEFAULT_COUNT, MAX_OCCURRENCES } from '../lib/recurrence'
 import { DndContext, PointerSensor, TouchSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable, sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -15,7 +16,7 @@ import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen,
+  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
@@ -111,6 +112,8 @@ export default function SetEditor() {
   const [swipedId, setSwipedId] = useState(null)   // row currently swiped open to show its trash can
   const [details, setDetails] = useState(null)   // form state while editing set details
   const [detailsSaving, setDetailsSaving] = useState(false)
+  const [repeatOpen, setRepeatOpen] = useState(false)
+  const [notice, setNotice] = useState(null)
   const [detailsError, setDetailsError] = useState(null)
   const [showAdd, setShowAdd]   = useState(false)
   const [confirmDeleteSet, setConfirmDeleteSet] = useState(false)
@@ -206,8 +209,15 @@ export default function SetEditor() {
       venue: s?.venue_name || '',
       address: s?.location_address || '',
       room: s?.location_details || '',
+      freq: s?.recurrence?.freq || '',
+      endMode: s?.recurrence?.until ? 'until' : 'count',
+      count: s?.recurrence?.count || DEFAULT_COUNT,
+      until: s?.recurrence?.until || '',
+      copyProgram: false,
+      scope: 'one',
       ...overrides,
     })
+    setRepeatOpen(false)
   }
   const openDetails = () => openDetailsFor(set)
 
@@ -221,25 +231,107 @@ export default function SetEditor() {
     setDetails(null)
   }
 
+  const ruleFrom = d => !d.freq ? null
+    : d.endMode === 'until' && d.until ? { freq: d.freq, until: d.until }
+    : { freq: d.freq, count: Math.min(Math.max(Number(d.count) || DEFAULT_COUNT, 2), MAX_OCCURRENCES) }
+
+  // Fields every set in a series shares (the date is each set's own).
+  const sharedFields = d => ({
+    name: d.name.trim(),
+    service_time: d.time || null,
+    duration_min: Number(d.duration) || 90,
+    venue_name: d.venue.trim() || null,
+    location_address: d.address.trim() || null,
+    location_details: d.room.trim() || null,
+    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+  })
+
+  // New sets for the given dates, copying the shared fields (and optionally this set's program).
+  const createSeriesSets = async (dates, fields, seriesId, rule, copyProgram) => {
+    if (!dates.length) return 0
+    const rows = dates.map(date => ({ user_id: user.id, ...fields, service_date: date, series_id: seriesId, recurrence: rule }))
+    const { data, error } = await supabase.from('sets').insert(rows).select('id')
+    if (error) throw error
+    if (copyProgram && items.length && data?.length) {
+      const copies = data.flatMap(ns => items.map(it => ({ set_id: ns.id, type: it.type, content: it.content, position: it.position })))
+      await supabase.from('set_items').insert(copies)
+    }
+    return data?.length || 0
+  }
+
+  // Following sets in this series that are still empty (no program items, no team) can be replaced.
+  const followingSets = async () => {
+    const { data } = await supabase.from('sets').select('id, service_date')
+      .eq('series_id', set.series_id).gt('service_date', set.service_date || '0000-01-01')
+    const ids = (data || []).map(r => r.id)
+    if (!ids.length) return { empty: [], kept: [] }
+    const [{ data: its }, asg] = await Promise.all([
+      supabase.from('set_items').select('set_id').in('set_id', ids),
+      supabase.from('set_assignments').select('set_id').in('set_id', ids).then(r => r, () => ({ data: [] })),
+    ])
+    const busy = new Set([...(its || []), ...(asg?.data || [])].map(r => r.set_id))
+    return { empty: (data || []).filter(r => !busy.has(r.id)), kept: (data || []).filter(r => busy.has(r.id)) }
+  }
+
   const saveDetails = async () => {
     if (!details.name.trim()) { setDetailsError('Set name is required.'); return }
+    const rule = ruleFrom(details)
+    if (rule && !details.date) { setDetailsError('Pick a date to repeat from.'); return }
+    if (rule?.until && rule.until <= details.date) { setDetailsError('The end date must be after the set date.'); return }
     setDetailsSaving(true); setDetailsError(null)
-    const patch = {
-      name: details.name.trim(),
-      service_date: details.date || null,
-      service_time: details.time || null,
-      duration_min: Number(details.duration) || 90,
-      venue_name: details.venue.trim() || null,
-      location_address: details.address.trim() || null,
-      location_details: details.room.trim() || null,
-      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
-    }
+    const shared = sharedFields(details)
+    const patch = { ...shared, service_date: details.date || null }
+    const inSeries = !!set?.series_id
+    const ruleChanged = !sameRule(rule, set?.recurrence)
+    let msg = null
+
     if (setId !== 'mock') {
-      const { error } = await supabase.from('sets').update(patch).eq('id', setId)
-      if (error) { setDetailsSaving(false); setDetailsError('Could not save. Make sure the latest Supabase migration has been run.'); return }
+      try {
+        if (!inSeries && rule) {
+          const seriesId = crypto.randomUUID()
+          const { error } = await supabase.from('sets').update({ ...patch, series_id: seriesId, recurrence: rule }).eq('id', setId)
+          if (error) throw error
+          patch.series_id = seriesId; patch.recurrence = rule
+          const n = await createSeriesSets(nextDates(details.date, rule), shared, seriesId, rule, details.copyProgram)
+          msg = `Repeats ${freqLabel(rule.freq, details.date).toLowerCase()} — added ${n} more set${n === 1 ? '' : 's'}.`
+        } else if (inSeries) {
+          const { error } = await supabase.from('sets').update({ ...patch, recurrence: rule }).eq('id', setId)
+          if (error) throw error
+          patch.recurrence = rule
+          if (details.scope === 'following') {
+            await supabase.from('sets').update(shared).eq('series_id', set.series_id).gt('service_date', set.service_date || '0000-01-01')
+            msg = 'Updated this set and the following sets.'
+          }
+          if (ruleChanged) {
+            const { empty, kept } = await followingSets()
+            if (empty.length) await supabase.from('sets').delete().in('id', empty.map(r => r.id))
+            let n = 0
+            if (rule) {
+              const have = new Set(kept.map(r => r.service_date))
+              n = await createSeriesSets(nextDates(details.date, rule).filter(d => !have.has(d)), shared, set.series_id, rule, details.copyProgram)
+              if (kept.length) await supabase.from('sets').update({ recurrence: rule }).in('id', kept.map(r => r.id))
+            }
+            msg = rule
+              ? `Repeat updated: ${ruleSummary(rule, details.date)}.`
+              : `Stopped repeating${empty.length ? ` — removed ${empty.length} empty upcoming set${empty.length === 1 ? '' : 's'}` : ''}.`
+            if (kept.length) msg += ` Kept ${kept.length} upcoming set${kept.length === 1 ? '' : 's'} that already ${kept.length === 1 ? 'has' : 'have'} a program or team.`
+            if (rule && n) msg += ` Added ${n}.`
+          }
+        } else {
+          const { error } = await supabase.from('sets').update(patch).eq('id', setId)
+          if (error) throw error
+        }
+      } catch {
+        setDetailsSaving(false)
+        setDetailsError(rule || inSeries
+          ? 'Could not save the repeat. Make sure the latest Supabase migration (recurring sets) has been run.'
+          : 'Could not save. Make sure the latest Supabase migration has been run.')
+        return
+      }
     }
     setSet(prev => ({ ...prev, ...patch, updated_at: new Date().toISOString() }))
     setDetailsSaving(false); setDetails(null); setIsNew(false)
+    if (msg) { setNotice(msg); setTimeout(() => setNotice(n => (n === msg ? null : n)), 8000) }
   }
 
   // Trash can in the header: first tap arms it (turns red), second tap deletes the set and its program.
@@ -347,7 +439,10 @@ export default function SetEditor() {
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="font-semibold text-lg truncate">{set?.name || '…'}</h1>
-            <p className="text-xs text-muted">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</p>
+            <p className="text-xs text-muted flex items-center gap-1 min-w-0">
+              {set?.series_id && set?.recurrence && <Repeat size={11} className="text-accent-light shrink-0" aria-label="Repeating set" />}
+              <span className="truncate">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.series_id && set?.recurrence && freqLabel(set.recurrence.freq, set.service_date), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</span>
+            </p>
             {(set?.venue_name || set?.location_address) && (
               <p className="text-xs text-muted flex items-center gap-1 truncate"><MapPin size={11} className="shrink-0" />{[set.venue_name, set.location_address].filter(Boolean).join(', ')}{set.location_details ? ` · ${set.location_details}` : ''}</p>
             )}
@@ -399,6 +494,81 @@ export default function SetEditor() {
                 <input className="input" placeholder="Main Sanctuary" value={details.room} onChange={e => setDetails(d => ({ ...d, room: e.target.value }))} />
               </div>
             </div>
+            {(() => {
+              const rule = ruleFrom(details)
+              const dates = rule ? nextDates(details.date, rule) : []
+              const fmt = d => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              const FREQS = [['', 'Does not repeat'], ['weekly', 'Weekly'], ['biweekly', 'Every 2 weeks'], ['monthly', freqLabel('monthly', details.date)]]
+              return (
+                <div className="rounded-lg border border-border">
+                  <button type="button" onClick={() => setRepeatOpen(o => !o)} aria-expanded={repeatOpen}
+                    className="w-full flex items-center gap-2 px-3 h-10 text-left text-sm">
+                    <Repeat size={14} className={rule ? 'text-accent-light' : 'text-muted'} />
+                    <span className="font-medium">Repeat</span>
+                    <span className="text-xs text-muted truncate">{rule ? ruleSummary(rule, details.date) : 'Does not repeat'}</span>
+                    <ChevronDown size={14} className={`ml-auto text-muted transition-transform ${repeatOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {repeatOpen && (
+                    <div className="px-3 pb-3 space-y-3 border-t border-border pt-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {FREQS.map(([v, label]) => (
+                          <button key={v || 'none'} type="button" onClick={() => setDetails(d => ({ ...d, freq: v }))}
+                            className={`px-3 h-8 rounded-full border text-xs font-medium transition-colors ${details.freq === v ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'}`}>{label}</button>
+                        ))}
+                      </div>
+                      {details.freq && (
+                        <>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                            <span className="text-xs text-muted">Ends</span>
+                            <label className="flex items-center gap-2">
+                              <input type="radio" name="ends" checked={details.endMode === 'count'} onChange={() => setDetails(d => ({ ...d, endMode: 'count' }))} className="accent-[#1a8aa8]" />
+                              After
+                              <input type="number" min="2" max={MAX_OCCURRENCES} className="input !w-16 !h-8 !py-0 text-sm" value={details.count}
+                                onFocus={() => setDetails(d => ({ ...d, endMode: 'count' }))} onChange={e => setDetails(d => ({ ...d, count: e.target.value, endMode: 'count' }))} />
+                              sets
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input type="radio" name="ends" checked={details.endMode === 'until'} onChange={() => setDetails(d => ({ ...d, endMode: 'until' }))} className="accent-[#1a8aa8]" />
+                              On
+                              <input type="date" className="input !w-auto !h-8 !py-0 text-sm" value={details.until} min={details.date || undefined}
+                                onFocus={() => setDetails(d => ({ ...d, endMode: 'until' }))} onChange={e => setDetails(d => ({ ...d, until: e.target.value, endMode: 'until' }))} />
+                            </label>
+                          </div>
+                          {details.date ? (
+                            <p className="text-[11px] text-muted leading-snug">
+                              {set?.series_id && sameRule(rule, set.recurrence)
+                                ? 'This set is part of a repeating series.'
+                                : `${dates.length} more set${dates.length === 1 ? '' : 's'} after this one: ${dates.slice(0, 4).map(fmt).join(', ')}${dates.length > 4 ? ` … ${fmt(dates[dates.length - 1])}` : ''}.`}
+                              {' '}Each gets the same name, time, length and venue.
+                            </p>
+                          ) : <p className="text-[11px] text-amber-400/90">Pick a date above to repeat from.</p>}
+                          {items.length > 0 && !(set?.series_id && sameRule(rule, set.recurrence)) && (
+                            <label className="flex items-center gap-2 text-xs">
+                              <input type="checkbox" checked={details.copyProgram} onChange={e => setDetails(d => ({ ...d, copyProgram: e.target.checked }))} className="accent-[#1a8aa8]" />
+                              Copy this set's program ({items.length} item{items.length === 1 ? '' : 's'}) to each new set
+                            </label>
+                          )}
+                        </>
+                      )}
+                      {set?.series_id && !details.freq && set?.recurrence && (
+                        <p className="text-[11px] text-amber-400/90 leading-snug">Saving stops the repeat after this set. Upcoming sets in the series that are still empty are removed; any with a program or team are kept.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+            {set?.series_id && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <span className="text-xs text-muted">Apply changes to</span>
+                {[['one', 'This set only'], ['following', 'This and following sets']].map(([v, label]) => (
+                  <label key={v} className="flex items-center gap-2">
+                    <input type="radio" name="scope" checked={details.scope === v} onChange={() => setDetails(d => ({ ...d, scope: v }))} className="accent-[#1a8aa8]" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )}
             {detailsError && <p className="text-red-400 text-xs">{detailsError}</p>}
             <div className="flex items-center gap-2">
               <button onClick={saveDetails} disabled={detailsSaving} className="btn-primary !py-1.5 !px-4 text-sm">{detailsSaving ? 'Saving…' : 'Save details'}</button>
@@ -406,6 +576,12 @@ export default function SetEditor() {
               <span className="ml-auto text-[11px] text-muted hidden sm:block">Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
             </div>
           </section>
+        )}
+
+        {notice && (
+          <p className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-accent-light flex items-start gap-2">
+            <Repeat size={13} className="shrink-0 mt-0.5" /> <span>{notice}</span>
+          </p>
         )}
 
         {/* Program card */}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, ChevronRight, ChevronDown, CalendarDays } from 'lucide-react'
+import { Plus, ChevronRight, ChevronDown, CalendarDays, Repeat } from 'lucide-react'
 import { groupSets, formatSetWhen, songCount } from '../../lib/sets'
 
 // Home shows a short list so the Song Library gets the room; the Schedule page has every set.
@@ -16,6 +16,7 @@ function SetRow({ set, isTarget, onOpen, className = '' }) {
         isTarget ? 'border-accent/50 bg-accent/5' : 'border-transparent hover:bg-[#1a1a1a] hover:border-border'
       }`}>
       <span className="flex-1 min-w-0 text-sm font-medium truncate">{set.name}</span>
+      {set.series_id && set.recurrence && <Repeat size={11} className="text-muted shrink-0" aria-label="Repeating" />}
       <span className="text-xs text-muted shrink-0">{formatSetWhen(set)}</span>
       <span className="text-xs text-muted shrink-0 w-14 text-right">{n} song{n !== 1 ? 's' : ''}</span>
       <ChevronRight size={14} className="text-muted group-hover:text-[#f5f5f5] shrink-0" />
