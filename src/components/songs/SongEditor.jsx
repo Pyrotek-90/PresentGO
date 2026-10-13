@@ -1,14 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
 import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
 import ArrangementBuilder from './ArrangementBuilder'
+import { looksNonEnglish } from '../../lib/language'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
-  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp, Save, Star,
+  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp, Save, Star, Languages,
 } from 'lucide-react'
 
 // ─── Wizard steps ─────────────────────────────────────────────────────────────
@@ -355,6 +356,12 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [cleaningUp, setCleaningUp] = useState(false)
   const [cleanupErr, setCleanupErr] = useState(null)
   const [showInsertMenu, setShowInsertMenu] = useState(false)
+  // English (or other) translations shown with the slides: [{ title, text, from? }], text uses [Section] labels.
+  const [translations, setTranslations] = useState(song?.metadata?.translations || [])
+  const [lyricsTab, setLyricsTab] = useState(0)          // 0 = lyrics, n = translations[n-1]
+  const [translating, setTranslating] = useState(false)
+  const [translateErr, setTranslateErr] = useState(null)
+  const lyricsForeign = useMemo(() => looksNonEnglish(rawLyrics), [rawLyrics])
 
   // Slides step
   const [showSlides, setShowSlides] = useState(!!song?.slides?.length)
@@ -478,6 +485,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     }
     setRawLyrics(p.rawLyrics)
     setChordChart(p.chordChart)
+    if (p.translations?.length) { setTranslations(p.translations); setLyricsTab(0) }
     setSlides([]); setShowSlides(false)
     setSectionsMap({}); setSectionOrder([]); setArrangement([])
     setSectionsRaw({}); setSectionLPS({})
@@ -562,6 +570,33 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     } catch (e) {
       setCleanupErr(e.message || 'Smart cleanup unavailable.')
     } finally { setCleaningUp(false) }
+  }
+
+  const handleTranslate = async () => {
+    if (!rawLyrics.trim() || translating) return
+    setTranslating(true); setTranslateErr(null)
+    try {
+      const res = await fetch('/api/translate-lyrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lyrics: rawLyrics }),
+      })
+      let json
+      try { json = await res.json() } catch {
+        throw new Error(res.status === 404
+          ? 'Translate only runs on the deployed app (present-go-five.vercel.app), not locally.'
+          : `Server error (${res.status}) — try again.`)
+      }
+      if (!res.ok || json.error) throw new Error(json.error || 'Translation failed')
+      const entry = { title: 'English', text: json.text, ...(json.language ? { from: json.language } : {}), ai: true }
+      // Replace an earlier English translation; keep any others (e.g. from an imported PDF).
+      const i = translations.findIndex(t => /english/i.test(t.title))
+      const next = i >= 0 ? translations.map((t, ti) => (ti === i ? entry : t)) : [...translations, entry]
+      setTranslations(next)
+      setLyricsTab((i >= 0 ? i : next.length - 1) + 1)
+    } catch (e) {
+      setTranslateErr(e.message || 'Translation unavailable.')
+    } finally { setTranslating(false) }
   }
 
   const handleFormatSong = () => {
@@ -714,7 +749,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       lines_per_slide: linesPerSlide,
       slides,
       metadata: {
-        ...(song?.metadata || {}),   // keep fields this editor doesn't show (translations, import details)
+        ...(song?.metadata || {}),   // keep fields this editor doesn't show (import details)
+        translations: translations.filter(t => t.text?.trim()),
         key: songKey,
         chord_chart: rawLyrics.trim() ? reconcileChart(rawLyrics, chordChart) : chordChart,
         bpm,
@@ -801,16 +837,24 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
       {/* Lyrics editor */}
       <div className="flex flex-col gap-1.5 flex-1 min-h-0">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-y-1.5">
           <label className="label mb-0" title="Label sections like [Verse 1] and [Chorus], or use Insert Section">Lyrics</label>
-          <div className="flex items-center gap-2">
-            <button onClick={handleSmartCleanup} disabled={cleaningUp || !rawLyrics.trim()}
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+            <button onClick={handleSmartCleanup} disabled={cleaningUp || !rawLyrics.trim()} title="Smart Cleanup"
               className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40">
               {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              {cleaningUp ? 'Cleaning…' : 'Smart Cleanup'}
+              {cleaningUp ? 'Cleaning…' : <span><span className="hidden sm:inline">Smart </span>Cleanup</span>}
             </button>
+            {(lyricsForeign || translations.length > 0) && (
+              <button onClick={handleTranslate} disabled={translating || !rawLyrics.trim()}
+                title={translations.some(t => /english/i.test(t.title)) ? 'Translate again into English' : 'Translate into English'}
+                className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40">
+                {translating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
+                {translating ? 'Translating…' : 'Translate'}
+              </button>
+            )}
             <div className="relative">
-              <button onClick={() => setShowInsertMenu(v => !v)}
+              <button onClick={() => { setLyricsTab(0); setShowInsertMenu(v => !v) }}
                 className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors">
                 <Tag size={12} /> Insert Section
                 <ChevronDown size={11} className={`transition-transform ${showInsertMenu ? 'rotate-180' : ''}`} />
@@ -820,8 +864,21 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           </div>
         </div>
         {cleanupErr && <p className="text-xs text-amber-400">{cleanupErr}</p>}
+        {translateErr && <p className="text-xs text-amber-400">{translateErr}</p>}
+
+        {translations.length > 0 && (
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {[{ title: 'Lyrics' }, ...translations].map((t, i) => (
+              <button key={i} onClick={() => setLyricsTab(i)}
+                className={`shrink-0 h-7 px-3 rounded-full border text-xs font-medium transition-colors ${
+                  lyricsTab === i ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+                }`}>{t.title}</button>
+            ))}
+          </div>
+        )}
+
         <textarea ref={lyricsRef}
-          className="input resize-none font-mono text-sm leading-relaxed flex-1 min-h-[10rem]"
+          className={`input resize-none font-mono text-sm leading-relaxed flex-1 min-h-[10rem] ${lyricsTab === 0 ? '' : 'hidden'}`}
           placeholder={`[Verse 1]\nAmazing grace how sweet the sound\nThat saved a wretch like me\n\n[Chorus]\nMy chains are gone I've been set free`}
           value={rawLyrics}
           onChange={e => {
@@ -829,6 +886,23 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             setShowSlides(false); setSectionsMap({}); setSectionOrder([]); setArrangement([])
           }}
         />
+        {lyricsTab > 0 && translations[lyricsTab - 1] && (() => {
+          const tr = translations[lyricsTab - 1]
+          return (
+            <>
+              <textarea
+                className="input resize-none font-mono text-sm leading-relaxed flex-1 min-h-[10rem]"
+                value={tr.text}
+                onChange={e => setTranslations(ts => ts.map((t, i) => (i === lyricsTab - 1 ? { ...t, text: e.target.value } : t)))}
+              />
+              <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+                <span>{tr.ai ? `Translated${tr.from ? ` from ${tr.from}` : ''} by AI — check it reads right before Sunday.` : 'Saved with the song for the slides.'}</span>
+                <button onClick={() => { setTranslations(ts => ts.filter((_, i) => i !== lyricsTab - 1)); setLyricsTab(0) }}
+                  className="shrink-0 flex items-center gap-1 hover:text-red-400 transition-colors"><Trash2 size={11} /> Remove</button>
+              </div>
+            </>
+          )
+        })()}
       </div>
     </div>
   )
@@ -1311,7 +1385,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   }
 
   // Unsaved-changes guard: closing with edits asks to Save or Discard instead of losing them.
-  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide])
+  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide, translations])
   const initialSnapshot = useRef(null)
   if (initialSnapshot.current === null) initialSnapshot.current = snapshot
   const dirty = snapshot !== initialSnapshot.current
