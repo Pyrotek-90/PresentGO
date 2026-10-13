@@ -61,3 +61,42 @@ export function scriptLanguage(text) {
   }
   return count >= 4 ? best : ''
 }
+
+// Romanized / Latin-script languages common in church settings, recognised by everyday words.
+const WORDS = {
+  Hindi: `hai hain ho tera teri tere mera meri mere tu tum aap main mai hum ka ki ke ko ne se mein me par aur ye yeh woh wo
+    nahi na kya kaise jab tab sab koi kuch yeshu yesu masih prabhu khuda parmeshwar ishwar pita aatma pavitra naam dil mann
+    jeevan prem pyaar karunga gaunga gaayenge hoon raha rahi tha thi diya liya kar karo karte karta jaye jaaye dhanyawad
+    stuti mahima aradhana kripa daya`,
+  Spanish: `el la los las un una y que de del en es por para con mi mis tu tus su sus no se lo al como pero mas muy yo te me
+    nos señor dios jesús cristo gloria santo amor gracia corazón vida eres soy está estás quiero alabanza aleluya cuán grande`,
+  Portuguese: `o a os as um uma e que de do da dos das em no na é por para com meu minha teu tua seu sua não se ao como mas
+    muito eu te me nos senhor deus jesus cristo glória santo amor graça coração vida és sou está quero louvor`,
+  French: `le la les un une et que de du des en est pour avec mon ma mes ton ta tes son sa ses ne pas se au comme mais très
+    je tu il nous vous seigneur dieu jésus christ gloire saint amour grâce cœur vie es suis louange`,
+  Tagalog: `ang ng mga sa si ni ay at na ko mo ka ikaw ako kami tayo sila ito iyan dito hindi oo ka panginoon diyos hesus
+    kristo papuri pag-ibig puso buhay salamat dakila`,
+  Indonesian: `yang dan di ke dari ini itu aku kau engkau kami kita mereka tidak ada dengan untuk dalam akan tuhan yesus
+    allah kasih hati hidup puji sembah kudus`,
+  Swahili: `na ya wa la za kwa ni si mimi wewe sisi yeye wao bwana mungu yesu kristo upendo moyo maisha asante sifa
+    takatifu nakupenda`,
+  German: `der die das ein eine und ist nicht ich du er wir ihr sie mein dein sein mit für auf zu von herr gott jesus
+    christus liebe herz leben gnade heilig`,
+}
+const WORD_SETS = Object.fromEntries(Object.entries(WORDS).map(([k, v]) => [k, new Set(v.split(/\s+/).filter(Boolean))]))
+
+// Best guess at the lyrics' language without any network call: the writing system first,
+// then everyday words for romanized lyrics. '' when unsure or when it looks like English.
+export function guessLanguage(text) {
+  const byScript = scriptLanguage(text)
+  if (byScript) return byScript
+  if (!looksNonEnglish(text)) return ''
+  const words = lyricLines(text).join(' ').toLowerCase().replace(/[’']/g, '')
+    .split(/[^\p{L}-]+/u).filter(w => w.length > 0)
+  if (words.length < 6) return ''
+  const scores = Object.entries(WORD_SETS)
+    .map(([lang, set]) => [lang, words.filter(w => set.has(w)).length / words.length])
+    .sort((a, b) => b[1] - a[1])
+  const [best, second] = scores
+  return best[1] >= 0.15 && best[1] >= (second?.[1] || 0) * 1.4 ? best[0] : ''
+}
