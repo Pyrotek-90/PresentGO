@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
+import { ACCEPT, readImports, saveImport, itemSlides, deleteLibraryItem, renameLibraryItem } from '../lib/contentLibrary'
 import {
   Upload, Image, FolderOpen, Monitor,
   Trash2, ExternalLink, Plus, X, Folder,
   Clock, GalleryHorizontal, Pencil, Check, ChevronLeft,
-  HardDrive, Loader2,
+  HardDrive, Loader2, Search,
 } from 'lucide-react'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -41,20 +42,6 @@ function ApplePhotosIcon({ size = 16 }) {
 }
 
 // ─── Google Drive icon (SVG) ───────────────────────────────────────────────────
-function GoogleDriveIcon({ size = 16 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
-      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47"/>
-      <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
-      <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
-    </svg>
-  )
-}
-
-// ─── Google Photos icon (SVG) ──────────────────────────────────────────────────
 function GooglePhotosIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
@@ -431,21 +418,6 @@ function GooglePhotosPicker({ userId, onSelect, onClose, mode = 'images' }) {
       </div>
     </div>
   )
-}
-
-// Fixed system categories — cannot be removed
-const FIXED_TABS = [
-  { id: 'all',          label: 'All' },
-  { id: 'presentation', label: 'Presentations' },
-  { id: 'image',        label: 'Images' },
-  { id: 'loop',         label: 'Loops' },
-]
-
-const FIXED_ICONS  = { presentation: Monitor, image: Image, loop: GalleryHorizontal }
-const FIXED_COLORS = {
-  presentation: 'text-blue-400 bg-blue-400/10',
-  image:        'text-green-400 bg-green-400/10',
-  loop:         'text-purple-400 bg-purple-400/10',
 }
 
 // Slide durations available for loops
@@ -920,575 +892,262 @@ function LoopsPanel({ userId }) {
 
 // ─── Utility functions ─────────────────────────────────────────────────────────
 
-function guessType(filename) {
-  const ext = filename.split('.').pop()?.toLowerCase()
-  if (['pptx', 'ppt', 'key', 'keynote', 'pdf'].includes(ext)) return 'presentation'
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return 'image'
-  return null
-}
-
-function formatSize(bytes) {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1048576).toFixed(1)} MB`
-}
-
 function formatDate(ts) {
   if (!ts) return ''
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-// ─── Google Drive Picker ───────────────────────────────────────────────────────
+// ─── Main ContentLibrary component ────────────────────────────────────────────
+// Only PDFs and images can be added (keeps storage small). A PDF with several pages becomes a
+// named slide folder; an image or a one-page PDF becomes a single slide.
 
-let gapiLoaded = false
-let gapiLoading = false
-const gapiCallbacks = []
+const TABS = [
+  { id: 'all',          label: 'All' },
+  { id: 'presentation', label: 'Slide Folders' },
+  { id: 'image',        label: 'Images' },
+  { id: 'loop',         label: 'Loops' },
+]
 
-function loadGapi() {
-  return new Promise((resolve, reject) => {
-    if (gapiLoaded) { resolve(); return }
-    gapiCallbacks.push({ resolve, reject })
-    if (gapiLoading) return
-    gapiLoading = true
-    const script = document.createElement('script')
-    script.src = 'https://apis.google.com/js/api.js'
-    script.onload = () => {
-      gapiLoaded = true
-      gapiLoading = false
-      gapiCallbacks.forEach(cb => cb.resolve())
-      gapiCallbacks.length = 0
-    }
-    script.onerror = () => {
-      gapiLoading = false
-      gapiCallbacks.forEach(cb => cb.reject(new Error('Failed to load Google API')))
-      gapiCallbacks.length = 0
-    }
-    document.head.appendChild(script)
-  })
+function ImportReview({ groups, busy, error, onChangeName, onCancel, onSave }) {
+  const total = groups.reduce((n, g) => n + g.pages.length, 0)
+  return (
+    <div className="card space-y-3 border-accent/40">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-sm">Ready to add {groups.length === 1 ? (groups[0].pages.length > 1 ? 'a slide folder' : 'an image') : `${groups.length} items`} · {total} slide{total !== 1 ? 's' : ''}</p>
+        <button onClick={onCancel} disabled={!!busy} className="btn-ghost p-1 rounded-lg" aria-label="Cancel import"><X size={16} /></button>
+      </div>
+      {groups.map((g, gi) => {
+        const multi = g.pages.length > 1
+        return (
+          <div key={gi} className="rounded-lg border border-border p-2.5 space-y-2">
+            <div className="flex items-center gap-2">
+              {multi ? <Folder size={15} className="text-blue-400 shrink-0" /> : <Image size={15} className="text-green-400 shrink-0" />}
+              <input className="input !h-8 !py-0 text-sm flex-1 min-w-0" value={g.name} onChange={e => onChangeName(gi, e.target.value)}
+                placeholder={multi ? 'Folder name, e.g. Sermon Slides – Oct 18' : 'Name'} aria-label={multi ? 'Folder name' : 'Image name'} />
+              <span className="text-[11px] text-muted shrink-0">{multi ? `${g.pages.length} slides` : '1 slide'}</span>
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {g.pages.slice(0, 12).map((p, i) => (
+                <img key={i} src={p.url} alt="" className="h-12 aspect-video object-contain rounded border border-border bg-black shrink-0" />
+              ))}
+              {g.pages.length > 12 && <span className="self-center text-[11px] text-muted shrink-0 px-1">+{g.pages.length - 12} more</span>}
+            </div>
+          </div>
+        )
+      })}
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      <div className="flex items-center gap-2">
+        <button onClick={onSave} disabled={!!busy} className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-60">
+          {busy ? <><Loader2 size={14} className="animate-spin" /> {busy}</> : <><Check size={14} /> Save to Content Library</>}
+        </button>
+        {!busy && <button onClick={onCancel} className="btn-ghost text-sm">Cancel</button>}
+      </div>
+    </div>
+  )
 }
 
-// ─── Main ContentLibrary component ────────────────────────────────────────────
+function SlidesViewer({ item, onClose }) {
+  const slides = itemSlides(item)
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 bg-black/80" onClick={onClose}>
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-4xl max-h-[calc(100dvh-1.5rem)] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
+          <p className="font-semibold truncate">{item.name} <span className="text-xs text-muted font-normal">· {slides.length} slide{slides.length !== 1 ? 's' : ''}</span></p>
+          <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg" aria-label="Close"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {slides.map((s, i) => (
+            <div key={i} className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
+              <img src={s.url} alt={`Slide ${i + 1}`} className="w-full h-full object-contain" loading="lazy" />
+              <span className="absolute bottom-1 left-1.5 text-[10px] text-white/70">{i + 1}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function ContentLibrary() {
   const { user } = useAuth()
-  const storageKey = `presentgo-folders-${user.id}`
-
-  const [items, setItems]               = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [activeCategory, setActiveCategory] = useState('all')
-  const [uploading, setUploading]       = useState(false)
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 })
-  const [dragOver, setDragOver]         = useState(false)
-  const [showGPhotosImages, setShowGPhotosImages] = useState(false)
-  const [gDriveLoading, setGDriveLoading] = useState(false)
-  const [gDriveError, setGDriveError]   = useState(null)
-  const [customFolders, setCustomFolders] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { return [] }
-  })
-  const [addingFolder, setAddingFolder] = useState(false)
-  const [newFolderName, setNewFolderName] = useState('')
-  const fileInputRef      = useRef(null)
-  const folderInputRef    = useRef(null)
-  const applePhotosRef    = useRef(null)
-
-  useEffect(() => { loadItems() }, [user.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(customFolders))
-  }, [customFolders, storageKey])
-
-  // Focus folder name input when shown
-  useEffect(() => {
-    if (addingFolder) folderInputRef.current?.focus()
-  }, [addingFolder])
+  const [items, setItems]       = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [tab, setTab]           = useState('all')
+  const [query, setQuery]       = useState('')
+  const [review, setReview]     = useState(null)   // groups waiting to be saved
+  const [busy, setBusy]         = useState(null)
+  const [error, setError]       = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [viewing, setViewing]   = useState(null)
+  const [renaming, setRenaming] = useState(null)   // { id, name }
+  const [confirmDel, setConfirmDel] = useState(null)
+  const fileRef = useRef(null)
 
   const loadItems = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('media_items')
-      .select('*')
-      .eq('user_id', user.id)
-      .in('type', ['image', 'presentation'])
-      .order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('media_items').select('*')
+      .eq('user_id', user.id).in('type', ['image', 'presentation']).order('created_at', { ascending: false })
     if (!error) setItems(data || [])
     setLoading(false)
   }
+  useEffect(() => { loadItems() }, [user.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleFiles = async (files) => {
+  const pickFiles = async files => {
     if (!files?.length) return
-    setUploading(true)
-    const fileArray = Array.from(files)
-    setUploadProgress({ current: 0, total: fileArray.length })
-    for (let i = 0; i < fileArray.length; i++) {
-      const file = fileArray[i]
-      const guessed = guessType(file.name)
-      const type = guessed || (activeCategory !== 'all' && activeCategory !== 'loop' ? activeCategory : 'image')
-      const uuid = generateUUID()
-      const storagePath = `${user.id}/${uuid}-${file.name}`
-      const { error: storageError } = await supabase.storage.from('media').upload(storagePath, file, {
-        contentType: file.type,
-      })
-      if (storageError) { console.error(storageError); setUploadProgress({ current: i + 1, total: fileArray.length }); continue }
-      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(storagePath)
-      await supabase.from('media_items').insert({
-        user_id: user.id,
-        name: file.name,
-        type,
-        storage_path: storagePath,
-        url: publicUrl,
-      })
-      setUploadProgress({ current: i + 1, total: fileArray.length })
-    }
-    setUploading(false)
-    setUploadProgress({ current: 0, total: 0 })
-    loadItems()
-  }
-
-  // Called when Google Photos picker finishes uploading images
-  const handleGPhotosImages = (newItems) => {
-    setItems(prev => [...newItems, ...prev])
-    setShowGPhotosImages(false)
-  }
-
-  const handleDelete = async (item) => {
-    if (item.storage_path) {
-      await supabase.storage.from('media').remove([item.storage_path])
-    }
-    await supabase.from('media_items').delete().eq('id', item.id)
-    setItems(prev => prev.filter(i => i.id !== item.id))
-  }
-
-  // ─── Google Drive Picker ─────────────────────────────────────────────────────
-
-  const openGoogleDrivePicker = async () => {
-    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-
-    if (!apiKey) {
-      setGDriveError('VITE_GOOGLE_API_KEY is not set. Add it to your .env file.')
-      return
-    }
-
-    setGDriveLoading(true)
-    setGDriveError(null)
-
+    setError(null); setBusy('Reading…')
     try {
-      await loadGapi()
-
-      await new Promise((resolve, reject) => {
-        window.gapi.load('picker', { callback: resolve, onerror: reject })
-      })
-
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.provider_token
-
-      if (!token) {
-        setGDriveError('No Google OAuth token found. Sign in with Google to use Drive import.')
-        setGDriveLoading(false)
-        return
-      }
-
-      const allowedTypes = [
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-        'application/vnd.ms-powerpoint',                                             // .ppt
-        'application/vnd.apple.keynote',                                             // .key
-        'application/pdf',
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-      ]
-
-      const pickerCallback = async (data) => {
-        if (data.action !== window.google.picker.Action.PICKED) return
-        const picked = data.docs || []
-        if (picked.length === 0) return
-
-        setGDriveLoading(true)
-        setUploadProgress({ current: 0, total: picked.length })
-
-        for (let i = 0; i < picked.length; i++) {
-          const doc = picked[i]
-          try {
-            const isImage = doc.mimeType?.startsWith('image/')
-            const type = isImage ? 'image' : 'presentation'
-
-            // Download file content from Drive
-            const downloadUrl = `https://www.googleapis.com/drive/v3/files/${doc.id}?alt=media`
-            const res = await fetch(downloadUrl, {
-              headers: { Authorization: `Bearer ${token}` },
-            })
-            if (!res.ok) throw new Error(`Drive download failed: HTTP ${res.status}`)
-            const blob = await res.blob()
-
-            const filename = doc.name || `drive-file-${doc.id}`
-            const uuid = generateUUID()
-            const storagePath = `${user.id}/${uuid}-${filename}`
-            const { error: storageErr } = await supabase.storage.from('media').upload(storagePath, blob, {
-              contentType: doc.mimeType || 'application/octet-stream',
-            })
-            if (storageErr) throw new Error(storageErr.message)
-
-            const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(storagePath)
-            await supabase.from('media_items').insert({
-              user_id: user.id,
-              name: filename,
-              type,
-              storage_path: storagePath,
-              url: publicUrl,
-            })
-          } catch (e) {
-            console.error('Failed to import Drive file', doc.name, e)
-          }
-          setUploadProgress({ current: i + 1, total: picked.length })
-        }
-
-        setGDriveLoading(false)
-        setUploadProgress({ current: 0, total: 0 })
-        loadItems()
-      }
-
-      const docsView = new window.google.picker.DocsView()
-        .setIncludeFolders(true)
-        .setMimeTypes(allowedTypes.join(','))
-
-      const pickerBuilder = new window.google.picker.PickerBuilder()
-        .addView(docsView)
-        .addView(new window.google.picker.DocsUploadView())
-        .setOAuthToken(token)
-        .setDeveloperKey(apiKey)
-        .setCallback(pickerCallback)
-
-      if (clientId) {
-        pickerBuilder.setAppId(clientId)
-      }
-
-      const picker = pickerBuilder.build()
-      picker.setVisible(true)
+      const groups = await readImports(files, msg => setBusy(`Reading ${msg}…`))
+      setReview(groups)
+      if (tab === 'loop') setTab('all')
     } catch (e) {
-      console.error('Google Picker error', e)
-      setGDriveError(`Could not open Google Drive: ${e.message}`)
-    }
-
-    setGDriveLoading(false)
+      setError(e.message || 'Could not read that file.')
+    } finally { setBusy(null) }
   }
 
-  // ─── Folder management ───────────────────────────────────────────────────────
-
-  const createFolder = () => {
-    const name = newFolderName.trim()
-    if (!name) return
-    if (customFolders.includes(name)) { setNewFolderName(''); setAddingFolder(false); return }
-    const updated = [...customFolders, name]
-    setCustomFolders(updated)
-    setActiveCategory(name)
-    setNewFolderName('')
-    setAddingFolder(false)
+  const saveReview = async () => {
+    setError(null)
+    try {
+      const saved = []
+      for (let gi = 0; gi < review.length; gi++) {
+        const g = review[gi]
+        saved.push(await saveImport(user.id, g, g.name, (i, n) => setBusy(`Uploading ${review.length > 1 ? `item ${gi + 1} of ${review.length}, ` : ''}slide ${i} of ${n}…`)))
+      }
+      review.forEach(g => g.pages.forEach(p => URL.revokeObjectURL(p.url)))
+      setItems(prev => [...saved.reverse(), ...prev])
+      setReview(null)
+    } catch (e) {
+      setError(`${e.message || 'Upload failed'} — try again.`)
+    } finally { setBusy(null) }
   }
 
-  const deleteFolder = (folder) => {
-    setCustomFolders(prev => prev.filter(f => f !== folder))
-    if (activeCategory === folder) setActiveCategory('all')
+  const cancelReview = () => {
+    review?.forEach(g => g.pages.forEach(p => URL.revokeObjectURL(p.url)))
+    setReview(null); setError(null)
   }
 
-  const getPublicUrl = (item) => {
-    if (item.url) return item.url
-    if (item.storage_path) {
-      const { data } = supabase.storage.from('media').getPublicUrl(item.storage_path)
-      return data.publicUrl
-    }
-    return '#'
+  const remove = async item => {
+    if (confirmDel !== item.id) { setConfirmDel(item.id); setTimeout(() => setConfirmDel(c => (c === item.id ? null : c)), 4000); return }
+    await deleteLibraryItem(item)
+    setItems(prev => prev.filter(i => i.id !== item.id))
+    setConfirmDel(null)
   }
 
-  const getCategoryLabel = (catId) => {
-    const fixed = FIXED_TABS.find(t => t.id === catId)
-    return fixed ? fixed.label.replace(/s$/, '') : catId
+  const saveRename = async () => {
+    const name = renaming.name.trim()
+    const item = items.find(i => i.id === renaming.id)
+    setRenaming(null)
+    if (!name || !item || name === item.name) return
+    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, name } : i)))
+    try { await renameLibraryItem(item, name) } catch { setItems(prev => prev.map(i => (i.id === item.id ? item : i))) }
   }
 
-  // Items for the non-loop tabs
-  const filtered = activeCategory === 'all'
-    ? items
-    : items.filter(i => i.type === activeCategory || i.category === activeCategory)
-
-  // Count helpers
-  const countFor = (id) => {
-    if (id === 'all') return items.length
-    if (id === 'loop') return 0  // loops are in their own panel
-    return items.filter(i => i.type === id || i.category === id).length
+  const counts = {
+    all: items.length,
+    presentation: items.filter(i => i.type === 'presentation').length,
+    image: items.filter(i => i.type === 'image').length,
   }
+  const q = query.toLowerCase()
+  const shown = items
+    .filter(i => tab === 'all' || i.type === tab)
+    .filter(i => !q || i.name.toLowerCase().includes(q))
 
   return (
     <Layout>
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4"
+        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={e => { if (e.currentTarget === e.target) setDragOver(false) }}
+        onDrop={e => { e.preventDefault(); setDragOver(false); pickFiles(e.dataTransfer.files) }}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Content Library</h1>
-            <p className="text-muted text-sm mt-1">Presentations, images and custom folders</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold">Content Library</h1>
+            <p className="text-muted text-xs sm:text-sm mt-0.5">PDFs and images for your sets. A PDF with several pages becomes a slide folder.</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Google Drive button */}
-            <button
-              onClick={openGoogleDrivePicker}
-              disabled={gDriveLoading}
-              className="btn-secondary flex items-center gap-2 text-sm"
-            >
-              {gDriveLoading
-                ? <Loader2 size={15} className="animate-spin" />
-                : <GoogleDriveIcon size={15} />
-              }
-              Google Drive
-            </button>
-
-            {/* Upload from Desktop */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="btn-primary flex items-center gap-2 text-sm"
-              disabled={uploading}
-            >
-              {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-              {uploading ? 'Uploading…' : 'Upload from Desktop'}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pptx,.ppt,.key,.keynote,.pdf,.jpg,.jpeg,.png,.gif,.webp,.svg"
-              className="hidden"
-              onChange={e => handleFiles(e.target.files)}
-            />
-          </div>
+          <button onClick={() => fileRef.current?.click()} disabled={!!busy || !!review}
+            className="btn-primary shrink-0 flex items-center gap-1.5 text-sm disabled:opacity-60">
+            {busy && !review ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+            <span className="hidden sm:inline">Import PDF or Image</span><span className="sm:hidden">Import</span>
+          </button>
+          <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden"
+            onChange={e => { pickFiles(e.target.files); e.target.value = '' }} />
         </div>
 
-        {/* Google Drive error banner */}
-        {gDriveError && (
-          <div className="card border-red-500/30 bg-red-500/5 flex items-start gap-3">
-            <GoogleDriveIcon size={18} />
-            <div className="flex-1 text-sm space-y-1">
-              <p className="font-medium text-red-400">Google Drive error</p>
-              <p className="text-muted">{gDriveError}</p>
-            </div>
-            <button onClick={() => setGDriveError(null)} className="text-muted hover:text-[#f5f5f5] mt-0.5 shrink-0"><X size={14} /></button>
+        {busy && !review && <p className="text-xs text-muted flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> {busy}</p>}
+        {error && !review && <p className="text-xs text-red-400">{error}</p>}
+        {review && <ImportReview groups={review} busy={busy} error={error} onCancel={cancelReview} onSave={saveReview}
+          onChangeName={(gi, name) => setReview(r => r.map((g, i) => (i === gi ? { ...g, name } : g)))} />}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 flex-wrap">
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`px-3 h-8 rounded-lg text-sm font-medium border transition-colors ${tab === t.id ? 'bg-accent/20 text-accent-light border-accent/40' : 'bg-card text-muted border-border hover:text-[#f5f5f5]'}`}>
+                {t.label}{t.id !== 'loop' && <span className="ml-1 text-xs opacity-60">{counts[t.id]}</span>}
+              </button>
+            ))}
           </div>
-        )}
-
-        {/* Tabs */}
-        <div className="flex items-end gap-1 border-b border-border overflow-x-auto">
-          {/* Fixed tabs */}
-          {FIXED_TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveCategory(tab.id)}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap flex items-center gap-1.5 ${
-                activeCategory === tab.id
-                  ? 'border-accent text-accent-light'
-                  : 'border-transparent text-muted hover:text-[#f5f5f5]'
-              }`}
-            >
-              {tab.label}
-              {countFor(tab.id) > 0 && (
-                <span className="text-[10px] bg-card px-1.5 py-0.5 rounded-full">{countFor(tab.id)}</span>
-              )}
-            </button>
-          ))}
-
-          {/* Custom folder tabs */}
-          {customFolders.map(folder => (
-            <div key={folder} className="relative group/tab flex items-end">
-              <button
-                onClick={() => setActiveCategory(folder)}
-                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap flex items-center gap-1.5 pr-2 ${
-                  activeCategory === folder
-                    ? 'border-accent text-accent-light'
-                    : 'border-transparent text-muted hover:text-[#f5f5f5]'
-                }`}
-              >
-                <Folder size={12} />
-                {folder}
-                {countFor(folder) > 0 && (
-                  <span className="text-[10px] bg-card px-1.5 py-0.5 rounded-full">{countFor(folder)}</span>
-                )}
-              </button>
-              <button
-                onClick={() => deleteFolder(folder)}
-                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-card border border-border flex items-center justify-center opacity-0 group-hover/tab:opacity-100 transition-opacity hover:bg-red-700/30 hover:text-red-400 text-muted"
-                title="Remove folder"
-              >
-                <X size={8} />
-              </button>
+          {tab !== 'loop' && (
+            <div className="relative flex-1 min-w-[10rem] sm:max-w-xs sm:ml-auto">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input className="input !pl-9 !h-8 text-sm" placeholder="Search…" value={query} onChange={e => setQuery(e.target.value)} />
             </div>
-          ))}
-
-          {/* New folder input or + button */}
-          <div className="flex items-center pb-1 ml-1 shrink-0">
-            {addingFolder ? (
-              <div className="flex items-center gap-1">
-                <input
-                  ref={folderInputRef}
-                  className="bg-card border border-border rounded-lg px-2 py-1 text-sm w-32 focus:outline-none focus:border-accent"
-                  placeholder="Folder name"
-                  value={newFolderName}
-                  onChange={e => setNewFolderName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') createFolder()
-                    if (e.key === 'Escape') { setAddingFolder(false); setNewFolderName('') }
-                  }}
-                />
-                <button onClick={createFolder} className="btn-primary px-2 py-1 text-xs">Add</button>
-                <button onClick={() => { setAddingFolder(false); setNewFolderName('') }} className="btn-ghost p-1 rounded"><X size={13} /></button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setAddingFolder(true)}
-                className="flex items-center gap-1 text-xs text-muted hover:text-[#f5f5f5] px-2 py-1 rounded-lg hover:bg-card transition-colors"
-                title="New folder"
-              >
-                <Plus size={13} /> New Folder
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* Photo import row — Images tab only */}
-        {activeCategory === 'image' && (
-          <div className="flex items-center gap-3 py-1">
-            <span className="text-xs text-muted font-medium uppercase tracking-wider">Import from</span>
-            <button
-              onClick={() => setShowGPhotosImages(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted hover:text-primary hover:border-accent/50 transition-colors"
-            >
-              <GooglePhotosIcon size={14} /> Google Photos
-            </button>
-            <button
-              onClick={() => applePhotosRef.current?.click()}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-muted hover:text-primary hover:border-accent/50 transition-colors"
-            >
-              <ApplePhotosIcon size={14} /> Apple Photos
-            </button>
-            <input
-              ref={applePhotosRef}
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
-            />
-          </div>
-        )}
-
-        {/* Drop zone — hidden on Loops tab */}
-        {activeCategory !== 'loop' && (
-          <div
-            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files) }}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${
-              dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-[#444]'
-            }`}
-          >
-            <Upload size={28} className="mx-auto text-muted mb-3" />
-            <p className="text-sm text-muted">
-              Drag & drop files here, or <span className="text-accent-light">browse to upload</span>
-              {activeCategory !== 'all' && (
-                <span className="text-muted"> into <span className="text-[#f5f5f5]">{getCategoryLabel(activeCategory)}</span></span>
-              )}
-            </p>
-            <p className="text-xs text-muted/60 mt-1">PowerPoint (.pptx), Keynote (.key), PDF, JPG, PNG and more</p>
-          </div>
-        )}
-
-        {/* Loops panel — replaces file grid when Loops tab is active */}
-        {activeCategory === 'loop' && <LoopsPanel userId={user.id} />}
-
-        {/* Items */}
-        {activeCategory !== 'loop' && loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : activeCategory !== 'loop' && filtered.length === 0 ? (
-          <div className="text-center py-10 space-y-3">
-            <FolderOpen size={36} className="text-muted mx-auto" />
-            <p className="text-muted text-sm">
-              {activeCategory === 'all' ? 'No files yet.' : `No files in ${getCategoryLabel(activeCategory)} yet.`}
-            </p>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="btn-primary mx-auto flex items-center gap-2"
-            >
-              <Plus size={14} /> Upload a file
-            </button>
-          </div>
-        ) : activeCategory !== 'loop' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtered.map(item => {
-              const Icon = FIXED_ICONS[item.type] || FIXED_ICONS[item.category] || Folder
-              const colorClass = FIXED_COLORS[item.type] || FIXED_COLORS[item.category] || 'text-accent-light bg-accent/10'
+        {tab === 'loop' ? <LoopsPanel userId={user.id} /> : loading ? (
+          <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
+        ) : shown.length === 0 ? (
+          <button onClick={() => fileRef.current?.click()}
+            className={`w-full rounded-xl border-2 border-dashed p-10 text-center transition-colors ${dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'}`}>
+            <Upload size={28} className="mx-auto text-accent-light mb-2" />
+            <p className="text-sm font-medium">{items.length ? 'Nothing matches.' : 'Import a PDF or an image'}</p>
+            <p className="text-xs text-muted mt-1">Drop files here or tap to choose. PowerPoint or Keynote? Export to PDF first.</p>
+          </button>
+        ) : (
+          <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 ${dragOver ? 'ring-2 ring-accent/50 rounded-xl' : ''}`}>
+            {shown.map(item => {
+              const slides = itemSlides(item)
+              const folder = item.type === 'presentation'
+              const old = slides.length === 0
               return (
-                <div key={item.id} className="card flex items-center gap-3 group hover:border-[#444] transition-colors">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
-                    <Icon size={18} />
+                <div key={item.id} className="rounded-xl border border-border bg-card overflow-hidden group">
+                  <button onClick={() => !old && setViewing(item)} disabled={old}
+                    className="relative block w-full aspect-video bg-black">
+                    {old ? (
+                      <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted text-[11px] px-2 text-center">
+                        <Monitor size={20} /> Old file — re-import as a PDF to use it as slides
+                      </span>
+                    ) : <img src={slides[0].url} alt="" className="w-full h-full object-contain" loading="lazy" />}
+                    {folder && !old && (
+                      <span className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 h-5 rounded bg-black/75 text-white text-[10px]">
+                        <Folder size={10} /> {slides.length}
+                      </span>
+                    )}
+                  </button>
+                  <div className="flex items-center gap-1 px-2 py-1.5">
+                    {renaming?.id === item.id ? (
+                      <input autoFocus className="input !h-7 !py-0 !px-2 text-xs flex-1 min-w-0" value={renaming.name}
+                        onChange={e => setRenaming(r => ({ ...r, name: e.target.value }))} onBlur={saveRename}
+                        onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(null) }} />
+                    ) : (
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" title={item.name}>{item.name}</p>
+                        <p className="text-[10px] text-muted">{folder ? `Slide folder · ${slides.length} slides` : 'Image'} · {formatDate(item.created_at)}</p>
+                      </div>
+                    )}
+                    <button onClick={() => setRenaming({ id: item.id, name: item.name })} aria-label={`Rename ${item.name}`} title="Rename"
+                      className="p-1.5 rounded-lg text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0"><Pencil size={13} /></button>
+                    <button onClick={() => remove(item)} aria-label={`Delete ${item.name}`} title={confirmDel === item.id ? 'Tap again to delete' : 'Delete'}
+                      className={`p-1.5 rounded-lg shrink-0 transition-colors ${confirmDel === item.id ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400 hover:bg-red-500/10'}`}><Trash2 size={13} /></button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                    <p className="text-xs text-muted">
-                      {getCategoryLabel(item.type || item.category)}
-                      {item.file_size ? ` · ${formatSize(item.file_size)}` : ''}
-                      {' · '}{formatDate(item.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <a
-                      href={getPublicUrl(item)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 rounded hover:bg-[#333] text-muted hover:text-primary"
-                      title="Open file"
-                    >
-                      <ExternalLink size={13} />
-                    </a>
-                    <button
-                      onClick={() => handleDelete(item)}
-                      className="p-1.5 rounded hover:bg-red-700/30 text-muted hover:text-red-400"
-                      title="Delete"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
+                  {confirmDel === item.id && <p className="px-2 pb-1.5 text-[10px] text-red-300 leading-snug">Tap again to delete. Sets that use it will lose these slides.</p>}
                 </div>
               )
             })}
           </div>
-        ) : null}
+        )}
       </div>
-
-      {/* Google Photos picker for Images tab */}
-      {showGPhotosImages && (
-        <GooglePhotosPicker
-          userId={user.id}
-          mode="images"
-          onSelect={handleGPhotosImages}
-          onClose={() => setShowGPhotosImages(false)}
-        />
-      )}
-
-      {/* Upload progress toast */}
-      {uploading && uploadProgress.total > 0 && (
-        <UploadProgress
-          current={uploadProgress.current}
-          total={uploadProgress.total}
-          label="Uploading files…"
-        />
-      )}
-      {gDriveLoading && uploadProgress.total > 0 && (
-        <UploadProgress
-          current={uploadProgress.current}
-          total={uploadProgress.total}
-          label="Importing from Drive…"
-        />
-      )}
+      {viewing && <SlidesViewer item={viewing} onClose={() => setViewing(null)} />}
     </Layout>
   )
 }
