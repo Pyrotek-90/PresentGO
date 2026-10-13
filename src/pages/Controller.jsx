@@ -160,9 +160,6 @@ function SlideThumb({ slide, live, onClick, className = '', large = false, fit =
         <TitleSlide title={slide.title} subtitle={slide.subtitle} style={slide.style} unit="cqw" />
       ) : slide ? (
         <div className="text-center w-full" style={{ fontSize: fit || '6cqw' }}>
-          {slide.label && !large && (
-            <p className="text-gray-500 uppercase tracking-wider mb-1" style={{ fontSize: 9 }}>{slide.label}</p>
-          )}
           {lines.map((line, i) => (
             <div key={i} style={{ marginTop: i ? '0.5em' : 0 }}>
               <p className="text-white font-light leading-snug whitespace-nowrap">{line}</p>
@@ -186,55 +183,48 @@ const ITEM_COLORS = {
   announcement: 'text-orange-400', media: 'text-purple-400',
 }
 
-// ─── Smart slide strip (bottom) ──────────────────────────────────────────────
+// ─── Slide matrix (bottom) ───────────────────────────────────────────────────
 
-// Slides of one item along the bottom. Thumbnails fill the strip's height; `focus` = { idx, n }
-// scrolls that slide to the front (used by the section buttons).
-function SmartStrip({ group, current, blank, onGo, fits, focus }) {
-  const wrapRef = useRef(null)
-  const rowRef = useRef(null)
-  const labelRef = useRef(null)
-  const [h, setH] = useState(160)
-
-  useEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([e]) => setH(e.contentRect.height))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+// All slides of one item in a grid. `focus` = { idx, n } scrolls that slide's row to the top
+// (used by the section buttons); otherwise the live slide is kept in view.
+function SlideMatrix({ group, current, blank, onGo, fits, focus }) {
+  const boxRef = useRef(null)
 
   const scrollToIdx = (idx, mode) => {
-    const row = rowRef.current
-    const btn = row?.querySelector(`[data-idx="${idx}"]`)
-    if (!row || !btn) return
-    const lead = (labelRef.current?.offsetWidth || 0) + 8
-    if (mode === 'first') { row.scrollTo({ left: btn.offsetLeft - lead, behavior: 'smooth' }); return }
-    const left = btn.offsetLeft - lead, right = btn.offsetLeft + btn.offsetWidth
-    if (left < row.scrollLeft || right > row.scrollLeft + row.clientWidth) row.scrollTo({ left, behavior: 'smooth' })
+    const box = boxRef.current
+    const cell = box?.querySelector(`[data-idx="${idx}"]`)
+    if (!box || !cell) return
+    const top = cell.offsetTop - box.offsetTop - 8
+    if (mode === 'first') { box.scrollTo({ top, behavior: 'smooth' }); return }
+    const bottom = top + cell.offsetHeight + 16
+    if (top < box.scrollTop || bottom > box.scrollTop + box.clientHeight) box.scrollTo({ top, behavior: 'smooth' })
   }
   useEffect(() => { if (focus) scrollToIdx(focus.idx, 'first') }, [focus?.n])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { scrollToIdx(current, 'visible') }, [current, group?.itemId])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!group) return <div ref={wrapRef} className="flex-1 min-h-0" />
+  if (!group) return <div className="flex-1 min-h-0" />
   const Icon = ITEM_ICONS[group.type] || Layers
-  const slideH = Math.max(48, Math.min(h - 24, 240))
-  const slideW = Math.round(slideH * 16 / 9)
 
   return (
-    <div ref={wrapRef} className="flex-1 min-h-0 border-t border-border bg-[#0a0a0a] select-none">
-      <div ref={rowRef} className="h-full flex items-center overflow-x-auto pr-3 relative">
-        <div ref={labelRef} className="sticky left-0 z-10 self-stretch flex items-center gap-1.5 shrink-0 pl-3 pr-3 mr-3 border-r border-border bg-[#0a0a0a] max-w-[10rem]">
-          <Icon size={13} className={`shrink-0 ${ITEM_COLORS[group.type] || 'text-muted'}`} />
-          <span className="text-xs text-muted font-medium line-clamp-3">{group.itemTitle}</span>
-        </div>
-        {group.slides.map(s => (
-          <div key={s.idx} data-idx={s.idx} className="shrink-0 mr-2 relative" style={{ width: slideW, height: slideH }}>
-            <SlideThumb slide={s} live={s.idx === current && !blank} onClick={() => onGo(s.idx)} fit={fits[s.itemId]} className="!rounded-lg" />
-            <span className="absolute bottom-1 right-1.5 text-[9px] text-gray-600 pointer-events-none">{s.idx + 1}</span>
-          </div>
-        ))}
+    <div ref={boxRef} className="flex-1 min-h-0 overflow-y-auto border-t border-border px-4 pt-3 pb-6 select-none relative">
+      <div className="grid gap-2.5 grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+        {group.slides.map(s => {
+          const live = s.idx === current && !blank
+          return (
+            <div key={s.idx} data-idx={s.idx} className="relative aspect-video">
+              <SlideThumb slide={s} live={live} onClick={() => onGo(s.idx)} fit={fits[s.itemId]} className="!rounded-lg" />
+              {s.label && (
+                <span className="absolute top-1 left-1.5 text-[9px] font-semibold uppercase tracking-wider text-gray-400 bg-black/70 px-1 rounded pointer-events-none">{s.label}</span>
+              )}
+              {live && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 pointer-events-none" />}
+              <span className="absolute bottom-1 right-1.5 text-[9px] text-gray-600 pointer-events-none">{s.idx + 1}</span>
+            </div>
+          )
+        })}
       </div>
+      {group.slides.length === 0 && (
+        <p className="text-xs text-muted flex items-center gap-1.5"><Icon size={13} /> No slides</p>
+      )}
     </div>
   )
 }
@@ -250,29 +240,8 @@ export default function Controller() {
   const [setName, setSetName]     = useState('')
   const [connected, setConnected] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState(null)
-  const [rightWidth, setRightWidth] = useState(240)
   const [stripFocus, setStripFocus] = useState(null)   // { idx, n }: scroll the strip so idx comes first
-  const rightDragRef = useRef(null)
   const channelRef = useRef(null)
-
-  const startRightDrag = useCallback((clientX) => {
-    rightDragRef.current = { x: clientX, w: rightWidth }
-    const onMove = (e) => {
-      const cx = e.touches ? e.touches[0].clientX : e.clientX
-      const delta = rightDragRef.current.x - cx
-      setRightWidth(Math.max(160, Math.min(420, rightDragRef.current.w + delta)))
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      window.removeEventListener('touchmove', onMove)
-      window.removeEventListener('touchend', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    window.addEventListener('touchmove', onMove, { passive: false })
-    window.addEventListener('touchend', onUp)
-  }, [rightWidth])
 
   useEffect(() => {
     async function load() {
@@ -410,181 +379,88 @@ export default function Controller() {
   const activeSection = [...currentSections].reverse().find(sec => sec.idx <= current)
   const jumpToSection = idx => { go(idx); setStripFocus(f => ({ idx, n: (f?.n || 0) + 1 })) }
 
+  const groupForGrid = groups.find(g => g.itemId === selectedGroupId) || currentGroup
+  const navBtn = 'h-10 rounded-xl border text-sm font-semibold transition-colors disabled:opacity-30'
+
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-          <span className="text-xs text-red-400 font-medium uppercase tracking-wide shrink-0">Live</span>
-          <span className="text-muted shrink-0">·</span>
-          <span className="font-medium text-sm truncate">{setName}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-muted">{current + 1} / {slides.length}</span>
-          <button onClick={handleDisconnect} className="btn-danger flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <X size={14} /> End
-          </button>
-        </div>
+      <div className="flex items-center gap-2 px-4 h-[52px] border-b border-border shrink-0">
+        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+        <span className="text-xs text-red-400 font-semibold uppercase tracking-wide shrink-0">Live</span>
+        <span className="text-muted shrink-0">·</span>
+        <span className="font-medium text-sm truncate">{setName}</span>
+        <span className="ml-auto text-xs text-muted shrink-0 hidden sm:inline">Slide {current + 1} of {slides.length}</span>
+        <button onClick={toggleBlank} title="Blank the screen (B)"
+          className={`h-9 px-3 rounded-lg border text-sm font-medium shrink-0 flex items-center gap-1.5 transition-colors ${blank ? 'border-white bg-white/10 text-white' : 'border-border text-[#e5e5e5] hover:border-[#555]'}`}>
+          <XSquare size={14} /> {blank ? 'Unblank' : 'Blank'}
+        </button>
+        <button onClick={handleDisconnect} className="btn-danger flex items-center gap-1.5 text-sm px-3 h-9 shrink-0">
+          <X size={14} /> End
+        </button>
       </div>
 
-      {/* Two-column body */}
-      <div className="flex flex-1 min-h-0">
-
-        {/* Left: Now Showing (top half) and the item's slides (bottom half) */}
-        <div className="flex-1 min-w-0 flex flex-col border-r border-border">
-        <div className="flex flex-col gap-1.5 p-3 min-h-0" style={{ flex: '1 1 0' }}>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            <p className="text-xs font-medium text-red-400">{blank ? 'Screen Blanked' : 'Now Showing'}</p>
-          </div>
-          <div className="flex-1 min-h-0 relative group/preview">
-            <div className="h-full mx-auto" style={{ aspectRatio: '16 / 9', maxWidth: '100%' }}>
+      {/* Top row: Now Showing | Up Next | Run Order */}
+      <div className="flex gap-3 px-4 pt-3 shrink-0" style={{ height: 'clamp(200px, 40%, 360px)' }}>
+        <section className="min-w-0 flex flex-col gap-1.5" style={{ flex: '1.55 1 0' }}>
+          <p className="text-xs font-semibold text-red-400 shrink-0">● {blank ? 'Screen Blanked' : 'Now Showing'}</p>
+          <div className="flex-1 min-h-0" style={{ containerType: 'size' }}>
+            <div style={{ width: 'min(100cqw, 100cqh * 16 / 9)', aspectRatio: '16 / 9' }}>
               <SlideThumb slide={blank ? null : curr} live={!blank} onClick={() => {}} large fit={curr ? fits[curr.itemId] : null} />
             </div>
-            {/* Left overlay arrow */}
-            <button
-              onClick={() => go(current - 1)}
-              disabled={current === 0}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 opacity-0 group-hover/preview:opacity-100 disabled:opacity-0 transition-all"
-            >
-              <ChevronLeft size={22} />
-            </button>
-            {/* Right overlay arrow */}
-            <button
-              onClick={() => go(current + 1)}
-              disabled={current >= slides.length - 1}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 opacity-0 group-hover/preview:opacity-100 disabled:opacity-0 transition-all"
-            >
-              <ChevronRight size={22} />
-            </button>
           </div>
-        </div>
-
-          <div className="flex flex-col min-h-0" style={{ flex: '1 1 0' }}>
-            <SmartStrip
-              group={groups.find(g => g.itemId === selectedGroupId) || currentGroup}
-              current={current}
-              blank={blank}
-              onGo={go}
-              fits={fits}
-              focus={stripFocus}
-            />
-          </div>
-        </div>
-
-        {/* Right: Up Next + sections + blank + Run Order */}
-        <div className="shrink-0 flex flex-col overflow-hidden relative" style={{ width: rightWidth }}>
-          {/* Drag handle — left edge */}
-          <div
-            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-10 hover:bg-accent/20 transition-colors select-none"
-            onMouseDown={e => { e.preventDefault(); startRightDrag(e.clientX) }}
-            onTouchStart={e => startRightDrag(e.touches[0].clientX)}
-          />
-
-          {/* Up Next thumbnail */}
-          <div className="shrink-0 pl-4 pr-3 pt-3 pb-3 border-b border-border space-y-1.5">
-            <p className="text-xs font-medium text-muted">Up Next</p>
-            <div className="aspect-video w-full">
+        </section>
+        <section className="min-w-0 flex flex-col gap-1.5" style={{ flex: '1 1 0' }}>
+          <p className="text-xs font-semibold text-muted shrink-0 truncate">Up Next{next?.label ? ` · ${next.label}` : next && next.itemId !== curr?.itemId ? ` · ${next.itemTitle}` : ''}</p>
+          <div className="flex-1 min-h-0" style={{ containerType: 'size' }}>
+            <div style={{ width: 'min(100cqw, 100cqh * 16 / 9)', aspectRatio: '16 / 9' }}>
               <SlideThumb slide={next} live={false} onClick={() => go(current + 1)} fit={next ? fits[next.itemId] : null} />
             </div>
           </div>
-
-          {/* Section jumps + Blank icon — same row, same size */}
-          {currentSections.length > 1 && (
-            <div className="shrink-0 pl-4 pr-3 py-2 border-b border-border flex flex-wrap items-center gap-1">
-              {currentSections.map(sec => (
-                <button
-                  key={sec.idx}
-                  onClick={() => jumpToSection(sec.idx)}
-                  title={sec.label}
-                  className={`min-w-[2rem] h-7 px-1.5 flex items-center justify-center rounded border text-[11px] font-medium transition-colors ${
-                    activeSection?.idx === sec.idx
-                      ? 'border-accent/60 text-accent-light bg-accent/10'
-                      : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#444]'
-                  }`}
-                >
-                  {abbreviate(sec.label)}
-                </button>
-              ))}
-              <button
-                onClick={toggleBlank}
-                title={blank ? 'Unblank Screen' : 'Blank Screen'}
-                className={`w-8 h-7 flex items-center justify-center rounded border transition-colors ${
-                  blank
-                    ? 'border-white text-white bg-white/10'
-                    : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#444]'
-                }`}
-              >
-                <XSquare size={14} />
-              </button>
-            </div>
-          )}
-
-          {/* Blank Screen — shown when no sections */}
-          {currentSections.length <= 1 && (
-            <div className="shrink-0 pl-4 pr-3 py-2 border-b border-border flex">
-              <button
-                onClick={toggleBlank}
-                title={blank ? 'Unblank Screen' : 'Blank Screen'}
-                className={`w-8 h-7 flex items-center justify-center rounded border transition-colors ${
-                  blank
-                    ? 'border-white text-white bg-white/10'
-                    : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#444]'
-                }`}
-              >
-                <XSquare size={14} />
-              </button>
-            </div>
-          )}
-
-          {/* Run Order — scrollable */}
+        </section>
+        <section className="w-[200px] lg:w-[250px] shrink-0 hidden md:flex flex-col rounded-xl border border-border bg-[#111] overflow-hidden">
+          <p className="px-3 py-2.5 text-[10px] font-semibold tracking-widest text-muted border-b border-border shrink-0">RUN ORDER</p>
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="px-3 py-1.5 border-b border-border">
-              <span className="text-[10px] text-muted uppercase tracking-wider font-medium">Run Order</span>
-            </div>
+            {groups.map(group => {
+              const isActive = currentGroup?.itemId === group.itemId
+              const isSelected = selectedGroupId === group.itemId
+              return (
+                <button key={group.itemId} onClick={() => { setSelectedGroupId(group.itemId); go(group.firstIdx) }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#1f1f1f] text-left text-sm transition-colors ${
+                    isActive ? 'bg-[#1a1a1a] text-white font-semibold' : isSelected ? 'bg-card/30 text-muted' : 'text-muted hover:bg-card/30'}`}>
+                  {isActive ? <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" /> : <span className="w-2 h-2 rounded-full border border-[#525252] shrink-0" />}
+                  <span className="flex-1 truncate">{group.itemTitle}</span>
+                  {isActive && <span className="text-[11px] text-red-400 shrink-0">{current - group.firstIdx + 1}/{group.slides.length}</span>}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      </div>
 
-            {groups.map((group) => {
-          const Icon = ITEM_ICONS[group.type] || Layers
-          const colorClass = ITEM_COLORS[group.type] || 'text-muted'
-          const isActive = currentGroup?.itemId === group.itemId
-          const isSelected = selectedGroupId === group.itemId
-
-          return (
-            <button
-              key={group.itemId}
-              onClick={() => { setSelectedGroupId(group.itemId); go(group.firstIdx) }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 border-b border-border transition-colors text-left ${
-                isSelected && !isActive ? 'bg-card/30' : isActive ? 'bg-card/50' : 'hover:bg-card/30'
-              }`}
-            >
-              {isActive
-                ? <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" />
-                : <span className="w-2 h-2 rounded-full border border-border shrink-0" />
-              }
-              <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${isActive ? 'bg-accent/20' : 'bg-card'}`}>
-                <Icon size={13} className={colorClass} />
-              </div>
-              <span className={`text-sm font-medium flex-1 truncate ${isActive ? 'text-[#f5f5f5]' : 'text-muted'}`}>
-                {group.itemTitle}
-              </span>
-              {isActive && (
-                <span className="text-[10px] text-red-400 font-medium shrink-0">
-                  {current - group.firstIdx + 1}/{group.slides.length}
-                </span>
-              )}
+      {/* Song name, arrangement sections, Back / Next */}
+      <div className="flex items-center gap-2 px-4 py-3 shrink-0">
+        <span className="text-sm font-semibold truncate max-w-[14rem] mr-1">{groupForGrid?.itemTitle}</span>
+        <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+          {groupForGrid?.itemId === currentGroup?.itemId && currentSections.map(sec => (
+            <button key={sec.idx} onClick={() => jumpToSection(sec.idx)} title={sec.label}
+              className={`shrink-0 h-8 min-w-[2.5rem] px-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+                activeSection?.idx === sec.idx ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#555]'}`}>
+              {abbreviate(sec.label)}
             </button>
-          )
-        })}
-          </div>
-          {/* keyboard hint */}
-          <div className="shrink-0 px-3 py-1.5 border-t border-border">
-            <p className="text-[10px] text-muted text-center">← → · B blank · Esc end</p>
-          </div>
+          ))}
+        </div>
+        <div className="ml-auto flex gap-2 shrink-0">
+          <button onClick={() => go(current - 1)} disabled={current === 0} aria-label="Previous slide"
+            className={`${navBtn} w-14 border-border bg-[#171717] text-[#e5e5e5] flex items-center justify-center`}><ChevronLeft size={20} /></button>
+          <button onClick={() => go(current + 1)} disabled={current >= slides.length - 1} aria-label="Next slide"
+            className={`${navBtn} w-24 border-transparent bg-accent hover:bg-accent-hover text-white flex items-center justify-center gap-1`}>Next <ChevronRight size={18} /></button>
         </div>
       </div>
 
+      {/* Slide grid */}
+      <SlideMatrix group={groupForGrid} current={current} blank={blank} onGo={go} fits={fits} focus={stripFocus} />
     </div>
   )
 }
