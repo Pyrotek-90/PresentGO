@@ -1247,35 +1247,33 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
       {/* Song details on one line: key (set on the Chords step), tempo, CCLI # */}
       <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
         <button type="button" onClick={() => setStep(4)} title="Original key — change on the Chords step"
-          className={`h-11 min-w-0 flex flex-col items-center justify-center rounded-lg border hover:border-accent/50 ${songKey ? 'border-border bg-card' : 'border-dashed border-border'}`}>
-          <span className="text-[9px] uppercase tracking-wider text-muted leading-none">Key</span>
-          <span className={`mt-1 truncate max-w-full px-1 leading-none ${songKey ? 'text-sm font-semibold' : 'text-xs text-muted'}`}>{songKey ? songKey.replace(' Major', '').replace(' Minor', 'm') : 'Set'}</span>
+          className={`h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border hover:border-accent/50 ${songKey ? 'border-border bg-card' : 'border-dashed border-border'}`}>
+          <span className="text-[9px] uppercase tracking-normal sm:tracking-wider text-muted shrink-0">Key</span>
+          <span className={`truncate ${songKey ? 'text-sm font-semibold' : 'text-xs text-muted'}`}>{songKey ? songKey.replace(' Major', '').replace(' Minor', 'm') : 'Set'}</span>
         </button>
-        <label className="h-11 min-w-0 flex flex-col items-center justify-center rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
-          <span className="text-[9px] uppercase tracking-wider text-muted leading-none">BPM</span>
-          <input className="mt-1 w-full min-w-0 bg-transparent text-sm font-semibold text-center leading-none focus:outline-none px-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        <label className="h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
+          <span className="text-[9px] uppercase tracking-normal sm:tracking-wider text-muted shrink-0">BPM</span>
+          <input className="w-full min-w-0 max-w-[2.75rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             type="number" inputMode="numeric" min="40" max="240" placeholder="75" value={bpm} onChange={e => setBpm(e.target.value)} />
         </label>
-        <label className="h-11 min-w-0 flex flex-col items-center justify-center rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
-          <span className="text-[9px] uppercase tracking-wider text-muted leading-none">CCLI</span>
-          <input className="mt-1 w-full min-w-0 bg-transparent text-sm font-semibold text-center leading-none focus:outline-none px-1" inputMode="numeric" placeholder="22025" value={ccliNumber}
+        <label className="h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
+          <span className="text-[9px] uppercase tracking-normal sm:tracking-wider text-muted shrink-0">CCLI</span>
+          <input className="w-full min-w-0 max-w-[4.5rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none" inputMode="numeric" placeholder="22025" value={ccliNumber}
             onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
         </label>
         {youtubeId && !ytOpen ? (
-          <div className="h-11 min-w-0 flex rounded-lg overflow-hidden border border-red-500/50">
+          <div className="h-9 min-w-0 flex rounded-lg overflow-hidden border border-red-500/50">
             <a href={youtubeUrl} target="_blank" rel="noreferrer" title="Play on YouTube (new tab)" aria-label="Play on YouTube"
-              className="flex-1 min-w-0 flex flex-col items-center justify-center bg-red-600 hover:bg-red-500 text-white">
-              <span className="text-[9px] uppercase tracking-wider leading-none opacity-80">YouTube</span>
-              <Play size={14} fill="currentColor" className="mt-1" />
+              className="flex-1 min-w-0 flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold">
+              <Play size={13} fill="currentColor" /> <span className="hidden sm:inline">YouTube</span>
             </a>
             <button type="button" onClick={() => setYtOpen(true)} title="Change YouTube link" aria-label="Change YouTube link"
               className="w-6 sm:w-8 shrink-0 flex items-center justify-center text-red-300 hover:text-white hover:bg-red-600/40"><Pencil size={11} /></button>
           </div>
         ) : (
           <button type="button" onClick={() => setYtOpen(o => !o)} aria-expanded={ytOpen} title="Link a YouTube video" aria-label="Link a YouTube video"
-            className={`h-11 min-w-0 flex flex-col items-center justify-center rounded-lg border transition-colors ${ytOpen ? 'border-red-500/60 bg-red-500/10 text-red-300' : 'border-dashed border-border text-muted hover:text-[#f5f5f5] hover:border-red-500/50'}`}>
-            <span className="text-[9px] uppercase tracking-wider leading-none">YouTube</span>
-            <span className="mt-1 flex items-center gap-1 text-xs leading-none"><Youtube size={13} className="text-red-400" /> Link</span>
+            className={`h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border text-xs transition-colors ${ytOpen ? 'border-red-500/60 bg-red-500/10 text-red-300' : 'border-dashed border-border text-muted hover:text-[#f5f5f5] hover:border-red-500/50'}`}>
+            <Youtube size={14} className="text-red-400 shrink-0" /> <span className="truncate">Link</span>
           </button>
         )}
       </div>
