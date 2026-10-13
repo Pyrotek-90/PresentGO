@@ -25,8 +25,8 @@ const REPEAT_RE = /\s+\(?\s*(?:[x×]\s*\d+|\d+\s*[x×])\s*\)?\s*$/i
 const PAGE_NO_RE = /^\d{1,3}$/
 
 async function loadPdfjs() {
-  const pdfjs = await import('pdfjs-dist')
-  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const workerUrl = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
   return pdfjs
 }
