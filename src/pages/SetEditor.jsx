@@ -16,17 +16,18 @@ import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
 import { formatLyrics } from '../lib/lyricFormatter'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown,
+  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen,
 } from 'lucide-react'
 
-const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen }
-const ITEM_LABELS = { song: 'Song', welcome: 'Welcome', announcement: 'Announcement', blank: 'Blank', media: 'Content' }
+const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen, note: NotebookPen }
+const ITEM_LABELS = { song: 'Song', welcome: 'Welcome', announcement: 'Announcement', blank: 'Blank', media: 'Content', note: 'Worship Leader Note · Song Viewer only' }
 const ITEM_COLORS = {
   song:         'text-accent-light bg-accent/20',
   welcome:      'text-yellow-400 bg-yellow-400/10',
   announcement: 'text-orange-400 bg-orange-400/10',
   blank:        'text-gray-500 bg-gray-500/10',
   media:        'text-purple-400 bg-purple-400/10',
+  note:         'text-amber-300 bg-amber-400/10',
 }
 
 const REVEAL = 80   // px the row slides to show the trash can
@@ -361,6 +362,41 @@ export default function SetEditor() {
     }
   }
 
+  // Worship Leader Notes go just before their songs. An existing note right before a song is replaced.
+  const handleAddNotes = async notes => {
+    if (setId === 'mock' || !notes.length) return
+    const bySong = new Map(notes.map(n => [n.songItemId, n.content]))
+    const oldPos = new Map(items.map(it => [it.id, it.position]))
+    const next = [], inserts = [], updates = []
+    items.forEach((it, idx) => {
+      const content = bySong.get(it.id)
+      if (content) {
+        const before = items[idx - 1]
+        if (before?.type === 'note' && before.content?.song_id === it.content?.song_id) {
+          updates.push({ id: before.id, content })
+          next[next.length - 1] = { ...next[next.length - 1], content }
+        } else {
+          const row = { set_id: setId, type: 'note', content }
+          inserts.push(row); next.push(row)
+        }
+      }
+      next.push({ ...it })
+    })
+    next.forEach((it, i) => { it.position = i })
+    let saved = []
+    if (inserts.length) {
+      const { data, error } = await supabase.from('set_items').insert(inserts).select()
+      if (error) throw new Error(/check constraint|violates/i.test(error.message) ? 'Run the Worship Leader Notes migration in Supabase first.' : error.message)
+      saved = data || []
+    }
+    await Promise.all([
+      ...updates.map(u => supabase.from('set_items').update({ content: u.content }).eq('id', u.id)),
+      ...next.filter(it => it.id && oldPos.get(it.id) !== it.position)
+        .map(it => supabase.from('set_items').update({ position: it.position }).eq('id', it.id)),
+    ])
+    setItems(next.map(it => (it.id ? it : saved.find(d => d.position === it.position) || it)))
+  }
+
   const handleSaveEdit = async ({ content }) => {
     if (setId !== 'mock') await supabase.from('set_items').update({ content }).eq('id', editItem.id)
     setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, content } : i))
@@ -415,7 +451,11 @@ export default function SetEditor() {
     return []
   }
 
-  const orderedSongs = items.filter(i => i.type === 'song').map(i => (songs[i.content?.song_id] ? { song: songs[i.content.song_id], key: i.content?.key || null } : null)).filter(Boolean)
+  // Song Viewer: songs in order, with any Worship Leader Note just before its song.
+  const orderedSongs = items.map(i =>
+    i.type === 'note' ? { note: i.content }
+    : i.type === 'song' && songs[i.content?.song_id] ? { song: songs[i.content.song_id], key: i.content?.key || null }
+    : null).filter(Boolean)
 
   const openPresent = () => {
     navigate(`/sets/${setId}/control`)
@@ -426,6 +466,7 @@ export default function SetEditor() {
   const itemTitle = item =>
     item.type === 'song'  ? item.content?.song_title :
     item.type === 'media' ? item.content?.media_name :
+    item.type === 'note'  ? `${item.content?.song_title || 'Song'} — Worship Leader Note` :
     item.content?.title || ITEM_LABELS[item.type]
 
   return (
@@ -648,7 +689,12 @@ export default function SetEditor() {
         )}
       </div>
 
-      {showAdd && <AddItemModal onClose={() => setShowAdd(false)} onAdd={handleAddItem} />}
+      {showAdd && <AddItemModal onClose={() => setShowAdd(false)} onAdd={handleAddItem} onAddNotes={handleAddNotes}
+        setSongs={items.map((it, i) => it.type === 'song' ? {
+          itemId: it.id, title: it.content?.song_title || songs[it.content?.song_id]?.title || 'Song',
+          artist: it.content?.song_artist || songs[it.content?.song_id]?.artist || '', song: songs[it.content?.song_id],
+          hasNote: items[i - 1]?.type === 'note' && items[i - 1].content?.song_id === it.content?.song_id,
+        } : null).filter(Boolean)} />}
       {editItem && <AddItemModal item={editItem} onClose={() => setEditItem(null)} onAdd={handleSaveEdit}
         onDelete={async () => { const it = editItem; setEditItem(null); await handleDelete(it) }} />}
       {optionsItem && (

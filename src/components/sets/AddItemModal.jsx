@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2, Filter } from 'lucide-react'
+import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2, Filter, NotebookPen, Check } from 'lucide-react'
 import { filesToSlideImages } from '../../lib/importSlides'
 import { ACCEPT, readImports, saveImport, itemSlides, setItemContent } from '../../lib/contentLibrary'
 import TitleSlide from '../TitleSlide'
@@ -15,6 +15,7 @@ const ITEM_TYPES = [
   { id: 'welcome',      label: 'Title Slide',   icon: Star },
   { id: 'content',      label: 'Content',       icon: FolderOpen },
   { id: 'song',         label: 'Song',          icon: Music },
+  { id: 'note',         label: 'Worship Leader Note', short: 'Leader Note', icon: NotebookPen },
 ]
 
 const MEDIA_ICONS  = { presentation: Monitor, image: Image }
@@ -23,7 +24,7 @@ const MEDIA_COLORS = {
   image:        'text-green-400 bg-green-400/10',
 }
 
-export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
+export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: setSongItems = [], item, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const editing = !!item
   const { user } = useAuth()
@@ -38,6 +39,13 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
   const [mediaItems, setMediaItems]   = useState([])
   const [mediaQuery, setMediaQuery]   = useState('')
   const [mediaLoaded, setMediaLoaded] = useState(false)
+  // Worship Leader Notes
+  const [notePick, setNotePick] = useState(() => setSongItems.filter(s => !s.hasNote).map(s => s.itemId))
+  const [noteBusy, setNoteBusy] = useState(null)
+  const [noteErr, setNoteErr] = useState(null)
+  const [noteEdit, setNoteEdit] = useState(item?.type === 'note' ? {
+    ...item.content, versesText: (item.content?.verses || []).map(v => `${v.reference} — ${v.text}`).join('\n'),
+  } : null)
   const [cImport, setCImport] = useState(null)   // one file read for import: { group, name }
   const [cBusy, setCBusy]     = useState(null)
   const [cErr, setCErr]       = useState(null)
@@ -124,6 +132,45 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
       type: 'song',
       content: { song_id: song.id, song_title: song.title, song_artist: song.artist },
     })
+    onClose()
+  }
+
+  const writeNotes = async () => {
+    const picked = setSongItems.filter(s => notePick.includes(s.itemId))
+    if (!picked.length) return
+    setNoteErr(null)
+    const notes = []
+    try {
+      for (let i = 0; i < picked.length; i++) {
+        const s = picked[i]
+        setNoteBusy(`Writing note ${i + 1} of ${picked.length}: ${s.title}…`)
+        const res = await fetch('/api/worship-note', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: s.title, artist: s.artist, lyrics: s.song?.raw_lyrics || '' }),
+        })
+        let json
+        try { json = await res.json() } catch { throw new Error(res.status === 404 ? 'Worship Leader Notes only work on the deployed app.' : `Server error (${res.status}) — try again.`) }
+        if (!res.ok || json.error) throw new Error(json.error || 'Could not write the note.')
+        notes.push({ songItemId: s.itemId, content: { song_id: s.song?.id || null, song_title: s.title, song_artist: s.artist, ...json } })
+      }
+      setNoteBusy('Adding to the set…')
+      await onAddNotes(notes)
+      onClose()
+    } catch (e) {
+      // Keep any notes already written so the work isn't lost.
+      if (notes.length) { try { await onAddNotes(notes) } catch { /* reported below */ } }
+      setNoteErr(`${e.message || 'Something went wrong'}${notes.length ? ` (${notes.length} note${notes.length > 1 ? 's were' : ' was'} added).` : ''}`)
+      setNoteBusy(null)
+    }
+  }
+
+  const saveNoteEdit = () => {
+    const verses = noteEdit.versesText.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const m = l.match(/^(.+?)\s+[—–-]\s+(.+)$/)
+      return m ? { reference: m[1].trim(), text: m[2].trim().replace(/^[“"]|[”"]$/g, '') } : { reference: l, text: '' }
+    })
+    const { versesText, ...rest } = noteEdit   // eslint-disable-line no-unused-vars
+    onAdd({ type: 'note', content: { ...rest, verses } })
     onClose()
   }
 
@@ -239,8 +286,8 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-4 pt-3 sm:pt-8 bg-black/70">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[85dvh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <h2 className="text-lg font-semibold">{editing ? 'Edit Item' : 'Add to Set'}</h2>
@@ -271,7 +318,7 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
               }`}
             >
               <Icon size={14} />
-              {label}
+              {ITEM_TYPES.find(t => t.id === id)?.short ? <><span className="sm:hidden">{ITEM_TYPES.find(t => t.id === id).short}</span><span className="hidden sm:inline">{label}</span></> : label}
             </button>
           ))}
         </div>}
@@ -343,6 +390,62 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
                 )}
               </div>
               <p className="text-[11px] text-muted text-center">{filtered.length} of {songs.length} songs · tap a song to add it</p>
+            </div>
+          )}
+
+          {/* Worship Leader Note: pick songs already in the set; AI writes a note placed before each */}
+          {type === 'note' && !editing && (
+            setSongItems.length === 0 ? (
+              <div className="text-center py-10 px-4 space-y-2">
+                <NotebookPen size={28} className="mx-auto text-muted" />
+                <p className="text-sm">Add songs to the set first.</p>
+                <p className="text-xs text-muted">Then come back here to add a Worship Leader Note before any of them.</p>
+                <button onClick={() => setType('song')} className="btn-secondary text-sm mt-2">Add a song</button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted leading-snug">AI writes a short summary, a reflection and 2–3 Scripture verses for each song you pick. Each note goes just before its song and shows in the Song Viewer (not on the TV).</p>
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <ul className="divide-y divide-border/60">
+                    {setSongItems.map(s => {
+                      const on = notePick.includes(s.itemId)
+                      return (
+                        <li key={s.itemId}>
+                          <button onClick={() => setNotePick(p => (on ? p.filter(x => x !== s.itemId) : [...p, s.itemId]))} aria-pressed={on} disabled={!!noteBusy}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-[#1a1a1a] transition-colors">
+                            <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center ${on ? 'bg-accent border-accent text-white' : 'border-[#555]'}`}>{on && <Check size={11} />}</span>
+                            <span className="min-w-0 flex-1 truncate"><span className="font-medium">{s.title}</span>{s.artist && <span className="text-xs text-muted"> · {s.artist}</span>}</span>
+                            {s.hasNote && <span className="shrink-0 text-[10px] text-amber-300/90">{on ? 'Will replace note' : 'Has a note'}</span>}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+                {noteErr && <p className="text-xs text-red-400">{noteErr}</p>}
+                <button onClick={writeNotes} disabled={!notePick.length || !!noteBusy} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
+                  {noteBusy ? <><Loader2 size={15} className="animate-spin" /> <span className="truncate">{noteBusy}</span></>
+                    : <><NotebookPen size={15} /> {notePick.length ? `Write ${notePick.length} Worship Leader Note${notePick.length > 1 ? 's' : ''}` : 'Pick songs above'}</>}
+                </button>
+              </div>
+            )
+          )}
+
+          {/* Editing an existing note */}
+          {type === 'note' && editing && noteEdit && (
+            <div className="space-y-3">
+              <p className="text-sm font-semibold">{noteEdit.song_title} <span className="text-xs text-muted font-normal">— Worship Leader Note</span></p>
+              {[['summary', 'Summary', 3], ['reflection', 'Reflection', 5]].map(([k, label, rows]) => (
+                <div key={k}>
+                  <label className="label !mb-1">{label}</label>
+                  <textarea className="input text-sm leading-relaxed" rows={rows} value={noteEdit[k] || ''} onChange={e => setNoteEdit(n => ({ ...n, [k]: e.target.value }))} />
+                </div>
+              ))}
+              <div>
+                <label className="label !mb-1">Scripture <span className="normal-case font-normal text-muted">(one per line: Reference — verse)</span></label>
+                <textarea className="input text-sm leading-relaxed" rows={4} value={noteEdit.versesText} onChange={e => setNoteEdit(n => ({ ...n, versesText: e.target.value }))} />
+              </div>
+              <button onClick={saveNoteEdit} className="btn-primary w-full">Save Changes</button>
             </div>
           )}
 
