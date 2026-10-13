@@ -15,6 +15,10 @@ export default function TitleSlideToolbar({ style, onChange, target }) {
       {/* Keep the text selection in the preview when a toolbar button is pressed */}
       <div onMouseDown={e => { if (e.target.tagName !== 'SELECT' && e.target.tagName !== 'OPTION') e.preventDefault() }}
         className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-2.5 py-2">
+        <select disabled={off} className="input !h-8 !py-0 !px-2 !w-auto text-xs disabled:opacity-40" value={cur?.font || 'sans'} onChange={e => setCur({ font: e.target.value })} aria-label="Font">
+          {Object.entries(FONTS).map(([id, f]) => <option key={id} value={id}>{f.label}</option>)}
+        </select>
+
         <div className="flex gap-1">
           <button type="button" disabled={off} onClick={() => setCur({ bold: !cur.bold })} className={btn(cur?.bold)} aria-label="Bold" aria-pressed={!!cur?.bold}><Bold size={14} /></button>
           <button type="button" disabled={off} onClick={() => setCur({ italic: !cur.italic })} className={btn(cur?.italic)} aria-label="Italic" aria-pressed={!!cur?.italic}><Italic size={14} /></button>
@@ -26,20 +30,16 @@ export default function TitleSlideToolbar({ style, onChange, target }) {
           <button type="button" disabled={off} onClick={() => setCur({ scale: Math.min(4, +(cur.scale + 0.2).toFixed(1)) })} className="w-8 h-8 flex items-center justify-center text-muted hover:text-[#f5f5f5] disabled:opacity-30" aria-label="Larger"><Plus size={13} /></button>
         </div>
 
-        <select disabled={off} className="input !h-8 !py-0 !px-2 !w-auto text-xs disabled:opacity-40" value={cur?.font || 'sans'} onChange={e => setCur({ font: e.target.value })} aria-label="Font">
-          {Object.entries(FONTS).map(([id, f]) => <option key={id} value={id}>{f.label}</option>)}
-        </select>
+        <div className="flex gap-1" role="group" aria-label="Alignment">
+          {[['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]].map(([a, Icon]) => (
+            <button key={a} type="button" onClick={() => onChange({ ...st, align: a })} className={btn(st.align === a)} aria-label={`Align ${a}`} aria-pressed={st.align === a}><Icon size={14} /></button>
+          ))}
+        </div>
 
         <div className="flex items-center gap-1" role="group" aria-label="Text color">
           {COLORS.map(c => (
             <button key={c} type="button" disabled={off} onClick={() => setCur({ color: c })} aria-label={`Color ${c}`}
               className={`w-5 h-5 rounded-full border-2 disabled:opacity-30 ${cur?.color === c ? 'border-accent' : 'border-border'}`} style={{ background: c }} />
-          ))}
-        </div>
-
-        <div className="flex gap-1" role="group" aria-label="Alignment">
-          {[['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]].map(([a, Icon]) => (
-            <button key={a} type="button" onClick={() => onChange({ ...st, align: a })} className={btn(st.align === a)} aria-label={`Align ${a}`} aria-pressed={st.align === a}><Icon size={14} /></button>
           ))}
         </div>
 
