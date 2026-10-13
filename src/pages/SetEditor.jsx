@@ -14,6 +14,7 @@ import SongEditor from '../components/songs/SongEditor'
 import SetSongViewer from '../components/songs/SetSongViewer'
 import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
 import { formatLyrics } from '../lib/lyricFormatter'
+import { arrangedSlides } from '../lib/arrangement'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
   GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen,
@@ -187,6 +188,15 @@ export default function SetEditor() {
     if (setId !== 'mock') await supabase.from('set_items').delete().eq('id', item.id)
     setItems(prev => prev.filter(i => i.id !== item.id))
     setOptionsItem(null)
+  }
+
+  // A set's own section order for a song (null = the song's arrangement).
+  const handleSetArrangement = async (item, arrangement) => {
+    const content = { ...item.content }
+    if (arrangement?.length) content.arrangement = arrangement; else delete content.arrangement
+    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, content } : i)))
+    setOptionsItem(o => (o && o.id === item.id ? { ...o, content } : o))
+    if (setId !== 'mock') await supabase.from('set_items').update({ content }).eq('id', item.id)
   }
 
   const handleSetKey = async (item, key) => {
@@ -441,7 +451,7 @@ export default function SetEditor() {
     if (item.type === 'song') {
       const song = songs[item.content?.song_id]
       if (!song) return []
-      return (song.slides?.length ? song.slides : null) || formatLyrics(song.raw_lyrics, song.lines_per_slide || 2)
+      return (song.slides?.length ? arrangedSlides(song, item.content?.arrangement) : null) || formatLyrics(song.raw_lyrics, song.lines_per_slide || 2)
     }
     if (item.type === 'welcome')      return [{ lines: [item.content.title, item.content.subtitle].filter(Boolean), label: 'Welcome' }]
     if (item.type === 'announcement') return (item.content.slides || [])
@@ -454,7 +464,12 @@ export default function SetEditor() {
   // Song Viewer: songs in order, with any Worship Leader Note just before its song.
   const orderedSongs = items.map(i =>
     i.type === 'note' ? { note: i.content }
-    : i.type === 'song' && songs[i.content?.song_id] ? { song: songs[i.content.song_id], key: i.content?.key || null }
+    : i.type === 'song' && songs[i.content?.song_id] ? {
+        song: i.content?.arrangement?.length
+          ? { ...songs[i.content.song_id], slides: arrangedSlides(songs[i.content.song_id], i.content.arrangement) }
+          : songs[i.content.song_id],
+        key: i.content?.key || null,
+      }
     : null).filter(Boolean)
 
   const openPresent = () => {
@@ -671,7 +686,7 @@ export default function SetEditor() {
                           ItemIcon={ITEM_ICONS[item.type] || Square} colorClass={ITEM_COLORS[item.type] || ITEM_COLORS.blank}
                           title={itemTitle(item)}
                           subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
-                          keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
+                          keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.preferred_key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
                           onOptions={it => (it.type === 'song' || it.type === 'blank' ? setOptionsItem(it) : handleEdit(it))}
                           open={swipedId === item.id} onSwipe={o => setSwipedId(o ? item.id : null)}
                           onDelete={async () => { setSwipedId(null); await handleDelete(item) }} />
@@ -701,6 +716,7 @@ export default function SetEditor() {
         <ItemOptionsDialog item={optionsItem} title={itemTitle(optionsItem)} song={songs[optionsItem.content?.song_id]}
           onClose={() => setOptionsItem(null)}
           onSetKey={key => handleSetKey(optionsItem, key)}
+          onSetArrangement={arr => handleSetArrangement(optionsItem, arr)}
           onEdit={() => { const it = optionsItem; setOptionsItem(null); handleEdit(it) }}
           onRemove={() => handleDelete(optionsItem)} />
       )}
