@@ -1,0 +1,46 @@
+import Anthropic from '@anthropic-ai/sdk'
+
+// Translates song lyrics into English line by line, keeping the same [Section] labels and the
+// same number of lines in each section so the translation can line up with the slides.
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  const { lyrics } = req.body || {}
+  if (!lyrics?.trim()) return res.status(400).json({ error: 'lyrics required' })
+  if (lyrics.length > 12000) return res.status(400).json({ error: 'These lyrics are too long to translate in one go.' })
+
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'Translation is not configured on this server.' })
+
+  try {
+    const client = new Anthropic({ apiKey })
+    const response = await client.messages.create({
+      model: 'claude-sonnet-5-5',
+      max_tokens: 3000,
+      messages: [{
+        role: 'user',
+        content: `You are translating worship song lyrics into English for a church presentation app, so the congregation can follow the meaning.
+
+Rules:
+- The lyrics may be in any language and may be romanized (for example Hindi or Urdu written in English letters). Lines already in English stay as they are.
+- Translate line by line: every lyric line gets exactly one English line, in the same order. Never merge or split lines.
+- Keep every section header (lines like [Verse 1] or [Chorus]) exactly as written, in the same place. Keep blank lines between sections.
+- Faithful, natural, reverent English. Keep the meaning; do not add ideas. Names of God may be rendered in English (Yeshu / Yesu / Isa Masih → Jesus, Prabhu → Lord) when that is clearly the meaning.
+- First line of your reply: "LANGUAGE: <name of the source language>". Then a blank line, then the translation only. No notes or explanations.
+
+Lyrics:
+${lyrics}`,
+      }],
+    })
+
+    const out = response.content.map(b => b.text || '').join('').trim()
+    const m = out.match(/^LANGUAGE:\s*(.+)\n+/i)
+    const language = m ? m[1].trim() : ''
+    const text = (m ? out.slice(m[0].length) : out).trim()
+    if (!text) throw new Error('No translation came back — try again.')
+    return res.json({ language, text })
+  } catch (err) {
+    console.error('translate-lyrics error:', err)
+    return res.status(500).json({ error: err.message || 'Translation failed — try again.' })
+  }
+}
