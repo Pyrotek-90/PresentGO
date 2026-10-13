@@ -9,7 +9,7 @@ const SUB_SCALE = 0.55       // translation line size relative to the lyric
 let ctx = null
 const widthCache = new Map()
 
-function textWidthEm(text, weight = 300) {
+function textWidthEm(text, weight = 700) {
   if (!text) return 0
   const key = `${weight}|${text}`
   if (widthCache.has(key)) return widthCache.get(key)
@@ -27,7 +27,7 @@ export function groupFit(slides) {
   for (const s of slides || []) {
     const lines = (s.lines || []).filter(l => l != null)
     for (const l of lines) widestEm = Math.max(widestEm, textWidthEm(l))
-    for (const t of s.subs || []) widestEm = Math.max(widestEm, textWidthEm(t) * SUB_SCALE)
+    for (const t of s.subs || []) widestEm = Math.max(widestEm, textWidthEm(`[${t}]`) * SUB_SCALE)
     const n = lines.length
     const subRows = (s.subs || []).filter(Boolean).length * SUB_SCALE
     rows = Math.max(rows, n * LINE_H + subRows * LINE_H + Math.max(0, n - 1) * GAP_EM)

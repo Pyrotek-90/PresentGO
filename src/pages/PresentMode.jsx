@@ -193,12 +193,12 @@ export default function PresentMode() {
           <div>
             {slide.lines.map((line, i) => (
               <div key={i} style={{ marginTop: i ? '0.5em' : 0 }}>
-                <p className="text-white font-light leading-snug slide-text whitespace-nowrap">
+                <p className="text-white font-bold leading-snug slide-text whitespace-nowrap">
                   {line}
                 </p>
                 {slide.subs?.[i] && (
-                  <p className="text-gray-300 font-light italic leading-snug slide-text whitespace-nowrap" style={{ fontSize: '0.55em' }}>
-                    {slide.subs[i]}
+                  <p className="text-gray-300 font-bold leading-snug slide-text whitespace-nowrap" style={{ fontSize: '0.55em' }}>
+                    [{slide.subs[i]}]
                   </p>
                 )}
               </div>
