@@ -206,7 +206,7 @@ function SlideMatrix({ group, current, blank, onGo, fits, focus }) {
   const Icon = ITEM_ICONS[group.type] || Layers
 
   return (
-    <div ref={boxRef} className="flex-1 min-h-0 overflow-y-auto border-t border-border px-4 pt-3 pb-6 select-none relative">
+    <div ref={boxRef} className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-6 select-none relative">
       <div className="grid gap-2.5 grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
         {group.slides.map(s => {
           const live = s.idx === current && !blank
@@ -391,16 +391,13 @@ export default function Controller() {
         <span className="text-muted shrink-0">·</span>
         <span className="font-medium text-sm truncate">{setName}</span>
         <span className="ml-auto text-xs text-muted shrink-0 hidden sm:inline">Slide {current + 1} of {slides.length}</span>
-        <button onClick={toggleBlank} title="Blank the screen (B)"
-          className={`h-9 px-3 rounded-lg border text-sm font-medium shrink-0 flex items-center gap-1.5 transition-colors ${blank ? 'border-white bg-white/10 text-white' : 'border-border text-[#e5e5e5] hover:border-[#555]'}`}>
-          <XSquare size={14} /> {blank ? 'Unblank' : 'Blank'}
-        </button>
         <button onClick={handleDisconnect} className="btn-danger flex items-center gap-1.5 text-sm px-3 h-9 shrink-0">
           <X size={14} /> End
         </button>
       </div>
 
       {/* Top row: Now Showing | Up Next | Run Order — equal slides; Run Order matches their height */}
+      <div className="shrink-0 bg-[#1a1a1a] border-b border-border">
       <div className="flex justify-center gap-3 px-4 pt-3 shrink-0">
         <section className="min-w-0 flex flex-col gap-1.5" style={{ flex: '1 1 0', maxWidth: 'calc(36vh * 16 / 9)' }}>
           <p className="text-xs font-semibold text-red-400 shrink-0 truncate">● {blank ? 'Screen Blanked' : 'Now Showing'}</p>
@@ -417,14 +414,14 @@ export default function Controller() {
         <section className="w-[200px] lg:w-[250px] shrink-0 hidden md:flex flex-col gap-1.5">
           <p className="text-xs font-semibold text-muted shrink-0">Run Order</p>
           <div className="relative flex-1 min-h-0">
-            <div className="absolute inset-0 overflow-y-auto rounded-xl border-2 border-border bg-[#111]">
+            <div className="absolute inset-0 overflow-y-auto rounded-xl border-2 border-border bg-[#242424]">
               {groups.map(group => {
                 const isActive = currentGroup?.itemId === group.itemId
                 const isSelected = selectedGroupId === group.itemId
                 return (
                   <button key={group.itemId} onClick={() => { setSelectedGroupId(group.itemId); go(group.firstIdx) }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-[#1f1f1f] text-left text-sm transition-colors ${
-                      isActive ? 'bg-[#1a1a1a] text-white font-semibold' : isSelected ? 'bg-card/30 text-muted' : 'text-muted hover:bg-card/30'}`}>
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-border text-left text-sm transition-colors ${
+                      isActive ? 'bg-[#333] text-white font-semibold' : isSelected ? 'bg-card/30 text-muted' : 'text-muted hover:bg-card/30'}`}>
                     {isActive ? <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" /> : <span className="w-2 h-2 rounded-full border border-[#525252] shrink-0" />}
                     <span className="flex-1 truncate">{group.itemTitle}</span>
                     {isActive && <span className="text-[11px] text-red-400 shrink-0">{current - group.firstIdx + 1}/{group.slides.length}</span>}
@@ -436,9 +433,8 @@ export default function Controller() {
         </section>
       </div>
 
-      {/* Song name, arrangement sections, Back / Next */}
-      <div className="flex items-center gap-2 px-4 py-3 shrink-0">
-        <span className="text-sm font-semibold truncate max-w-[14rem] mr-1">{groupForGrid?.itemTitle}</span>
+      {/* Sections (left, for the thumb) | song title (center) | Blank, Back, Next (right) */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-3">
         <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {groupForGrid?.itemId === currentGroup?.itemId && currentSections.map(sec => (
             <button key={sec.idx} onClick={() => jumpToSection(sec.idx)} title={sec.label}
@@ -448,12 +444,18 @@ export default function Controller() {
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-1.5 shrink-0">
+        <span className="text-sm font-semibold truncate max-w-[16rem] text-center">{groupForGrid?.itemTitle}</span>
+        <div className="flex justify-end gap-1.5">
+          <button onClick={toggleBlank} title="Blank the screen (B)"
+            className={`h-8 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors ${blank ? 'border-white bg-white/10 text-white' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#555]'}`}>
+            <XSquare size={14} /> {blank ? 'Unblank' : 'Blank'}
+          </button>
           <button onClick={() => go(current - 1)} disabled={current === 0} aria-label="Previous slide"
             className="h-8 min-w-[2.5rem] px-2.5 rounded-lg border border-border text-muted hover:text-[#f5f5f5] hover:border-[#555] flex items-center justify-center transition-colors disabled:opacity-30"><ChevronLeft size={16} /></button>
           <button onClick={() => go(current + 1)} disabled={current >= slides.length - 1} aria-label="Next slide"
             className="h-8 min-w-[2.5rem] px-2.5 rounded-lg border border-accent bg-accent/25 text-accent-light hover:bg-accent/35 flex items-center justify-center transition-colors disabled:opacity-30"><ChevronRight size={16} /></button>
         </div>
+      </div>
       </div>
 
       {/* Slide grid */}
