@@ -87,7 +87,7 @@ function SortableRow({ leadLabel, item, idx, ItemIcon, colorClass, title, subtit
         </button>
         {leadLabel && (
           <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={`Song Leader: ${leadLabel}`}
-            className="shrink-0 max-w-[8.5rem] sm:max-w-[13rem] h-7 px-2 rounded-md border border-border text-xs text-muted hover:text-[#f5f5f5] flex items-center gap-1">
+            className="shrink-0 max-w-[10.5rem] sm:max-w-[16rem] h-7 px-2 rounded-md border border-border text-xs text-muted hover:text-[#f5f5f5] flex items-center gap-1">
             <span className="shrink-0">Song Leader:</span><span className="truncate font-semibold">{leadLabel}</span>
           </button>
         )}
@@ -725,7 +725,7 @@ export default function SetEditor() {
                           ItemIcon={ITEM_ICONS[item.type] || Square} colorClass={ITEM_COLORS[item.type] || ITEM_COLORS.blank}
                           title={itemTitle(item)}
                           subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
-                          leadLabel={item.type === 'song' ? (item.content?.lead?.name || '').split(' ')[0] : ''}
+                          leadLabel={item.type === 'song' ? (item.content?.lead?.name || '') : ''}
                           keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.preferred_key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
                           onOptions={it => (it.type === 'song' || it.type === 'blank' ? setOptionsItem(it) : handleEdit(it))}
                           open={swipedId === item.id} onSwipe={o => setSwipedId(o ? item.id : null)}
