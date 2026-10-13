@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { openControlChannel } from '../lib/controlChannel'
 import TitleSlide from '../components/TitleSlide'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
+import { groupFit } from '../lib/slideFit'
 import { ChevronLeft, ChevronRight, Square } from 'lucide-react'
 
 export default function PresentMode() {
@@ -159,13 +160,13 @@ export default function PresentMode() {
   useEffect(() => {
     for (const i of [current + 1, current + 2]) { const u = slides[i]?.image; if (u) { const img = new Image(); img.src = u } }
   }, [current, slides])
-  const dynamicFontSize = slide?.lines?.length
-    ? (() => {
-        const maxLen = Math.max(...slide.lines.map(l => l.length), 1)
-        const vw = (90 / maxLen).toFixed(2)
-        return `clamp(1.5rem, ${vw}vw, 4.5rem)`
-      })()
-    : '3rem'
+  // One text size per song: its longest line spans 85% of the screen width (see slideFit).
+  const fits = useMemo(() => {
+    const by = {}
+    for (const s of slides) (by[s.itemId] = by[s.itemId] || []).push(s)
+    return Object.fromEntries(Object.entries(by).map(([id, list]) => [id, groupFit(list).fit('vw', 'vh')]))
+  }, [slides])
+  const dynamicFontSize = slide ? fits[slide.itemId] || '3rem' : '3rem'
 
   return (
     <div
@@ -188,19 +189,15 @@ export default function PresentMode() {
         <TitleSlide title={slide.title} subtitle={slide.subtitle} style={slide.style} />
       )}
       {loaded && !blank && slide && !slide.image && slide.type !== 'welcome' && (
-        <div className="w-full max-w-5xl px-16 text-center">
-          <div className={slide.subs ? 'space-y-6' : 'space-y-4'}>
+        <div className="w-full text-center" style={{ fontSize: dynamicFontSize }}>
+          <div>
             {slide.lines.map((line, i) => (
-              <div key={i}>
-                <p
-                  className="text-white font-light leading-snug slide-text"
-                  style={{ fontSize: dynamicFontSize }}
-                >
+              <div key={i} style={{ marginTop: i ? '0.5em' : 0 }}>
+                <p className="text-white font-light leading-snug slide-text whitespace-nowrap">
                   {line}
                 </p>
                 {slide.subs?.[i] && (
-                  <p className="text-gray-300 font-light italic leading-snug mt-1 slide-text"
-                    style={{ fontSize: `calc(${dynamicFontSize} * 0.55)` }}>
+                  <p className="text-gray-300 font-light italic leading-snug slide-text whitespace-nowrap" style={{ fontSize: '0.55em' }}>
                     {slide.subs[i]}
                   </p>
                 )}
