@@ -68,9 +68,11 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
 
   // Songs left out of the main list: occasions, and languages other than the library's main one.
   const visibleByDefault = t => !t.occasions.length && t.language === mainLanguage
+  const langPicked = include.filter(k => k.startsWith('lang:')).map(k => k.slice(5))
   const included = t =>
     (!t.occasions.length || t.occasions.some(o => include.includes(`occ:${o}`))) &&
-    (t.language === mainLanguage || include.includes(`lang:${t.language}`))
+    // Picking a language narrows the list to that language (like any other filter).
+    (langPicked.length ? langPicked.includes(t.language) : t.language === mainLanguage)
 
   const occasionCounts = useMemo(() => {
     const m = {}
@@ -79,8 +81,10 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
   }, [tagged])
   const languageCounts = useMemo(() => {
     const m = {}
-    for (const t of tagged) if (t.language !== mainLanguage) m[t.language] = (m[t.language] || 0) + 1
-    return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    for (const t of tagged) m[t.language] = (m[t.language] || 0) + 1
+    // Only worth offering when the library has more than one language; main language first.
+    if (Object.keys(m).length < 2) return []
+    return Object.entries(m).sort((a, b) => (b[0] === mainLanguage) - (a[0] === mainLanguage) || b[1] - a[1] || a[0].localeCompare(b[0]))
   }, [tagged, mainLanguage])
 
   const inView = useMemo(() => tagged.filter(included), [tagged, include, mainLanguage])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -114,8 +118,9 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
     const name = k.slice(k.indexOf(':') + 1)
     const n = k.startsWith('occ:') ? occasionCounts.find(([o]) => o === name)?.[1] : languageCounts.find(([l]) => l === name)?.[1]
     return (
-      <button key={k} onClick={() => toggleInclude(k)} title={`Hide ${name} songs`}
-        className="flex items-center gap-1 pl-2.5 pr-2 h-6 rounded-full border border-amber-500 bg-amber-500 text-black text-[11px] font-medium">
+      <button key={k} onClick={() => toggleInclude(k)} title={k.startsWith('lang:') ? `Stop showing only ${name}` : `Hide ${name} songs`}
+        className={`flex items-center gap-1 pl-2.5 pr-2 h-6 rounded-full border text-[11px] font-medium ${
+          k.startsWith('lang:') ? 'border-accent bg-accent text-white' : 'border-amber-500 bg-amber-500 text-black'}`}>
         {name} <span className="opacity-70">{n || 0}</span> <X size={10} />
       </button>
     )
@@ -209,10 +214,11 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             <MenuItem on={sort === 'az'} onClick={() => pickSort('az')}>A–Z</MenuItem>
             {(occasionCounts.length > 0 || languageCounts.length > 0) && (
               <div className="border-t border-border mt-1.5 pt-0.5">
-                <MenuHeading>Also show</MenuHeading>
+                {occasionCounts.length > 0 && <MenuHeading>Also show</MenuHeading>}
                 {occasionCounts.map(([o, n]) => (
                 <MenuItem key={o} on={include.includes(`occ:${o}`)} count={n} onClick={() => toggleInclude(`occ:${o}`)}>{o}</MenuItem>
                 ))}
+                {languageCounts.length > 0 && <MenuHeading>Language — show only</MenuHeading>}
                 {languageCounts.map(([l, n]) => (
                 <MenuItem key={l} on={include.includes(`lang:${l}`)} count={n} onClick={() => toggleInclude(`lang:${l}`)}>{l}</MenuItem>
                 ))}
