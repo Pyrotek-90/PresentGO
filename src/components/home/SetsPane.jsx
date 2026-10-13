@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { Plus, ChevronRight, ChevronDown } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, ChevronRight, ChevronDown, CalendarDays } from 'lucide-react'
 import { groupSets, formatSetWhen, songCount } from '../../lib/sets'
 
-const PAST_PREVIEW = 5
+// Home shows a short list so the Song Library gets the room; the Schedule page has every set.
+const UPCOMING_SHOWN = 4   // phones show 3
+const PAST_SHOWN = 2
 const COLLAPSE_KEY = 'presentgo.setsCollapsed'
 
-function SetRow({ set, isTarget, onOpen }) {
+function SetRow({ set, isTarget, onOpen, className = '' }) {
   const n = songCount(set)
   return (
     <button onClick={() => onOpen(set.id)}
-      className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg border text-left transition-colors group ${
+      className={`${className} w-full flex items-center gap-3 px-3 py-1.5 rounded-lg border text-left transition-colors group ${
         isTarget ? 'border-accent/50 bg-accent/5' : 'border-transparent hover:bg-[#1a1a1a] hover:border-border'
       }`}>
       <span className="flex-1 min-w-0 text-sm font-medium truncate">{set.name}</span>
@@ -26,9 +29,10 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
   })
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
-  const [showAllPast, setShowAllPast] = useState(false)
   const { upcoming, past } = groupSets(sets)
-  const visiblePast = showAllPast ? past : past.slice(0, PAST_PREVIEW)
+  const shownUpcoming = upcoming.slice(0, UPCOMING_SHOWN)
+  const shownPast = past.slice(0, PAST_SHOWN)
+  const more = upcoming.length > 3 || past.length > PAST_SHOWN
 
   const toggle = () => setCollapsed(c => {
     try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1') } catch { /* ignore */ }
@@ -44,7 +48,7 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
   }
 
   return (
-    <section className={`flex flex-col rounded-xl border border-border bg-card overflow-hidden shrink-0 ${collapsed ? '' : 'max-h-[40%]'}`}>
+    <section className="flex flex-col rounded-xl border border-border bg-card overflow-hidden shrink-0">
       <div className="flex items-center justify-between gap-3 px-3 py-2 shrink-0">
         <button onClick={toggle} className="flex items-center gap-2 min-w-0 text-left" aria-expanded={!collapsed}>
           <ChevronDown size={16} className={`text-muted transition-transform ${collapsed ? '-rotate-90' : ''}`} />
@@ -59,7 +63,7 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
       {!collapsed && (
         <>
           {error && <p className="px-3 pb-2 text-red-400 text-xs shrink-0">{error}</p>}
-          <div className="overflow-y-auto px-2 pb-2 border-t border-border pt-1">
+          <div className="px-2 pb-1.5 border-t border-border pt-1">
             {loading ? (
               <div className="flex justify-center py-6"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
             ) : sets.length === 0 ? (
@@ -69,21 +73,22 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
                 {upcoming.length > 0 && (
                   <div>
                     <p className="px-3 pt-1 text-[10px] uppercase tracking-widest text-muted">Upcoming</p>
-                    {upcoming.map(s => <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} />)}
+                    {shownUpcoming.map((s, i) => (
+                      <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} className={i >= 3 ? 'hidden sm:flex' : ''} />
+                    ))}
                   </div>
                 )}
                 {past.length > 0 && (
                   <div>
                     <p className="px-3 pt-1 text-[10px] uppercase tracking-widest text-muted">Past</p>
-                    {visiblePast.map(s => <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} />)}
-                    {past.length > PAST_PREVIEW && (
-                      <button onClick={() => setShowAllPast(v => !v)}
-                        className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-muted hover:text-accent-light transition-colors">
-                        <ChevronDown size={12} className={showAllPast ? 'rotate-180' : ''} />
-                        {showAllPast ? 'Show fewer' : `Show all ${past.length} past sets`}
-                      </button>
-                    )}
+                    {shownPast.map(s => <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} />)}
                   </div>
+                )}
+                {more && (
+                  <Link to="/schedule"
+                    className="w-full flex items-center justify-center gap-1.5 pt-1.5 pb-0.5 text-xs text-muted hover:text-accent-light transition-colors">
+                    <CalendarDays size={12} /> See all {sets.length} sets in Schedule
+                  </Link>
                 )}
               </>
             )}
