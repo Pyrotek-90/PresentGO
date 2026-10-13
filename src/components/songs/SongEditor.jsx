@@ -7,6 +7,7 @@ import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
 import ArrangementBuilder from './ArrangementBuilder'
 import { looksNonEnglish, guessLanguage } from '../../lib/language'
 import { translationForSlides } from '../../lib/translationLines'
+import { THEMES, OCCASIONS, LANGUAGES, DEFAULT_LIBRARY_LANGUAGE, songThemes, songOccasions } from '../../lib/songTags'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
@@ -50,10 +51,6 @@ const DIATONIC = {
   'B':     ['B', 'C#m', 'D#m', 'E', 'F#', 'G#m', 'A#dim'],
 }
 const NOTE_OPTIONS = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
-const PRESET_THEMES = [
-  'Worship', 'Praise', 'Communion', 'Offering', 'Closing', 'Opening',
-  'Christmas', 'Easter', 'Baptism', 'Prayer', 'Salvation', 'Healing',
-]
 const PRESET_LABELS = [
   'Verse 1', 'Verse 2', 'Verse 3', 'Verse 4',
   'Chorus', 'Pre-Chorus', 'Bridge', 'Outro', 'Intro', 'Tag',
@@ -410,7 +407,9 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
   // Details step
   const [bpm, setBpm]           = useState(song?.metadata?.bpm || '')
-  const [themes, setThemes]     = useState(song?.metadata?.themes || [])
+  const [themes, setThemes]     = useState(() => songThemes(song))
+  const [occasions, setOccasions] = useState(() => songOccasions(song))
+  const [addingTheme, setAddingTheme] = useState(false)
   const [themeInput, setThemeInput] = useState('')
   const [author, setAuthor]     = useState(song?.metadata?.author || '')
   const [transposedKeys, setTransposedKeys] = useState(song?.metadata?.transposed_keys || [])
@@ -724,8 +723,12 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
   const addTheme = tag => {
     const t = tag.trim()
-    if (t && !themes.includes(t)) setThemes(prev => [...prev, t])
-    setThemeInput('')
+    if (t && !themes.some(x => x.toLowerCase() === t.toLowerCase())) {
+      const occ = OCCASIONS.find(o => o.toLowerCase() === t.toLowerCase())
+      if (occ) setOccasions(prev => (prev.includes(occ) ? prev : [...prev, occ]))
+      else setThemes(prev => [...prev, THEMES.find(x => x.toLowerCase() === t.toLowerCase()) || t])
+    }
+    setThemeInput(''); setAddingTheme(false)
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
@@ -766,12 +769,13 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       metadata: {
         ...(song?.metadata || {}),   // keep fields this editor doesn't show (import details)
         translations: translations.filter(t => t.text?.trim()),
-        language: language || guessedLanguage,
+        language: language || guessedLanguage || 'English',
         slide_translation: translations.some(t => t.title === slideTranslation && t.text?.trim()) ? slideTranslation : '',
         key: songKey,
         chord_chart: rawLyrics.trim() ? reconcileChart(rawLyrics, chordChart) : chordChart,
         bpm,
         themes,
+        occasions,
         author,
         youtube_url: youtubeUrl.trim(),
         original_key: songKey,
@@ -1220,31 +1224,23 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         </div>
       )}
 
-      {/* Song details: key from the Chords step, tempo, CCLI # */}
-      <div className="rounded-xl border border-border bg-card p-3">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="min-w-0">
-            <span className="label !mb-1">Original Key</span>
-            {songKey ? (
-              <button type="button" onClick={() => setStep(4)} title="Change on the Chords step"
-                className="h-10 w-full flex items-center px-3 rounded-lg border border-border bg-surface text-sm font-semibold text-left truncate hover:border-accent/50">
-                {songKey.replace('♭', '♭')}
-              </button>
-            ) : (
-              <button type="button" onClick={() => setStep(4)} className="h-10 w-full px-3 rounded-lg border border-dashed border-border text-xs text-muted text-left hover:text-primary">Set on Chords step</button>
-            )}
-          </div>
-          <label className="block min-w-0">
-            <span className="label !mb-1">BPM</span>
-            <input className="input !h-10" type="number" inputMode="numeric" min="40" max="240" placeholder="75"
-              value={bpm} onChange={e => setBpm(e.target.value)} />
-          </label>
-          <label className="block min-w-0">
-            <span className="label !mb-1">CCLI Song #</span>
-            <input className="input !h-10" inputMode="numeric" placeholder="22025" value={ccliNumber}
-              onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
-          </label>
-        </div>
+      {/* Song details on one line: key (set on the Chords step), tempo, CCLI # */}
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+        <button type="button" onClick={() => setStep(4)} title="Original key — change on the Chords step"
+          className={`h-10 min-w-0 flex items-center gap-1.5 px-2.5 rounded-lg border text-left hover:border-accent/50 ${songKey ? 'border-border bg-card' : 'border-dashed border-border'}`}>
+          <span className="text-[10px] uppercase tracking-wider text-muted shrink-0">Key</span>
+          <span className={`truncate text-sm ${songKey ? 'font-semibold' : 'text-muted text-xs'}`}>{songKey ? songKey.replace(' Major', '').replace(' Minor', 'm') : 'Set'}</span>
+        </button>
+        <label className="h-10 min-w-0 flex items-center gap-1.5 pl-2.5 rounded-lg border border-border bg-card focus-within:border-accent">
+          <span className="text-[10px] uppercase tracking-wider text-muted shrink-0">BPM</span>
+          <input className="w-full min-w-0 bg-transparent text-sm font-semibold focus:outline-none pr-2" type="number" inputMode="numeric" min="40" max="240" placeholder="75"
+            value={bpm} onChange={e => setBpm(e.target.value)} />
+        </label>
+        <label className="h-10 min-w-0 flex items-center gap-1.5 pl-2.5 rounded-lg border border-border bg-card focus-within:border-accent">
+          <span className="text-[10px] uppercase tracking-wider text-muted shrink-0">CCLI</span>
+          <input className="w-full min-w-0 bg-transparent text-sm font-semibold focus:outline-none pr-2" inputMode="numeric" placeholder="22025" value={ccliNumber}
+            onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
+        </label>
       </div>
 
       {/* Transposed keys, each with a star (preferred key) and a note (e.g. Male key) */}
@@ -1330,36 +1326,79 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         {transposedKeys.length > 0 && !hasChords(chordChart) && <p className="text-[11px] text-amber-400/80">No chords entered yet.</p>}
       </div>
 
-      {/* Themes / categories */}
-      <div className="space-y-2">
-        <label className="label">Themes / Categories</label>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {PRESET_THEMES.map(t => (
-            <button key={t} onClick={() => themes.includes(t) ? setThemes(prev => prev.filter(x => x !== t)) : addTheme(t)}
-              className={`px-2.5 py-1 rounded-full border text-xs transition-colors ${
-                themes.includes(t) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:border-accent/40 hover:text-[#f5f5f5]'
-              }`}>{t}</button>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input className="input flex-1" placeholder="Add custom tag…"
-            value={themeInput} onChange={e => setThemeInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTheme(themeInput) } }} />
-          <button onClick={() => addTheme(themeInput)} disabled={!themeInput.trim()}
-            className="btn-secondary px-4 shrink-0">Add</button>
-        </div>
-        {themes.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {themes.map(t => (
-              <span key={t} className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full bg-accent/15 border border-accent/30 text-xs text-accent-light">
+      {/* Themes */}
+      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+        <p className="text-sm font-semibold">Themes</p>
+        <div className="flex flex-wrap gap-1.5">
+          {[...THEMES, ...themes.filter(t => !THEMES.includes(t))].map(t => {
+            const on = themes.includes(t)
+            return (
+              <button key={t} type="button" aria-pressed={on}
+                onClick={() => setThemes(prev => (on ? prev.filter(x => x !== t) : [...prev, t]))}
+                className={`px-2.5 h-7 rounded-full border text-xs transition-colors ${on ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:border-accent/40 hover:text-[#f5f5f5]'}`}>
                 {t}
-                <button onClick={() => setThemes(prev => prev.filter(x => x !== t))}
-                  className="hover:text-red-400 transition-colors"><X size={10} /></button>
-              </span>
-            ))}
-          </div>
-        )}
+              </button>
+            )
+          })}
+          {addingTheme ? (
+            <input autoFocus className="input !h-7 !py-0 !px-2.5 text-xs !w-36 !rounded-full" placeholder="New theme"
+              value={themeInput} onChange={e => setThemeInput(e.target.value)}
+              onBlur={() => addTheme(themeInput)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTheme(themeInput) } if (e.key === 'Escape') { setThemeInput(''); setAddingTheme(false) } }} />
+          ) : (
+            <button type="button" onClick={() => setAddingTheme(true)}
+              className="px-2.5 h-7 rounded-full border border-dashed border-border text-xs text-muted hover:text-[#f5f5f5] hover:border-accent/40 flex items-center gap-1">
+              <Plus size={11} /> Add
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Occasion */}
+      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+        <p className="text-sm font-semibold">Occasion</p>
+        <div className="flex flex-wrap gap-1.5">
+          {OCCASIONS.map(o => {
+            const on = occasions.includes(o)
+            return (
+              <button key={o} type="button" aria-pressed={on}
+                onClick={() => setOccasions(prev => (on ? prev.filter(x => x !== o) : [...prev, o]))}
+                className={`px-2.5 h-7 rounded-full border text-xs transition-colors ${on ? 'border-amber-500/60 bg-amber-500/15 text-amber-300' : 'border-border text-muted hover:border-amber-500/40 hover:text-[#f5f5f5]'}`}>
+                {o}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11px] text-muted leading-snug">Songs with an occasion are hidden from the Song Library's main list. Show them any time from the library's sort menu (⇅).</p>
+      </div>
+
+      {/* Language */}
+      {(() => {
+        const current = language || guessedLanguage || 'English'
+        const main = user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE
+        const shown = [...new Set([main, current, ...LANGUAGES.slice(0, 8)])]
+        return (
+          <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+            <p className="text-sm font-semibold">Language</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {shown.map(l => (
+                <button key={l} type="button" aria-pressed={current === l} onClick={() => setLanguage(l)}
+                  className={`px-2.5 h-7 rounded-full border text-xs transition-colors ${current === l ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:border-accent/40 hover:text-[#f5f5f5]'}`}>
+                  {l}
+                </button>
+              ))}
+              <select className="input !h-7 !py-0 !px-2 text-xs !w-auto !rounded-full" value="" aria-label="More languages"
+                onChange={e => e.target.value && setLanguage(e.target.value)}>
+                <option value="">More…</option>
+                {LANGUAGES.filter(l => !shown.includes(l)).map(l => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+            {current !== main && (
+              <p className="text-[11px] text-muted leading-snug">Not in your library's main language ({main}), so it's hidden from the Song Library's main list. Show {current} songs from the sort menu (⇅).</p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* YouTube link */}
       <div className="rounded-xl border border-border bg-card p-3 space-y-2">
@@ -1424,7 +1463,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   }
 
   // Unsaved-changes guard: closing with edits asks to Save or Discard instead of losing them.
-  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide, translations, language, slideTranslation])
+  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, occasions, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide, translations, language, slideTranslation])
   const initialSnapshot = useRef(null)
   if (initialSnapshot.current === null) initialSnapshot.current = snapshot
   const dirty = snapshot !== initialSnapshot.current

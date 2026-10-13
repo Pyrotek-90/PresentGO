@@ -5,8 +5,11 @@ import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
   Sun, Moon, Shield, Check, ExternalLink,
-  Church, Zap, Bell, Star, Music,
+  Church, Zap, Bell, Star, Music, Languages,
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { LANGUAGES, DEFAULT_LIBRARY_LANGUAGE } from '../lib/songTags'
 import { useState } from 'react'
 
 // ─── Subscription plans ────────────────────────────────────────────────────────
@@ -155,6 +158,14 @@ export default function Settings() {
   const { isDark, toggleTheme } = useTheme()
   const [viewerMode, setViewerMode] = useState(() => getPref('viewerMode', 'lyrics'))
   const pickViewerMode = m => { setViewerMode(m); setPref('viewerMode', m) }
+  const { user } = useAuth()
+  const [libLang, setLibLang] = useState(user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE)
+  const [libLangState, setLibLangState] = useState(null)   // null | 'saving' | 'saved' | 'error'
+  const pickLibLang = async l => {
+    setLibLang(l); setLibLangState('saving')
+    const { error } = await supabase.auth.updateUser({ data: { library_language: l } })
+    setLibLangState(error ? 'error' : 'saved')
+  }
 
   return (
     <Layout>
@@ -210,6 +221,22 @@ export default function Settings() {
               className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 ${viewerMode === 'chords' ? 'bg-accent' : 'bg-stone-400'}`}>
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${viewerMode === 'chords' ? 'translate-x-6' : 'translate-x-0'}`} />
             </button>
+          </div>
+
+          <div className="card flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Languages size={18} className="text-accent-light shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-primary">Song Library language</p>
+                <p className="text-xs text-muted">Songs in other languages are hidden from the Song Library's main list; show them from its ⇅ menu.
+                  {libLangState === 'saved' && <span className="text-green-400"> Saved.</span>}
+                  {libLangState === 'error' && <span className="text-red-400"> Couldn't save — try again.</span>}</p>
+              </div>
+            </div>
+            <select className="input !w-auto !h-9 !py-0 text-sm shrink-0" value={libLang} onChange={e => pickLibLang(e.target.value)}
+              disabled={libLangState === 'saving'} aria-label="Song Library language">
+              {LANGUAGES.map(l => <option key={l}>{l}</option>)}
+            </select>
           </div>
 
           <OfflineMode />
