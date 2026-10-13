@@ -8,7 +8,7 @@ import { groupFit } from '../lib/slideFit'
 import {
   ChevronLeft, ChevronRight, XSquare, X, Tv, ArrowLeft,
   MonitorPlay, ArrowRight, Radio, Wifi,
-  Music, Star, Megaphone, FolderOpen, Layers,
+  Music, Star, Megaphone, FolderOpen, Layers, LayoutGrid, AlignLeft,
 } from 'lucide-react'
 
 // ─── Connect step — open presentation then AirPlay ───────────────────────────
@@ -187,7 +187,7 @@ const ITEM_COLORS = {
 
 // All slides of one item in a grid. `focus` = { idx, n } scrolls that slide's row to the top
 // (used by the section buttons); otherwise the live slide is kept in view.
-function SlideMatrix({ group, current, blank, onGo, fits, focus }) {
+function SlideMatrix({ group, current, blank, onGo, fits, focus, mode = 'tiles' }) {
   const boxRef = useRef(null)
 
   // Bring idx's row to the top of the grid. Scrolling stops on its own once the end of the
@@ -200,13 +200,47 @@ function SlideMatrix({ group, current, blank, onGo, fits, focus }) {
     if (Math.abs(box.scrollTop - top) > 2) box.scrollTo({ top, behavior: 'smooth' })
   }
   useEffect(() => { if (focus) scrollToIdx(focus.idx) }, [focus?.n])  // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { scrollToIdx(current) }, [current, group?.itemId])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { scrollToIdx(current) }, [current, group?.itemId, mode])  // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!group) return <div className="flex-1 min-h-0" />
   const Icon = ITEM_ICONS[group.type] || Layers
 
   return (
     <div ref={boxRef} className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-6 select-none relative">
+      {mode === 'text' ? (
+        // Text mode: just the words, large and readable, like ProPresenter's text view
+        <div className="grid gap-2.5 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+          {group.slides.map(s => {
+            const live = s.idx === current && !blank
+            return (
+              <button key={s.idx} data-idx={s.idx} onClick={() => onGo(s.idx)}
+                className={`relative flex flex-col justify-start text-left rounded-lg border-2 px-3 pt-2 pb-3 transition-colors ${
+                  live ? 'border-red-500/70 bg-red-500/10' : 'border-border bg-[#1a1a1a] hover:border-[#555]'}`}>
+                <div className="w-full flex items-center gap-2 mb-1.5">
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${live ? 'text-red-400' : 'text-gray-500'}`}>{s.label || '\u00a0'}</span>
+                  <span className="ml-auto text-[10px] text-gray-600">{s.idx + 1}</span>
+                </div>
+                {s.image ? (
+                  <img src={s.image} alt="" className="w-full aspect-video object-contain bg-black rounded" draggable={false} />
+                ) : s.type === 'welcome' ? (
+                  <p className="text-[15px] font-bold text-white leading-snug">{s.title}{s.subtitle ? <span className="block text-sm font-semibold text-gray-400">{s.subtitle}</span> : null}</p>
+                ) : (s.lines || []).length ? (
+                  <div className="space-y-1">
+                    {s.lines.map((line, i) => (
+                      <div key={i}>
+                        <p className="text-[15px] font-bold text-white leading-snug">{line}</p>
+                        {s.subs?.[i] && <p className="text-xs font-semibold text-gray-400 leading-snug">[{s.subs[i]}]</p>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm italic text-gray-600">Blank</p>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      ) : (
       <div className="grid gap-2.5 grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
         {group.slides.map(s => {
           const live = s.idx === current && !blank
@@ -222,6 +256,7 @@ function SlideMatrix({ group, current, blank, onGo, fits, focus }) {
           )
         })}
       </div>
+      )}
       {group.slides.length === 0 && (
         <p className="text-xs text-muted flex items-center gap-1.5"><Icon size={13} /> No slides</p>
       )}
@@ -240,6 +275,8 @@ export default function Controller() {
   const [setName, setSetName]     = useState('')
   const [connected, setConnected] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState(null)
+  const [gridMode, setGridMode] = useState(() => { try { return localStorage.getItem('controller-grid-mode') || 'tiles' } catch { return 'tiles' } })
+  const chooseGridMode = m => { setGridMode(m); try { localStorage.setItem('controller-grid-mode', m) } catch { /* ignore */ } }
   const [stripFocus, setStripFocus] = useState(null)   // { idx, n }: scroll the strip so idx comes first
   const channelRef = useRef(null)
 
@@ -450,6 +487,14 @@ export default function Controller() {
             className={`h-8 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors ${blank ? 'border-white bg-white/10 text-white' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#555]'}`}>
             <XSquare size={14} /> {blank ? 'Unblank' : 'Blank'}
           </button>
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            {[['tiles', LayoutGrid, 'Tile view'], ['text', AlignLeft, 'Text view']].map(([m, I, t]) => (
+              <button key={m} onClick={() => chooseGridMode(m)} title={t} aria-label={t} aria-pressed={gridMode === m}
+                className={`h-8 w-10 flex items-center justify-center transition-colors ${gridMode === m ? 'bg-accent/25 text-accent-light' : 'text-muted hover:text-[#f5f5f5]'}`}>
+                <I size={15} />
+              </button>
+            ))}
+          </div>
           <button onClick={() => go(current - 1)} disabled={current === 0} aria-label="Previous slide"
             className="h-8 min-w-[2.5rem] px-2.5 rounded-lg border border-border text-muted hover:text-[#f5f5f5] hover:border-[#555] flex items-center justify-center transition-colors disabled:opacity-30"><ChevronLeft size={16} /></button>
           <button onClick={() => go(current + 1)} disabled={current >= slides.length - 1} aria-label="Next slide"
@@ -459,7 +504,7 @@ export default function Controller() {
       </div>
 
       {/* Slide grid */}
-      <SlideMatrix group={groupForGrid} current={current} blank={blank} onGo={go} fits={fits} focus={stripFocus} />
+      <SlideMatrix group={groupForGrid} current={current} blank={blank} onGo={go} fits={fits} focus={stripFocus} mode={gridMode} />
     </div>
   )
 }
