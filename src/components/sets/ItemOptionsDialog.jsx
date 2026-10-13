@@ -138,16 +138,16 @@ export default function ItemOptionsDialog({ item, title, song, onClose, onSetKey
             <section className="space-y-2">
               <button onClick={() => setLeadOpen(o => !o)} aria-expanded={leadOpen} className="w-full flex items-center gap-2 text-left">
                 <Mic size={14} className="text-accent-light" />
-                <span className="text-sm font-medium">Lead singer</span>
+                <span className="text-sm font-medium">Song Leader</span>
                 <span className={`text-xs truncate ${lead ? 'text-accent-light font-medium' : 'text-muted'}`}>{lead ? lead.name : 'None'}</span>
                 <ChevronDown size={14} className={`ml-auto text-muted transition-transform ${leadOpen ? 'rotate-180' : ''}`} />
               </button>
               {leadOpen && (team.length === 0 ? (
-                <p className="text-xs text-muted leading-relaxed">No one is assigned to this set yet. Add the team on the <Link to="/schedule" className="text-accent-light underline">Schedule</Link> page, then pick a lead singer here.</p>
+                <p className="text-xs text-muted leading-relaxed">No one is assigned to this set yet. Add the team on the <Link to="/schedule" className="text-accent-light underline">Schedule</Link> page, then pick a Song Leader here.</p>
               ) : (
                 <>
-                  <ul className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border/60" role="radiogroup" aria-label="Lead singer">
-                    {[{ id: null, name: 'No lead singer' }, ...team].map(m => {
+                  <ul className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border/60" role="radiogroup" aria-label="Song Leader">
+                    {[{ id: null, name: 'No Song Leader' }, ...team].map(m => {
                       const on = (lead?.member_id || null) === m.id
                       return (
                         <li key={m.id || 'none'}>

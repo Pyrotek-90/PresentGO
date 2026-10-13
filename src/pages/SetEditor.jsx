@@ -86,9 +86,9 @@ function SortableRow({ leadLabel, item, idx, ItemIcon, colorClass, title, subtit
           <p className="text-xs text-muted truncate">{subtitle}</p>
         </button>
         {leadLabel && (
-          <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={`Lead singer: ${leadLabel}`}
-            className="shrink-0 max-w-[6.5rem] sm:max-w-[10rem] h-7 px-2 rounded-md bg-accent/15 text-accent-light text-xs font-medium flex items-center gap-1">
-            <Mic size={11} className="shrink-0" /><span className="truncate">{leadLabel}</span>
+          <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={`Song Leader: ${leadLabel}`}
+            className="shrink-0 max-w-[8.5rem] sm:max-w-[13rem] h-7 px-2 rounded-md border border-border text-xs text-muted hover:text-[#f5f5f5] flex items-center gap-1">
+            <span className="shrink-0">Song Leader:</span><span className="truncate font-semibold">{leadLabel}</span>
           </button>
         )}
         {keyLabel && (
