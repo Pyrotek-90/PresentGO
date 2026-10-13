@@ -406,6 +406,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   // Save state
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState(null)
+  const [confirmLeave, setConfirmLeave] = useState(false)
 
   const lyricsRef = useRef(null)
 
@@ -1179,14 +1180,9 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             onChange={e => setTMode(e.target.value)} aria-label="Major or minor">
             <option>Major</option><option>Minor</option>
           </select>
-          <button type="button" disabled={!keyOptions.length}
-            onClick={() => { setWantTransposed(v => !v); setPendingKeys([]) }}
-            className="h-8 px-3 rounded-lg border border-accent/50 bg-accent/10 text-xs font-medium text-accent-light hover:bg-accent/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1">
-            {wantTransposed ? <X size={12} /> : <Plus size={12} />} {wantTransposed ? 'Close' : 'Add Keys'}
-          </button>
         </div>
         {!songKey && <p className="text-[11px] text-muted">Set the Original Key on the Chords step to add transposed keys.</p>}
-        {wantTransposed && keyOptions.length > 0 && (
+        {keyOptions.length > 0 && (
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-1">
               {keyOptions.map(k => {
@@ -1200,7 +1196,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
                 )
               })}
             </div>
-            <p className="text-[11px] text-muted">Tap a key to add it (tap again to remove). Star your preferred key and add notes below.</p>
+            <p className="text-[11px] text-muted">Tap a key to add it, tap again to remove. Star your preferred key and add notes below, then save with ✓.</p>
           </div>
         )}
         {songKey && (
@@ -1331,6 +1327,13 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     )
   }
 
+  // Unsaved-changes guard: closing with edits asks to Save or Discard instead of losing them.
+  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide])
+  const initialSnapshot = useRef(null)
+  if (initialSnapshot.current === null) initialSnapshot.current = snapshot
+  const dirty = snapshot !== initialSnapshot.current
+  const requestClose = () => { if (dirty && !saving) setConfirmLeave(true); else onClose() }
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-4 pt-3 sm:pt-6 bg-black/70">
@@ -1343,7 +1346,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             <h2 className="text-lg font-semibold">{isNew ? 'Add Song' : 'Edit Song'}</h2>
             {title && <span className="text-muted text-sm hidden sm:block">— {title}</span>}
           </div>
-          <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg"><X size={18} /></button>
+          <button onClick={requestClose} className="btn-ghost p-1.5 rounded-lg" aria-label="Close"><X size={18} /></button>
         </div>
 
         {/* Progress stepper */}
@@ -1358,6 +1361,14 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           {step === 5 && renderStep5()}
           {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
         </div>
+
+        {confirmLeave && (
+          <div className="flex flex-wrap items-center gap-2 px-3 sm:px-5 py-2.5 border-t border-amber-500/30 bg-amber-500/10 text-sm shrink-0">
+            <span className="mr-auto text-amber-200">You have unsaved changes.</span>
+            <button onClick={() => { setConfirmLeave(false); onClose() }} className="btn-ghost !py-1 !px-3 text-sm">Discard</button>
+            <button onClick={() => { setConfirmLeave(false); handleSave() }} disabled={saving} className="btn-primary !py-1 !px-3 text-sm flex items-center gap-1.5"><Save size={14} /> Save</button>
+          </div>
+        )}
 
         {/* Footer navigation */}
         <div className="flex items-center justify-between px-3 sm:px-5 py-3 border-t border-border shrink-0 gap-2 sm:gap-3">
