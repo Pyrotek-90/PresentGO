@@ -214,7 +214,7 @@ function SlideMatrix({ group, current, blank, onGo, fits, focus, mode = 'tiles' 
             const live = s.idx === current && !blank
             return (
               <button key={s.idx} data-idx={s.idx} onClick={() => onGo(s.idx)}
-                className={`relative flex flex-col justify-start text-left rounded-lg border-2 px-3 pt-2 pb-3 transition-colors ${
+                className={`relative flex flex-col justify-start text-center rounded-lg border-2 px-3 pt-2 pb-3 transition-colors ${
                   live ? 'border-red-500/70 bg-red-500/10' : 'border-border bg-[#1a1a1a] hover:border-[#555]'}`}>
                 <div className="w-full flex items-center gap-2 mb-1.5">
                   <span className={`text-[10px] font-semibold uppercase tracking-wider ${live ? 'text-red-400' : 'text-gray-500'}`}>{s.label || '\u00a0'}</span>
