@@ -6,6 +6,7 @@ import { filesToSlideImages } from '../../lib/importSlides'
 import TitleSlide from '../TitleSlide'
 import TitleSlideToolbar from '../TitleSlideToolbar'
 import SongEditor from '../songs/SongEditor'
+import { songLanguage } from '../../lib/songTags'
 
 const ITEM_TYPES = [
   { id: 'welcome',      label: 'Title Slide',   icon: Star },
@@ -58,7 +59,7 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
   useEffect(() => {
     supabase
       .from('songs')
-      .select('id, title, artist, slides, raw_lyrics, lines_per_slide')
+      .select('id, title, artist, slides, raw_lyrics, lines_per_slide, metadata')
       .eq('user_id', user?.id)
       .order('title')
       .then(({ data }) => setSongs(data || []))
@@ -172,6 +173,7 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
   if (showNewSong) {
     return (
       <SongEditor
+        libraryLanguages={[...new Set(songs.map(songLanguage))]}
         onClose={() => setShowNewSong(false)}
         onSaved={(saved) => {
           setSongs(prev => [...prev, saved])
