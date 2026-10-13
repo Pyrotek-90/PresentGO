@@ -1404,12 +1404,12 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
           {/* Editing on a phone: Back / Delete / Next at the end of the page (X saves and closes) */}
           {editing && (
-            <div className="sm:hidden mt-6 pt-4 border-t border-border flex items-center justify-between gap-2">
-              {step > 1 ? (
+            <div className="sm:hidden mt-6 pt-4 border-t border-border flex items-center gap-2">
+              {step > 1 && (
                 <button onClick={() => setStep(st => st - 1)} aria-label="Back" title="Back" className="btn-secondary h-10 w-12 !p-0 flex items-center justify-center">
                   <ArrowLeft size={18} />
                 </button>
-              ) : <span className="w-12" />}
+              )}
               {onDelete && (
                 <button onClick={() => { if (confirmDelete) { onDelete(song); onClose() } else setConfirmDelete(true) }}
                   onBlur={() => setConfirmDelete(false)}
@@ -1421,10 +1421,10 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
                 </button>
               )}
               {step < 5 ? (
-                <button onClick={() => goTo(step + 1)} disabled={!canAdvance()} aria-label="Next" title="Next" className="btn-primary h-10 w-12 !p-0 flex items-center justify-center disabled:opacity-40">
+                <button onClick={() => goTo(step + 1)} disabled={!canAdvance()} aria-label="Next" title="Next" className="ml-auto btn-primary h-10 w-12 !p-0 flex items-center justify-center disabled:opacity-40">
                   <ChevronRight size={20} />
                 </button>
-              ) : <span className="w-12" />}
+              ) : null}
             </div>
           )}
         </div>
