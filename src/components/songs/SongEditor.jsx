@@ -1099,7 +1099,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           </div>
           <textarea id="chord-chart-area"
             className="input resize-none font-mono text-sm leading-relaxed"
-            style={{ height: 'max(16rem, calc(92vh - 380px))' }}
+            style={{ height: 'max(16rem, calc(92dvh - 380px))' }}
             placeholder={`[Verse 1]\nG         D      Em    C\nAmazing grace how sweet the sound\nG         D         G\nThat saved a wretch like me\n\n[Chorus]\nC    G      D        Em\nMy chains are gone I've been set free`}
             value={chordChart}
             onChange={e => setChordChart(e.target.value)}
@@ -1373,7 +1373,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-4 pt-3 sm:pt-6 bg-black/70">
-      <div className={`bg-surface border border-border rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col ${step === 1 ? 'h-[92vh]' : ''}`}>
+      <div className={`bg-surface border border-border rounded-2xl w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] flex flex-col ${step === 1 ? 'h-[calc(100dvh-1.5rem)] sm:h-[92dvh]' : ''}`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
