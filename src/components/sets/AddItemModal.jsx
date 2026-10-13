@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2 } from 'lucide-react'
+import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2, Filter } from 'lucide-react'
 import { filesToSlideImages } from '../../lib/importSlides'
 import TitleSlide from '../TitleSlide'
 import TitleSlideToolbar from '../TitleSlideToolbar'
 import SongEditor from '../songs/SongEditor'
-import { songLanguage } from '../../lib/songTags'
+import { songLanguage, songThemes, songOccasions, THEMES, DEFAULT_LIBRARY_LANGUAGE } from '../../lib/songTags'
 
 const ITEM_TYPES = [
   { id: 'welcome',      label: 'Title Slide',   icon: Star },
@@ -29,6 +29,8 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
   const [songs, setSongs] = useState([])
   const [query, setQuery] = useState('')
   const [showNewSong, setShowNewSong] = useState(false)
+  const [showSongFilters, setShowSongFilters] = useState(false)
+  const [songFilters, setSongFilters] = useState([])   // e.g. ['rotation', 'theme:Praise', 'occ:Easter', 'lang:Hindi']
 
   // Content library state
   const [mediaItems, setMediaItems]   = useState([])
@@ -76,10 +78,40 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
       .then(({ data }) => { setMediaItems(data || []); setMediaLoaded(true) })
   }, [type, user?.id, mediaLoaded])
 
-  const filtered = songs.filter(s =>
-    s.title.toLowerCase().includes(query.toLowerCase()) ||
-    (s.artist || '').toLowerCase().includes(query.toLowerCase())
-  )
+  const mainLanguage = user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE
+  const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
+  const tagged = useMemo(() => songs.map(song => {
+    const m = song.metadata || {}
+    return {
+      song, themes: songThemes(song), occasions: songOccasions(song), language: songLanguage(song), rotation: !!m.rotation,
+      keys: [...new Set([m.original_key || m.key, ...(m.transposed_keys || [])].filter(Boolean).map(shortKey))],
+    }
+  }), [songs])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filter chips: Rotation List, then themes, occasions and other languages found in the library.
+  const filterChips = useMemo(() => {
+    const count = pred => tagged.filter(pred).length
+    const chips = [['rotation', 'Rotation List', count(t => t.rotation)]]
+    const themes = [...new Set([...THEMES, ...tagged.flatMap(t => t.themes)])]
+    themes.forEach(th => chips.push([`theme:${th}`, th, count(t => t.themes.includes(th))]))
+    ;[...new Set(tagged.flatMap(t => t.occasions))].sort().forEach(o => chips.push([`occ:${o}`, o, count(t => t.occasions.includes(o))]))
+    ;[...new Set(tagged.map(t => t.language))].filter(l => l !== mainLanguage).sort().forEach(l => chips.push([`lang:${l}`, l, count(t => t.language === l)]))
+    return chips.filter(([k, , n]) => n > 0 || songFilters.includes(k))
+  }, [tagged, mainLanguage, songFilters])
+
+  const toggleSongFilter = k => setSongFilters(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]))
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase()
+    const themeSel = songFilters.filter(k => k.startsWith('theme:')).map(k => k.slice(6))
+    const tagSel = songFilters.filter(k => k.startsWith('occ:') || k.startsWith('lang:'))
+    return tagged
+      .filter(({ song: s }) => !q || s.title.toLowerCase().includes(q) || (s.artist || '').toLowerCase().includes(q))
+      .filter(t => !songFilters.includes('rotation') || t.rotation)
+      .filter(t => !themeSel.length || t.themes.some(th => themeSel.includes(th)))
+      .filter(t => !tagSel.length || tagSel.some(k => (k.startsWith('occ:') ? t.occasions.includes(k.slice(4)) : t.language === k.slice(5))))
+      .sort((a, b) => a.song.title.localeCompare(b.song.title, undefined, { sensitivity: 'base' }))
+  }, [tagged, query, songFilters])
 
   const handleAddSong = (song) => {
     onAdd({
@@ -225,39 +257,70 @@ export default function AddItemModal({ onClose, onAdd, item, onDelete }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* Song picker */}
           {type === 'song' && (
-            <>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input
-                  className="input pl-9"
-                  placeholder="Search library…"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  autoFocus
-                />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                  <input className="input !pl-9 !h-9 text-sm" placeholder="Search title or artist…" value={query} onChange={e => setQuery(e.target.value)} autoFocus />
+                </div>
+                <button onClick={() => setShowSongFilters(v => !v)} aria-expanded={showSongFilters} title="Filter" aria-label="Filter songs"
+                  className={`relative shrink-0 flex items-center justify-center gap-1.5 h-9 w-9 sm:w-auto sm:px-2.5 rounded-lg border text-sm transition-colors ${
+                    showSongFilters || songFilters.length ? 'border-accent bg-accent/15 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'}`}>
+                  <Filter size={14} /> <span className="hidden sm:inline text-xs">Filter</span>
+                  {songFilters.length > 0 && <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] leading-4 text-center">{songFilters.length}</span>}
+                </button>
+                <button onClick={() => setShowNewSong(true)} title="New song" aria-label="New song"
+                  className="btn-primary shrink-0 flex items-center justify-center gap-1.5 h-9 w-9 sm:w-auto !p-0 sm:!px-3 text-sm">
+                  <Plus size={14} /> <span className="hidden sm:inline">New Song</span>
+                </button>
               </div>
-              <button
-                onClick={() => setShowNewSong(true)}
-                className="btn-secondary w-full flex items-center gap-2 justify-center"
-              >
-                <Plus size={16} /> New Song
-              </button>
-              <div className="space-y-1.5">
-                {filtered.map(song => (
-                  <button
-                    key={song.id}
-                    onClick={() => handleAddSong(song)}
-                    className="w-full text-left card hover:border-accent/50 transition-colors"
-                  >
-                    <p className="font-medium text-sm">{song.title}</p>
-                    {song.artist && <p className="text-xs text-muted mt-0.5">{song.artist}</p>}
-                  </button>
-                ))}
-                {!filtered.length && (
-                  <p className="text-muted text-sm text-center py-4">No songs found.</p>
+              {showSongFilters && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {filterChips.map(([k, label, n]) => {
+                    const on = songFilters.includes(k)
+                    const strong = k === 'rotation' || k.startsWith('occ:') || k.startsWith('lang:')
+                    return (
+                      <button key={k} onClick={() => toggleSongFilter(k)} aria-pressed={on}
+                        className={`px-2.5 h-6 rounded-full border text-[11px] transition-colors ${
+                          on ? (strong ? 'border-accent bg-accent text-white font-medium' : 'border-accent bg-accent/20 text-accent-light')
+                             : strong ? 'border-accent/50 text-accent-light font-medium hover:bg-accent/10' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                        }`}>{label} <span className="opacity-60">{n}</span></button>
+                    )
+                  })}
+                  {songFilters.length > 0 && (
+                    <button onClick={() => setSongFilters([])} className="flex items-center gap-0.5 px-1.5 h-6 text-[11px] text-muted hover:text-[#f5f5f5]"><X size={10} /> Clear</button>
+                  )}
+                </div>
+              )}
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                {filtered.length ? (
+                  <ul className="divide-y divide-border/60">
+                    {filtered.map(({ song, keys, occasions, language }) => {
+                      const tags = [...occasions, ...(language !== mainLanguage ? [language] : [])]
+                      return (
+                        <li key={song.id}>
+                          <button onClick={() => handleAddSong(song)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#1a1a1a] transition-colors group">
+                            <span className="min-w-0 flex-1 truncate">
+                              <span className="font-medium">{song.title}</span>
+                              {song.artist && <span className="text-xs text-muted"> · {song.artist}</span>}
+                              {tags.length > 0 && (
+                                <span className="ml-1.5 inline-block align-middle px-1.5 rounded border border-amber-500/40 text-[10px] text-amber-300/90 leading-4">{tags.join(' · ')}</span>
+                              )}
+                            </span>
+                            {keys.length > 0 && <span className="shrink-0 text-xs text-muted">{keys.join(', ')}</span>}
+                            <Plus size={14} className="shrink-0 text-muted group-hover:text-accent-light" />
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-muted text-sm text-center py-6">{songs.length ? 'No songs match.' : 'No songs yet.'}</p>
                 )}
               </div>
-            </>
+              <p className="text-[11px] text-muted text-center">{filtered.length} of {songs.length} songs · tap a song to add it</p>
+            </div>
           )}
 
           {/* Welcome slide */}
