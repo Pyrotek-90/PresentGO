@@ -9,7 +9,7 @@ import SongsPane from '../components/home/SongsPane'
 import SongEditor from '../components/songs/SongEditor'
 import SongViewer from '../components/songs/SongViewer'
 import { groupSets, createSet as insertSet, todayISO } from '../lib/sets'
-import { DEFAULT_LIBRARY_LANGUAGE } from '../lib/songTags'
+import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -45,6 +45,8 @@ export default function Dashboard() {
     }
     return m
   }, [sets])
+
+  const libraryLanguages = useMemo(() => [...new Set(songs.map(songLanguage))].sort(), [songs])
 
   // Default "add songs to" target: next upcoming set, else the most recent one
   useEffect(() => {
@@ -104,6 +106,7 @@ export default function Dashboard() {
 
       {editing && (
         <SongEditor
+          libraryLanguages={libraryLanguages}
           song={editing === true ? null : editing}
           onClose={() => setEditing(null)}
           onDelete={deleteSong}

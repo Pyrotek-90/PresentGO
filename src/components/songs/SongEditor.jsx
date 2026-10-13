@@ -11,7 +11,7 @@ import { THEMES, OCCASIONS, LANGUAGES, DEFAULT_LIBRARY_LANGUAGE, songThemes, son
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
-  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp, Save, Star, Languages,
+  ChevronDown, Tag, Sparkles, ListOrdered, Check, Music2, ChevronRight, Youtube, ExternalLink, FileUp, Save, Star, Languages, Play, Pencil,
 } from 'lucide-react'
 
 // ─── Wizard steps ─────────────────────────────────────────────────────────────
@@ -51,6 +51,23 @@ const DIATONIC = {
   'B':     ['B', 'C#m', 'D#m', 'E', 'F#', 'G#m', 'A#dim'],
 }
 const NOTE_OPTIONS = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+// "+ Add" row that turns into a small text box (Enter or tapping away adds it).
+function AddRow({ placeholder, onAdd, list }) {
+  const [open, setOpen] = useState(false)
+  const [val, setVal] = useState('')
+  const done = () => { const v = val.trim(); if (v) onAdd(v); setVal(''); setOpen(false) }
+  return open ? (
+    <input autoFocus list={list} className="input !h-8 !py-0 !px-2 text-xs" placeholder={placeholder}
+      value={val} onChange={e => setVal(e.target.value)} onBlur={done}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); done() } if (e.key === 'Escape') { setVal(''); setOpen(false) } }} />
+  ) : (
+    <button type="button" onClick={() => setOpen(true)}
+      className="w-full flex items-center gap-1.5 px-2 h-8 rounded-lg border border-dashed border-border text-xs text-muted hover:text-[#f5f5f5]">
+      <Plus size={11} /> Add
+    </button>
+  )
+}
+
 const PRESET_LABELS = [
   'Verse 1', 'Verse 2', 'Verse 3', 'Verse 4',
   'Chorus', 'Pre-Chorus', 'Bridge', 'Outro', 'Intro', 'Tag',
@@ -330,7 +347,7 @@ function ChordProImport({ onImport, hasExisting }) {
 }
 
 // ─── Main editor ──────────────────────────────────────────────────────────────
-export default function SongEditor({ song, onClose, onSaved, onDelete }) {
+export default function SongEditor({ libraryLanguages = [], song, onClose, onSaved, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { user } = useAuth()
   const isNew = !song
@@ -417,6 +434,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [keyNotes, setKeyNotes] = useState(song?.metadata?.key_notes || {})          // { "A Major": "Male key" }
   const [preferredKey, setPreferredKey] = useState(song?.metadata?.preferred_key || '')
   const [youtubeUrl, setYoutubeUrl] = useState(song?.metadata?.youtube_url || '')
+  const [ytOpen, setYtOpen] = useState(false)
   const [yt, setYt] = useState({ status: 'idle', results: [] }) // idle | loading | done | error | unconfigured
   const [wantTransposed, setWantTransposed] = useState(false) // key picker open
   const [pendingKeys, setPendingKeys] = useState([])
@@ -1227,7 +1245,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       )}
 
       {/* Song details on one line: key (set on the Chords step), tempo, CCLI # */}
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+      <div className="grid grid-cols-[auto_minmax(4.25rem,0.8fr)_minmax(5.5rem,1.2fr)_auto] gap-1.5 sm:gap-2">
         <button type="button" onClick={() => setStep(4)} title="Original key — change on the Chords step"
           className={`h-10 min-w-0 flex items-center gap-1.5 px-2.5 rounded-lg border text-left hover:border-accent/50 ${songKey ? 'border-border bg-card' : 'border-dashed border-border'}`}>
           <span className="text-[10px] uppercase tracking-wider text-muted shrink-0">Key</span>
@@ -1243,7 +1261,66 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           <input className="w-full min-w-0 bg-transparent text-sm font-semibold focus:outline-none pr-2" inputMode="numeric" placeholder="22025" value={ccliNumber}
             onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
         </label>
+        {youtubeId && !ytOpen ? (
+          <div className="flex h-10 rounded-lg overflow-hidden border border-red-500/50">
+            <a href={youtubeUrl} target="_blank" rel="noreferrer" title="Play on YouTube (new tab)" aria-label="Play on YouTube"
+              className="flex items-center gap-1.5 px-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold">
+              <Play size={14} fill="currentColor" /> <span className="hidden sm:inline">YouTube</span>
+            </a>
+            <button type="button" onClick={() => setYtOpen(true)} title="Change YouTube link" aria-label="Change YouTube link"
+              className="px-1.5 sm:px-2 text-red-300 hover:text-white hover:bg-red-600/40"><Pencil size={12} /></button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setYtOpen(o => !o)} aria-expanded={ytOpen} title="Link a YouTube video" aria-label="Link a YouTube video"
+            className={`h-10 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-medium transition-colors ${ytOpen ? 'border-red-500/60 bg-red-500/10 text-red-300' : 'border-dashed border-border text-muted hover:text-[#f5f5f5] hover:border-red-500/50'}`}>
+            <Youtube size={15} className="text-red-400" /> <span className="hidden sm:inline">Link</span>
+          </button>
+        )}
       </div>
+      {ytOpen && (
+        <div className="rounded-xl border border-red-500/30 bg-card p-3 space-y-2 -mt-2">
+          <div className="flex flex-wrap gap-2">
+            <input className="input flex-1 min-w-[12rem] !h-9 text-sm" placeholder="Paste a YouTube link, or find one →" autoFocus
+              value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} />
+            <button type="button" onClick={findOnYoutube} disabled={!title.trim() || yt.status === 'loading'}
+              className="btn-secondary flex items-center gap-1.5 !h-9 !py-0 text-sm shrink-0 disabled:opacity-40">
+              {yt.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Find on YouTube
+            </button>
+          </div>
+          {(yt.status === 'unconfigured' || yt.status === 'error') && (
+            <p className="text-[11px] text-amber-400/90">
+              {yt.status === 'unconfigured' ? 'Automatic search isn\'t set up on this server yet.' : 'No results, or the search failed.'}{' '}
+              <a href={ytSearchPage} target="_blank" rel="noreferrer" className="underline hover:text-accent-light">Search YouTube</a> and paste the link above.
+            </p>
+          )}
+          {yt.status === 'done' && (
+            <ul className="space-y-1">
+              {yt.results.map(v => (
+                <li key={v.id}>
+                  <button type="button" onClick={() => { setYoutubeUrl(`https://www.youtube.com/watch?v=${v.id}`); setYt({ status: 'idle', results: [] }) }}
+                    className="w-full flex items-center gap-2.5 p-1.5 rounded-lg border border-border hover:border-accent/50 hover:bg-[#1a1a1a] text-left transition-colors">
+                    {v.thumbnail && <img src={v.thumbnail} alt="" className="w-16 h-9 rounded object-cover shrink-0" />}
+                    <span className="min-w-0">
+                      <span className="block text-sm truncate">{v.title}</span>
+                      <span className="block text-[11px] text-muted truncate">{v.channel}</span>
+                    </span>
+                    <span className="ml-auto text-xs text-accent-light shrink-0">Select</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex items-center gap-2">
+            {youtubeId && <img src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`} alt="" className="w-20 h-11 rounded object-cover" />}
+            {youtubeUrl && <button type="button" onClick={() => setYoutubeUrl('')} className="flex items-center gap-1 text-xs text-muted hover:text-red-400"><Trash2 size={12} /> Remove</button>}
+            <button type="button" onClick={() => { setYtOpen(false); setYt({ status: 'idle', results: [] }) }}
+              className="ml-auto btn-primary !h-8 !py-0 !px-3 text-sm flex items-center gap-1.5">
+              {youtubeId ? <><Check size={13} /> Save</> : 'Done'}
+            </button>
+          </div>
+          {youtubeUrl && !youtubeId && <p className="text-[11px] text-amber-400/90">That doesn't look like a YouTube video link.</p>}
+        </div>
+      )}
 
       {/* Transposed keys, each with a star (preferred key) and a note (e.g. Male key) */}
       <div className="rounded-xl border border-border bg-card p-3 space-y-2.5">
@@ -1298,46 +1375,36 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           const short = k => k.replace(/ Major$/, '').replace(/ Minor$/, 'm')
           return (
             <>
-              <ul className="divide-y divide-border/60">
+              <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_3.75rem_1.75rem] items-center gap-x-2 text-[10px] uppercase tracking-widest text-muted px-0.5">
+                <span>Key</span><span>Note</span><span className="text-center">Preferred</span><span />
+              </div>
+              <ul className="divide-y divide-border/60" role="radiogroup" aria-label="Preferred key">
                 {allKeys.map(k => {
                   const original = k === songKey
                   const pref = preferredKey === k
                   return (
-                    <li key={k} className="flex items-center gap-2 py-1.5">
-                      <span className="w-16 shrink-0">
-                        <span className="block text-sm font-semibold">{short(k)}</span>
-                        <span className={`block text-[10px] ${pref ? 'text-accent-light font-semibold' : 'text-muted'}`}>
-                          {[pref && 'Preferred', original && 'Original'].filter(Boolean).join(' · ')}
-                        </span>
+                    <li key={k} className="grid grid-cols-[4.5rem_minmax(0,1fr)_3.75rem_1.75rem] items-center gap-x-2 py-1.5">
+                      <span className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="text-sm font-semibold">{short(k)}</span>
+                        {original && <span className="text-[10px] text-muted">Original</span>}
                       </span>
-                      <input className="input !h-8 !py-0 text-sm flex-1 min-w-0" placeholder="Note, e.g. Male key"
+                      <input className="input !h-8 !py-0 !px-2 text-xs w-full max-w-[14rem]" placeholder="e.g. Male key"
                         value={keyNotes[k] || ''} onChange={e => setKeyNotes(n => ({ ...n, [k]: e.target.value }))} aria-label={`Note for ${k}`} />
-                      <div className="hidden sm:flex gap-1 shrink-0">
-                        {['Male', 'Female'].map(q => (
-                          <button key={q} type="button" onClick={() => setKeyNotes(n => ({ ...n, [k]: `${q} key` }))}
-                            className={`px-2 h-7 rounded-md border text-[11px] transition-colors ${keyNotes[k] === `${q} key` ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-primary'}`}>{q}</button>
-                        ))}
-                      </div>
-                      {original ? <span className="w-7 shrink-0" /> : (
+                      <button type="button" role="radio" aria-checked={pref} onClick={() => setPreferredKey(k)} aria-label={`Preferred key ${short(k)}`}
+                        className="justify-self-center w-8 h-8 flex items-center justify-center">
+                        <span className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center transition-colors ${pref ? 'border-accent' : 'border-[#555] hover:border-accent/60'}`}>
+                          {pref && <span className="w-2 h-2 rounded-full bg-accent" />}
+                        </span>
+                      </button>
+                      {original ? <span /> : (
                         <button type="button" onClick={() => { removeKey(k); if (pref) setPreferredKey('') }} aria-label={`Remove ${k}`}
-                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-red-400 hover:bg-[#2e2e2e]"><X size={14} /></button>
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-red-400 hover:bg-[#2e2e2e]"><X size={14} /></button>
                       )}
                     </li>
                   )
                 })}
               </ul>
-              <div className="rounded-lg bg-surface border border-border px-2.5 py-2 space-y-1.5">
-                <p className="text-xs font-medium">Which key do you usually play this song in?</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {allKeys.map(k => (
-                    <button key={k} type="button" aria-pressed={preferredKey === k} onClick={() => setPreferredKey(preferredKey === k ? '' : k)}
-                      className={`min-w-[2.5rem] px-2.5 h-8 rounded-lg border text-sm font-semibold transition-colors ${
-                        preferredKey === k ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                      }`}>{short(k)}</button>
-                  ))}
-                </div>
-                <p className="text-[11px] text-muted">The song opens in this key from the Song Library.{transposedKeys.length === 0 ? ' Add keys above to choose a different one.' : ''}</p>
-              </div>
+              <p className="text-[11px] text-muted">Songs open in the preferred key from the Song Library.</p>
             </>
           )
         })()}
@@ -1348,7 +1415,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       {(() => {
         const current = language || guessedLanguage || 'English'
         const main = user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE
-        const langs = [...new Set([main, current, ...LANGUAGES.slice(0, 7)])]
+        const langs = [...new Set([main, current, ...libraryLanguages])]
+        const customOcc = occasions.filter(o => !OCCASIONS.includes(o))
         const Row = ({ on, onClick, tone = 'accent', children }) => (
           <button type="button" aria-pressed={on} onClick={onClick}
             className={`w-full flex items-center gap-1.5 px-1.5 sm:px-2 h-8 rounded-lg border text-xs text-left transition-colors ${
@@ -1394,20 +1462,21 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
               </div>
               <div className="min-w-0 space-y-1 pt-2">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted px-1">Occasion</p>
-                {OCCASIONS.map(o => (
+                {[...OCCASIONS, ...customOcc].map(o => (
                   <Row key={o} tone="amber" on={occasions.includes(o)} onClick={() => setOccasions(prev => (prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]))}>{o}</Row>
                 ))}
+                <AddRow placeholder="New occasion" onAdd={v => {
+                  const o = OCCASIONS.find(x => x.toLowerCase() === v.toLowerCase()) || v
+                  setOccasions(prev => (prev.includes(o) ? prev : [...prev, o]))
+                }} />
               </div>
               <div className="min-w-0 space-y-1 pt-2">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted px-1">Language</p>
                 {langs.map(l => (
                   <Row key={l} tone={l === main ? 'accent' : 'amber'} on={current === l} onClick={() => setLanguage(l)}>{l}</Row>
                 ))}
-                <select className="input !h-8 !py-0 !px-2 text-xs" value="" aria-label="More languages"
-                  onChange={e => e.target.value && setLanguage(e.target.value)}>
-                  <option value="">More…</option>
-                  {LANGUAGES.filter(l => !langs.includes(l)).map(l => <option key={l}>{l}</option>)}
-                </select>
+                <AddRow placeholder="Language" list="song-languages" onAdd={v => setLanguage(LANGUAGES.find(x => x.toLowerCase() === v.toLowerCase()) || v)} />
+                <datalist id="song-languages">{LANGUAGES.filter(l => !langs.includes(l)).map(l => <option key={l} value={l} />)}</datalist>
               </div>
             </div>
 
@@ -1419,55 +1488,6 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           </div>
         )
       })()}
-
-      {/* YouTube link */}
-      <div className="rounded-xl border border-border bg-card p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <Youtube size={15} className="text-red-400" />
-          <p className="text-sm font-medium">YouTube link</p>
-          <span className="text-[11px] text-muted truncate">{[title, artist].filter(Boolean).join(' · ')}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <input className="input flex-1 min-w-[12rem] !h-9 text-sm" placeholder="Paste a YouTube link, or find one →"
-            value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} />
-          <button type="button" onClick={findOnYoutube} disabled={!title.trim() || yt.status === 'loading'}
-            className="btn-secondary flex items-center gap-1.5 !h-9 !py-0 text-sm shrink-0 disabled:opacity-40">
-            {yt.status === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Find on YouTube
-          </button>
-        </div>
-        {(yt.status === 'unconfigured' || yt.status === 'error') && (
-          <p className="text-[11px] text-amber-400/90">
-            {yt.status === 'unconfigured' ? 'Automatic search isn\'t set up on this server yet.' : 'No results, or the search failed.'}{' '}
-            <a href={ytSearchPage} target="_blank" rel="noreferrer" className="underline hover:text-accent-light">Search YouTube</a> and paste the link above.
-          </p>
-        )}
-        {yt.status === 'done' && (
-          <ul className="space-y-1">
-            {yt.results.map(v => (
-              <li key={v.id}>
-                <button type="button" onClick={() => { setYoutubeUrl(`https://www.youtube.com/watch?v=${v.id}`); setYt({ status: 'idle', results: [] }) }}
-                  className="w-full flex items-center gap-2.5 p-1.5 rounded-lg border border-border hover:border-accent/50 hover:bg-[#1a1a1a] text-left transition-colors">
-                  {v.thumbnail && <img src={v.thumbnail} alt="" className="w-16 h-9 rounded object-cover shrink-0" />}
-                  <span className="min-w-0">
-                    <span className="block text-sm truncate">{v.title}</span>
-                    <span className="block text-[11px] text-muted truncate">{v.channel}</span>
-                  </span>
-                  <span className="ml-auto text-xs text-accent-light shrink-0">Select</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {youtubeId && (
-          <div className="flex items-center gap-2.5 pt-1">
-            <img src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`} alt="" className="w-24 h-14 rounded object-cover" />
-            <a href={youtubeUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-accent-light hover:underline">
-              <ExternalLink size={12} /> Open on YouTube
-            </a>
-            <button type="button" onClick={() => setYoutubeUrl('')} className="text-xs text-muted hover:text-red-400 ml-auto">Remove</button>
-          </div>
-        )}
-      </div>
 
       {/* CCLI reminder */}
       <div className="rounded-xl border border-border/50 bg-card/50 p-3 flex items-start gap-3">

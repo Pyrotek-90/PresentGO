@@ -75,7 +75,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
   const occasionCounts = useMemo(() => {
     const m = {}
     for (const t of tagged) for (const o of t.occasions) m[o] = (m[o] || 0) + 1
-    return OCCASIONS.filter(o => m[o]).map(o => [o, m[o]])
+    return [...OCCASIONS.filter(o => m[o]), ...Object.keys(m).filter(o => !OCCASIONS.includes(o)).sort()].map(o => [o, m[o]])
   }, [tagged])
   const languageCounts = useMemo(() => {
     const m = {}
