@@ -168,13 +168,20 @@ function SlideThumb({ slide, live, onClick, className = '', large = false, group
             </p>
           )}
           {lines.map((line, i) => (
-            <p
-              key={i}
-              className="text-white leading-snug"
-              style={large ? { fontSize } : { fontSize: '10px' }}
-            >
-              {line}
-            </p>
+            <div key={i} className={slide.subs && large ? 'mb-2' : ''}>
+              <p
+                className="text-white leading-snug"
+                style={large ? { fontSize } : { fontSize: '10px' }}
+              >
+                {line}
+              </p>
+              {slide.subs?.[i] && (
+                <p className="text-gray-400 italic leading-snug"
+                  style={large ? { fontSize: `calc(${fontSize} * 0.55)` } : { fontSize: '7px' }}>
+                  {slide.subs[i]}
+                </p>
+              )}
+            </div>
           ))}
           {lines.length === 0 && (
             <p className="text-gray-700 italic" style={{ fontSize: large ? '1rem' : '10px' }}>Blank</p>

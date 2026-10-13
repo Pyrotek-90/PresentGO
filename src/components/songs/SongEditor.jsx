@@ -5,7 +5,8 @@ import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/c
 import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
 import ArrangementBuilder from './ArrangementBuilder'
-import { looksNonEnglish } from '../../lib/language'
+import { looksNonEnglish, scriptLanguage } from '../../lib/language'
+import { translationForSlides } from '../../lib/translationLines'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
@@ -362,6 +363,18 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [translating, setTranslating] = useState(false)
   const [translateErr, setTranslateErr] = useState(null)
   const lyricsForeign = useMemo(() => looksNonEnglish(rawLyrics), [rawLyrics])
+  // Name of the lyrics' language, shown on the first tab (e.g. "Hindi").
+  const [language, setLanguage] = useState(song?.metadata?.language || song?.metadata?.translations?.find(t => t.from)?.from || '')
+  const lyricsLanguage = language || scriptLanguage(rawLyrics) || (lyricsForeign ? 'Original' : 'Lyrics')
+  // Which translation goes under each lyric line on the slides ('' = none).
+  const [slideTranslation, setSlideTranslation] = useState(song?.metadata?.slide_translation || '')
+  const detectTried = useRef(false)
+  useEffect(() => {
+    if (language || detectTried.current || !translations.length || !rawLyrics.trim() || scriptLanguage(rawLyrics)) return
+    detectTried.current = true
+    fetch('/api/translate-lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lyrics: rawLyrics, detect: true }) })
+      .then(r => (r.ok ? r.json() : null)).then(j => { if (j?.language) setLanguage(j.language) }).catch(() => {})
+  }, [translations.length, rawLyrics, language])
 
   // Slides step
   const [showSlides, setShowSlides] = useState(!!song?.slides?.length)
@@ -589,6 +602,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       }
       if (!res.ok || json.error) throw new Error(json.error || 'Translation failed')
       const entry = { title: 'English', text: json.text, ...(json.language ? { from: json.language } : {}), ai: true }
+      if (json.language) setLanguage(json.language)
       // Replace an earlier English translation; keep any others (e.g. from an imported PDF).
       const i = translations.findIndex(t => /english/i.test(t.title))
       const next = i >= 0 ? translations.map((t, ti) => (ti === i ? entry : t)) : [...translations, entry]
@@ -751,6 +765,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       metadata: {
         ...(song?.metadata || {}),   // keep fields this editor doesn't show (import details)
         translations: translations.filter(t => t.text?.trim()),
+        language,
+        slide_translation: translations.some(t => t.title === slideTranslation && t.text?.trim()) ? slideTranslation : '',
         key: songKey,
         chord_chart: rawLyrics.trim() ? reconcileChart(rawLyrics, chordChart) : chordChart,
         bpm,
@@ -868,7 +884,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
         {translations.length > 0 && (
           <div className="flex items-center gap-1 overflow-x-auto">
-            {[{ title: 'Lyrics' }, ...translations].map((t, i) => (
+            {[{ title: lyricsLanguage }, ...translations].map((t, i) => (
               <button key={i} onClick={() => setLyricsTab(i)}
                 className={`shrink-0 h-7 px-3 rounded-full border text-xs font-medium transition-colors ${
                   lyricsTab === i ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
@@ -897,7 +913,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
               />
               <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
                 <span>{tr.ai ? `Translated${tr.from ? ` from ${tr.from}` : ''} by AI — check it reads right before Sunday.` : 'Saved with the song for the slides.'}</span>
-                <button onClick={() => { setTranslations(ts => ts.filter((_, i) => i !== lyricsTab - 1)); setLyricsTab(0) }}
+                <button onClick={() => { if (slideTranslation === tr.title) setSlideTranslation(''); setTranslations(ts => ts.filter((_, i) => i !== lyricsTab - 1)); setLyricsTab(0) }}
                   className="shrink-0 flex items-center gap-1 hover:text-red-400 transition-colors"><Trash2 size={11} /> Remove</button>
               </div>
             </>
@@ -930,10 +946,29 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           </button>
         </div>
 
+        {translations.length > 0 && (
+          <div className="rounded-xl border border-border bg-card px-3 py-2.5 space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-medium">Translation on slides</p>
+              <p className="text-[11px] text-muted">Smaller, under each lyric line</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[{ title: '' }, ...translations].map(t => (
+                <button key={t.title || 'none'} onClick={() => setSlideTranslation(t.title)}
+                  className={`h-7 px-3 rounded-full border text-xs font-medium transition-colors ${
+                    slideTranslation === t.title ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+                  }`}>{t.title || 'None'}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* One card per section */}
         {sectionOrder.map(label => {
           const secSlides = sectionsMap[label] || []
           const lps = sectionLPS[label] || linesPerSlide
+          const subText = slideTranslation ? translations.find(t => t.title === slideTranslation)?.text : ''
+          const secSubs = subText ? translationForSlides(secSlides.map((sl, i) => ({ ...sl, label: i === 0 ? label : null })), subText, rawLyrics) : []
           return (
             <div key={label} className="rounded-xl border border-border bg-card overflow-hidden">
               {/* Section header — compact */}
@@ -983,7 +1018,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
                     {/* Right: editable lyric lines */}
                     <div className="flex-1 px-3 py-2 space-y-0.5">
                       {slide.lines.map((line, li) => (
-                        <div key={li} className="flex items-center gap-1 group/line">
+                        <div key={li}>
+                        <div className="flex items-center gap-1 group/line">
                           <input
                             id={`line-${label}-${si}-${li}`}
                             className="flex-1 bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none text-sm py-0.5 text-[#f5f5f5] min-w-0"
@@ -1016,6 +1052,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
                             className="opacity-0 group-hover/line:opacity-100 p-0.5 rounded hover:bg-red-700/30 text-muted hover:text-red-400 shrink-0 transition-opacity">
                             <X size={9} />
                           </button>
+                        </div>
+                        {secSubs[si]?.[li] && <p className="text-xs italic text-muted pb-1 leading-snug">{secSubs[si][li]}</p>}
                         </div>
                       ))}
                     </div>
@@ -1385,7 +1423,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   }
 
   // Unsaved-changes guard: closing with edits asks to Save or Discard instead of losing them.
-  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide, translations])
+  const snapshot = JSON.stringify([title, artist, ccliNumber, rawLyrics, chordChart, songKey, bpm, themes, transposedKeys, keyNotes, preferredKey, youtubeUrl, linesPerSlide, translations, language, slideTranslation])
   const initialSnapshot = useRef(null)
   if (initialSnapshot.current === null) initialSnapshot.current = snapshot
   const dirty = snapshot !== initialSnapshot.current

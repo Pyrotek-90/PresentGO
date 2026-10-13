@@ -189,15 +189,22 @@ export default function PresentMode() {
       )}
       {loaded && !blank && slide && !slide.image && slide.type !== 'welcome' && (
         <div className="w-full max-w-5xl px-16 text-center">
-          <div className="space-y-4">
+          <div className={slide.subs ? 'space-y-6' : 'space-y-4'}>
             {slide.lines.map((line, i) => (
-              <p
-                key={i}
-                className="text-white font-light leading-snug slide-text"
-                style={{ fontSize: dynamicFontSize }}
-              >
-                {line}
-              </p>
+              <div key={i}>
+                <p
+                  className="text-white font-light leading-snug slide-text"
+                  style={{ fontSize: dynamicFontSize }}
+                >
+                  {line}
+                </p>
+                {slide.subs?.[i] && (
+                  <p className="text-gray-300 font-light italic leading-snug mt-1 slide-text"
+                    style={{ fontSize: `calc(${dynamicFontSize} * 0.55)` }}>
+                    {slide.subs[i]}
+                  </p>
+                )}
+              </div>
             ))}
           </div>
           {slide.type === 'song' && slide.itemTitle && (

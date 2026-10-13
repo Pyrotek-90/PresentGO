@@ -1,3 +1,4 @@
+import { translationForSlides, slideTranslationText } from './translationLines'
 /**
  * Parses raw lyric text into structured slides.
  * - Detects section labels: [Verse 1], [Chorus], Chorus:, etc.
@@ -103,16 +104,18 @@ export function buildPresentationSlides(setItems, songs) {
       if (!song) continue
       const slides = (song.slides?.length ? song.slides : null)
         || formatLyrics(song.raw_lyrics, song.lines_per_slide || 2)
-      for (const slide of slides) {
+      const subs = translationForSlides(slides, slideTranslationText(song.metadata), song.raw_lyrics)
+      slides.forEach((slide, si) => {
         all.push({
           type: 'song',
           itemId: item.id,
           itemTitle: song.title,
           lines: slide.lines,
+          ...(subs[si]?.some(Boolean) ? { subs: subs[si] } : {}),
           label: slide.label,
           sectionLabel: slide.sectionLabel || slide.label || null,
         })
-      }
+      })
     } else if (item.type === 'announcement') {
       for (const slide of (item.content.slides || [])) {
         all.push({

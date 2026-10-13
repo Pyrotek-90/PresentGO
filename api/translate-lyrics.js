@@ -5,7 +5,7 @@ import Anthropic from '@anthropic-ai/sdk'
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { lyrics } = req.body || {}
+  const { lyrics, detect } = req.body || {}
   if (!lyrics?.trim()) return res.status(400).json({ error: 'lyrics required' })
   if (lyrics.length > 12000) return res.status(400).json({ error: 'These lyrics are too long to translate in one go.' })
 
@@ -14,6 +14,18 @@ export default async function handler(req, res) {
 
   try {
     const client = new Anthropic({ apiKey })
+
+    // Just name the language (used to label lyrics that came with a translation, e.g. from a PDF).
+    if (detect) {
+      const r = await client.messages.create({
+        model: 'claude-sonnet-5-5',
+        max_tokens: 20,
+        messages: [{ role: 'user', content: `What language are these song lyrics in? They may be romanized (for example Hindi written in English letters). Reply with only the language name in English, one or two words.\n\n${lyrics.slice(0, 2000)}` }],
+      })
+      const language = r.content.map(b => b.text || '').join('').trim().replace(/[.\n].*$/s, '').slice(0, 30)
+      return res.json({ language })
+    }
+
     const response = await client.messages.create({
       model: 'claude-sonnet-5-5',
       max_tokens: 3000,
