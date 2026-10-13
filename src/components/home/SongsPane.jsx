@@ -59,7 +59,12 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
   const [include, setInclude] = useState([])                             // e.g. ['occ:Christmas', 'lang:Hindi']
 
   const pickSort = v => { setSort(v); setPref('librarySort', v) }
-  const toggleInclude = k => setInclude(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]))
+  const [only, setOnly] = useState([])   // bubbles filled in: show only these occasions / languages
+  const toggleInclude = k => {
+    setInclude(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]))
+    setOnly(prev => prev.filter(x => x !== k))
+  }
+  const toggleOnly = k => setOnly(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]))
 
   // Tags per song, worked out once per list change.
   const tagged = useMemo(() => songs.map(song => ({
@@ -68,11 +73,12 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
 
   // Songs left out of the main list: occasions, and languages other than the library's main one.
   const visibleByDefault = t => !t.occasions.length && t.language === mainLanguage
-  const langPicked = include.filter(k => k.startsWith('lang:')).map(k => k.slice(5))
   const included = t =>
     (!t.occasions.length || t.occasions.some(o => include.includes(`occ:${o}`))) &&
-    // Picking a language narrows the list to that language (like any other filter).
-    (langPicked.length ? langPicked.includes(t.language) : t.language === mainLanguage)
+    (t.language === mainLanguage || include.includes(`lang:${t.language}`))
+  // A filled-in occasion / language bubble narrows the list to songs with any of the filled ones.
+  const matchesOnly = t => !only.length || only.some(k =>
+    k.startsWith('occ:') ? t.occasions.includes(k.slice(4)) : t.language === k.slice(5))
 
   const occasionCounts = useMemo(() => {
     const m = {}
@@ -81,10 +87,8 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
   }, [tagged])
   const languageCounts = useMemo(() => {
     const m = {}
-    for (const t of tagged) m[t.language] = (m[t.language] || 0) + 1
-    // Only worth offering when the library has more than one language; main language first.
-    if (Object.keys(m).length < 2) return []
-    return Object.entries(m).sort((a, b) => (b[0] === mainLanguage) - (a[0] === mainLanguage) || b[1] - a[1] || a[0].localeCompare(b[0]))
+    for (const t of tagged) if (t.language !== mainLanguage) m[t.language] = (m[t.language] || 0) + 1
+    return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   }, [tagged, mainLanguage])
 
   const inView = useMemo(() => tagged.filter(included), [tagged, include, mainLanguage])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -104,25 +108,27 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
     return pool
       .filter(({ song: s }) => !q || s.title.toLowerCase().includes(q) || (s.artist || '').toLowerCase().includes(q) || (s.ccli_number || '').includes(q))
       .filter(t => !rotationOnly || t.song.metadata?.rotation)
+      .filter(matchesOnly)
       .filter(t => !activeThemes.length || t.themes.some(th => activeThemes.includes(th)))
       .sort(sort === 'recent'
         ? (a, b) => (lastUsed[b.song.id] || '').localeCompare(lastUsed[a.song.id] || '') || byTitle(a, b)
         : byTitle)
-  }, [tagged, inView, query, activeThemes, rotationOnly, sort, lastUsed])
+  }, [tagged, inView, query, activeThemes, rotationOnly, only, sort, lastUsed])  // eslint-disable-line react-hooks/exhaustive-deps
   const rotationCount = inView.filter(t => t.song.metadata?.rotation).length
 
   const hiddenCount = tagged.length - inView.length
 
-  // Occasions / languages added from the sort menu show as bubbles; tap one to hide those songs again.
+  // Occasions / languages added from the sort menu get a bubble under Filter, like Rotation List:
+  // tap to fill it in and show only those songs.
   const includeBubbles = include.map(k => {
     const name = k.slice(k.indexOf(':') + 1)
-    const n = k.startsWith('occ:') ? occasionCounts.find(([o]) => o === name)?.[1] : languageCounts.find(([l]) => l === name)?.[1]
+    const n = inView.filter(t => (k.startsWith('occ:') ? t.occasions.includes(name) : t.language === name)).length
+    const on = only.includes(k)
     return (
-      <button key={k} onClick={() => toggleInclude(k)} title={k.startsWith('lang:') ? `Stop showing only ${name}` : `Hide ${name} songs`}
-        className={`flex items-center gap-1 pl-2.5 pr-2 h-6 rounded-full border text-[11px] font-medium ${
-          k.startsWith('lang:') ? 'border-accent bg-accent text-white' : 'border-amber-500 bg-amber-500 text-black'}`}>
-        {name} <span className="opacity-70">{n || 0}</span> <X size={10} />
-      </button>
+      <button key={k} onClick={() => toggleOnly(k)} aria-pressed={on} title={on ? `Showing only ${name}` : `Show only ${name}`}
+        className={`px-2.5 h-6 rounded-full border text-[11px] font-medium transition-colors ${
+          on ? 'border-accent bg-accent text-white' : 'border-accent/50 text-accent-light hover:bg-accent/10'
+        }`}>{name} <span className="opacity-70">{n}</span></button>
     )
   })
 
@@ -195,10 +201,10 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
           </div>
           <button onClick={() => setShowFilters(v => !v)} aria-expanded={showFilters} title="Filter" aria-label="Filter songs"
             className={`relative shrink-0 flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg border text-sm transition-colors ${
-              showFilters || activeThemes.length || rotationOnly ? 'border-accent bg-accent/15 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+              showFilters || activeThemes.length || rotationOnly || only.length ? 'border-accent bg-accent/15 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
             }`}>
             <Filter size={14} /> <span className="hidden sm:inline text-xs">Filter</span>
-            {activeThemes.length + rotationOnly > 0 && <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] leading-4 text-center">{activeThemes.length + rotationOnly}</span>}
+            {activeThemes.length + rotationOnly + only.length > 0 && <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] leading-4 text-center">{activeThemes.length + rotationOnly + only.length}</span>}
           </button>
         <div className="relative shrink-0">
           <button onClick={() => setSortOpen(o => !o)} title="Sort and show more songs" aria-label="Sort and show more songs" aria-expanded={sortOpen}
@@ -214,16 +220,15 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             <MenuItem on={sort === 'az'} onClick={() => pickSort('az')}>A–Z</MenuItem>
             {(occasionCounts.length > 0 || languageCounts.length > 0) && (
               <div className="border-t border-border mt-1.5 pt-0.5">
-                {occasionCounts.length > 0 && <MenuHeading>Also show</MenuHeading>}
+                <MenuHeading>Also show</MenuHeading>
                 {occasionCounts.map(([o, n]) => (
                 <MenuItem key={o} on={include.includes(`occ:${o}`)} count={n} onClick={() => toggleInclude(`occ:${o}`)}>{o}</MenuItem>
                 ))}
-                {languageCounts.length > 0 && <MenuHeading>Language — show only</MenuHeading>}
                 {languageCounts.map(([l, n]) => (
                 <MenuItem key={l} on={include.includes(`lang:${l}`)} count={n} onClick={() => toggleInclude(`lang:${l}`)}>{l}</MenuItem>
                 ))}
                 {include.length > 0 && (
-                <button onClick={() => setInclude([])} className="w-full px-3 h-8 text-left text-xs text-muted hover:text-[#f5f5f5]">Back to the main list</button>
+                <button onClick={() => { setInclude([]); setOnly([]) }} className="w-full px-3 h-8 text-left text-xs text-muted hover:text-[#f5f5f5]">Back to the main list</button>
                 )}
               </div>
             )}
@@ -252,9 +257,6 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             </div>
           </div>
         )}
-        {!showFilters && include.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">{includeBubbles}</div>
-        )}
         {showFilters && (
           <div className="flex flex-wrap items-center gap-1">
             <button onClick={() => setRotationOnly(v => !v)} aria-pressed={rotationOnly}
@@ -269,8 +271,8 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
                   activeThemes.includes(t) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                 } disabled:opacity-35 disabled:cursor-default`}>{t} <span className="opacity-60">{n}</span></button>
             ))}
-            {(activeThemes.length > 0 || rotationOnly) && (
-              <button onClick={() => { setActiveThemes([]); setRotationOnly(false) }} className="flex items-center gap-0.5 px-1.5 h-6 text-[11px] text-muted hover:text-[#f5f5f5]">
+            {(activeThemes.length > 0 || rotationOnly || only.length > 0) && (
+              <button onClick={() => { setActiveThemes([]); setRotationOnly(false); setOnly([]) }} className="flex items-center gap-0.5 px-1.5 h-6 text-[11px] text-muted hover:text-[#f5f5f5]">
                 <X size={10} /> Clear
               </button>
             )}
