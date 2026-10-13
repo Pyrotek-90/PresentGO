@@ -41,7 +41,7 @@ const MenuItem = ({ on, onClick, children, count }) => (
 )
 
 export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onCreateSet, onAdd, onEdit, onView, onNew,
-  mainLanguage = DEFAULT_LIBRARY_LANGUAGE, lastUsed = {} }) {
+  mainLanguage = DEFAULT_LIBRARY_LANGUAGE, lastUsed = {}, keepVisible = [] }) {
   const [query, setQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState([])
   const [addMode, setAddMode] = useState(false)
@@ -73,9 +73,9 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
 
   // Songs left out of the main list: occasions, and languages other than the library's main one.
   const visibleByDefault = t => !t.occasions.length && t.language === mainLanguage
-  const included = t =>
+  const included = t => keepVisible.includes(t.song.id) || (
     (!t.occasions.length || t.occasions.some(o => include.includes(`occ:${o}`))) &&
-    (t.language === mainLanguage || include.includes(`lang:${t.language}`))
+    (t.language === mainLanguage || include.includes(`lang:${t.language}`)))
   // A filled-in occasion / language bubble narrows the list to songs with any of the filled ones.
   const matchesOnly = t => !only.length || only.some(k =>
     k.startsWith('occ:') ? t.occasions.includes(k.slice(4)) : t.language === k.slice(5))
@@ -91,7 +91,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
     return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   }, [tagged, mainLanguage])
 
-  const inView = useMemo(() => tagged.filter(included), [tagged, include, mainLanguage])  // eslint-disable-line react-hooks/exhaustive-deps
+  const inView = useMemo(() => tagged.filter(included), [tagged, include, mainLanguage, keepVisible])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const themeCounts = useMemo(() => {
     const m = {}

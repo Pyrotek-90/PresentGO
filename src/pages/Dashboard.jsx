@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [targetSetId, setTargetSetId] = useState(null)
   const [editing, setEditing] = useState(null) // song, or true for new
   const [viewing, setViewing] = useState(null)
+  const [justAdded, setJustAdded] = useState([])   // new songs stay in view even if they'd normally be hidden
 
   useEffect(() => {
     supabase.from('sets').select('*, set_items(type, content)').eq('user_id', user.id)
@@ -99,7 +100,7 @@ export default function Dashboard() {
         <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
           onTargetChange={setTargetSetId} onCreateSet={createTargetSet} onAdd={addToSet} onEdit={setEditing}
           onView={setViewing} onNew={() => setEditing(true)}
-          lastUsed={lastUsed} mainLanguage={user.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE} />
+          lastUsed={lastUsed} keepVisible={justAdded} mainLanguage={user.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE} />
       </div>
 
       {viewing && <SongViewer song={viewing} onClose={() => setViewing(null)} />}
@@ -112,7 +113,7 @@ export default function Dashboard() {
           onDelete={deleteSong}
           onSaved={saved => { setViewing(v => (v && v.id === saved.id ? saved : v)); setSongs(prev =>
             prev.find(s => s.id === saved.id) ? prev.map(s => s.id === saved.id ? saved : s) : [...prev, saved]
-          ) }}
+          ); if (editing === true) setJustAdded(ids => (ids.includes(saved.id) ? ids : [...ids, saved.id])) }}
         />
       )}
     </Layout>

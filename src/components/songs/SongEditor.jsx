@@ -760,12 +760,12 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
 
   const jumpTo = n => {
     if (n === step) return
-    if (n > 1 && !rawLyrics.trim()) return
+    if (n > 1 && (!rawLyrics.trim() || !title.trim())) return
     goTo(n)
   }
 
   const canAdvance = () => {
-    if (step === 1) return !!rawLyrics.trim()
+    if (step === 1) return !!rawLyrics.trim() && !!title.trim()
     return true
   }
 
@@ -944,6 +944,9 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
             </>
           )
         })()}
+        {!song?.id && (!title.trim() || !rawLyrics.trim()) && (
+          <p className="text-[11px] text-muted">Add a {[!title.trim() && 'title', !rawLyrics.trim() && 'lyrics'].filter(Boolean).join(' and ')} to continue.</p>
+        )}
       </div>
     </div>
   )
@@ -1253,12 +1256,12 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
         </button>
         <label className="h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
           <span className="text-[9px] uppercase tracking-normal sm:tracking-wider text-muted shrink-0">BPM</span>
-          <input className="w-full min-w-0 max-w-[2.75rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          <input className="w-full min-w-0 max-w-[2.75rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none placeholder:font-normal placeholder:text-muted/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             type="number" inputMode="numeric" min="40" max="240" placeholder="75" value={bpm} onChange={e => setBpm(e.target.value)} />
         </label>
         <label className="h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
           <span className="text-[9px] uppercase tracking-normal sm:tracking-wider text-muted shrink-0">CCLI</span>
-          <input className="w-full min-w-0 max-w-[4.5rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none" inputMode="numeric" placeholder="22025" value={ccliNumber}
+          <input className="w-full min-w-0 max-w-[4.5rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none placeholder:font-normal placeholder:text-muted/40" inputMode="numeric" placeholder="22025" value={ccliNumber}
             onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
         </label>
         {youtubeId && !ytOpen ? (
