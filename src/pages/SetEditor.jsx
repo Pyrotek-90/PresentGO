@@ -17,7 +17,7 @@ import { formatLyrics } from '../lib/lyricFormatter'
 import { arrangedSlides } from '../lib/arrangement'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
-  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen,
+  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen, Mic,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen, note: NotebookPen }
@@ -33,7 +33,7 @@ const ITEM_COLORS = {
 
 const REVEAL = 80   // px the row slides to show the trash can
 
-function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabel, onOptions, open, onSwipe, onDelete }) {
+function SortableRow({ leadLabel, item, idx, ItemIcon, colorClass, title, subtitle, keyLabel, onOptions, open, onSwipe, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   const [dx, setDx] = useState(null)       // live finger offset while swiping, null when not swiping
   const touch = useRef(null)
@@ -85,6 +85,12 @@ function SortableRow({ item, idx, ItemIcon, colorClass, title, subtitle, keyLabe
           <p className="text-sm font-medium truncate">{title}</p>
           <p className="text-xs text-muted truncate">{subtitle}</p>
         </button>
+        {leadLabel && (
+          <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={`Lead singer: ${leadLabel}`}
+            className="shrink-0 max-w-[6.5rem] sm:max-w-[10rem] h-7 px-2 rounded-md bg-accent/15 text-accent-light text-xs font-medium flex items-center gap-1">
+            <Mic size={11} className="shrink-0" /><span className="truncate">{leadLabel}</span>
+          </button>
+        )}
         {keyLabel && (
           <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={`Key: ${keyLabel} (tap to change for this set)`}
             className="shrink-0 min-w-[2rem] h-7 px-2 rounded-md border border-border text-xs font-semibold text-muted hover:text-[#f5f5f5]">{keyLabel}</button>
@@ -152,19 +158,28 @@ export default function SetEditor() {
       if (!setData) { navigate('/'); return }
       setSet(setData)
       setItems(itemsData || [])
-      // Team assigned to this set (for choosing a lead singer per song). Fine if the team tables aren't set up.
-      supabase.from('set_assignments').select('status, member:team_members(id, name), position:positions(name, category)').eq('set_id', setId)
-        .then(({ data }) => {
-          const byId = {}
-          for (const a of data || []) {
-            if (!a.member) continue
-            const m = byId[a.member.id] || (byId[a.member.id] = { id: a.member.id, name: a.member.name, positions: [], singer: false, status: a.status })
-            if (a.position?.name) m.positions.push(a.position.name)
-            if (a.position?.category === 'Singers' || /sing|vocal|lead/i.test(a.position?.name || '')) m.singer = true
-            if (a.status === 'accepted') m.status = 'accepted'
-          }
-          setTeam(Object.values(byId).sort((x, y) => (y.singer - x.singer) || x.name.localeCompare(y.name)))
-        }, () => {})
+      // Team assigned to this set (for choosing a lead singer per song). Same three reads as the
+      // Schedule page, joined here; quietly empty if the team tables aren't set up.
+      Promise.all([
+        supabase.from('set_assignments').select('*').eq('set_id', setId),
+        supabase.from('team_members').select('id, name'),
+        supabase.from('positions').select('id, name, category'),
+      ]).then(([a, m, p]) => {
+        if (a.error) { console.warn('set team:', a.error.message); return }
+        const memberBy = Object.fromEntries((m.data || []).map(x => [x.id, x]))
+        const posBy = Object.fromEntries((p.data || []).map(x => [x.id, x]))
+        const byId = {}
+        for (const row of a.data || []) {
+          const mem = memberBy[row.member_id]
+          if (!mem) continue
+          const pos = posBy[row.position_id]
+          const t = byId[mem.id] || (byId[mem.id] = { id: mem.id, name: mem.name, positions: [], singer: false, status: row.status })
+          if (pos?.name && !t.positions.includes(pos.name)) t.positions.push(pos.name)
+          if (pos?.category === 'Singers' || /sing|vocal|lead|worship leader/i.test(pos?.name || '')) t.singer = true
+          if (row.status === 'accepted') t.status = 'accepted'
+        }
+        setTeam(Object.values(byId).sort((x, y) => (y.singer - x.singer) || x.name.localeCompare(y.name)))
+      }).catch(e => console.warn('set team:', e))
       if (location.state?.newSet) {
         openDetailsFor(setData, { name: '' })
         navigate(location.pathname, { replace: true, state: null })   // a refresh shouldn't reopen it
@@ -709,7 +724,8 @@ export default function SetEditor() {
                         <SortableRow key={item.id} item={item} idx={idx}
                           ItemIcon={ITEM_ICONS[item.type] || Square} colorClass={ITEM_COLORS[item.type] || ITEM_COLORS.blank}
                           title={itemTitle(item)}
-                          subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.lead?.name ? ` · Lead: ${item.content.lead.name}` : item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
+                          subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
+                          leadLabel={item.type === 'song' ? (item.content?.lead?.name || '').split(' ')[0] : ''}
                           keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.preferred_key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
                           onOptions={it => (it.type === 'song' || it.type === 'blank' ? setOptionsItem(it) : handleEdit(it))}
                           open={swipedId === item.id} onSwipe={o => setSwipedId(o ? item.id : null)}
