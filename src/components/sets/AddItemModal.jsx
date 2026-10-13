@@ -13,8 +13,8 @@ import { songLanguage, songThemes, songOccasions, THEMES, DEFAULT_LIBRARY_LANGUA
 // (PDFs and images). Existing text / presentation items in sets can still be edited.
 const ITEM_TYPES = [
   { id: 'welcome',      label: 'Title Slide',   icon: Star },
-  { id: 'song',         label: 'Song',          icon: Music },
   { id: 'content',      label: 'Content',       icon: FolderOpen },
+  { id: 'song',         label: 'Song',          icon: Music },
 ]
 
 const MEDIA_ICONS  = { presentation: Monitor, image: Image }
