@@ -1383,14 +1383,6 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             {title && <span className="text-muted text-sm hidden sm:block">— {title}</span>}
           </div>
           <div className="flex items-center gap-1">
-            {editing && onDelete && (
-              <button onClick={() => { if (confirmDelete) { onDelete(song); onClose() } else setConfirmDelete(true) }}
-                onBlur={() => setConfirmDelete(false)}
-                aria-label={confirmDelete ? 'Tap again to delete this song' : 'Delete song'} title={confirmDelete ? 'Tap again to delete' : 'Delete song'}
-                className={`sm:hidden w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${confirmDelete ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400'}`}>
-                <Trash2 size={16} />
-              </button>
-            )}
             <button onClick={requestClose} disabled={saving} className="btn-ghost p-1.5 rounded-lg" aria-label={editing && dirty ? 'Save and close' : 'Close'}
               title={editing && dirty ? 'Save and close' : 'Close'}>
               {saving ? <Loader2 size={18} className="animate-spin" /> : <X size={18} />}
@@ -1409,6 +1401,31 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
           {step === 5 && renderStep5()}
+
+          {/* Editing on a phone: Back / Delete / Next at the end of the page (X saves and closes) */}
+          {editing && (
+            <div className="sm:hidden mt-6 pt-4 border-t border-border flex items-center gap-2">
+              {step > 1 ? (
+                <button onClick={() => setStep(st => st - 1)} className="btn-secondary h-10 !px-4 flex items-center gap-1.5">
+                  <ArrowLeft size={15} /> Back
+                </button>
+              ) : <span />}
+              {onDelete && (
+                <button onClick={() => { if (confirmDelete) { onDelete(song); onClose() } else setConfirmDelete(true) }}
+                  onBlur={() => setConfirmDelete(false)}
+                  className={`mx-auto h-10 px-4 rounded-lg border text-sm flex items-center gap-1.5 transition-colors ${
+                    confirmDelete ? 'border-red-600 bg-red-700 text-white' : 'border-border text-muted hover:text-red-400 hover:border-red-500/50'
+                  }`}>
+                  <Trash2 size={15} /> {confirmDelete ? 'Tap again to delete' : 'Delete'}
+                </button>
+              )}
+              {step < 5 ? (
+                <button onClick={() => goTo(step + 1)} disabled={!canAdvance()} className="btn-primary h-10 !px-4 flex items-center gap-1.5 disabled:opacity-40">
+                  Next <ChevronRight size={16} />
+                </button>
+              ) : <span />}
+            </div>
+          )}
         </div>
 
         {confirmLeave && (
