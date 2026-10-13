@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -9,6 +9,7 @@ import SongsPane from '../components/home/SongsPane'
 import SongEditor from '../components/songs/SongEditor'
 import SongViewer from '../components/songs/SongViewer'
 import { groupSets, createSet as insertSet, todayISO } from '../lib/sets'
+import { DEFAULT_LIBRARY_LANGUAGE } from '../lib/songTags'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const [viewing, setViewing] = useState(null)
 
   useEffect(() => {
-    supabase.from('sets').select('*, set_items(type)').eq('user_id', user.id)
+    supabase.from('sets').select('*, set_items(type, content)').eq('user_id', user.id)
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
       .finally(() => setLoadingSets(false))
@@ -31,6 +32,19 @@ export default function Dashboard() {
       .catch(() => {})
       .finally(() => setLoadingSongs(false))
   }, [user.id])
+
+  // Most recent set date each song was used in (for "Recently used" sorting).
+  const lastUsed = useMemo(() => {
+    const m = {}
+    for (const set of sets) {
+      const d = set.service_date || set.created_at || ''
+      for (const it of set.set_items || []) {
+        const id = it.type === 'song' && it.content?.song_id
+        if (id && d > (m[id] || '')) m[id] = d
+      }
+    }
+    return m
+  }, [sets])
 
   // Default "add songs to" target: next upcoming set, else the most recent one
   useEffect(() => {
@@ -66,7 +80,7 @@ export default function Dashboard() {
     })
     if (error) throw error
     setSets(prev => prev.map(s => s.id === targetSetId
-      ? { ...s, set_items: [...(s.set_items || []), { type: 'song' }] } : s))
+      ? { ...s, set_items: [...(s.set_items || []), { type: 'song', content: { song_id: song.id } }] } : s))
   }
 
   const deleteSong = async song => {
@@ -82,7 +96,8 @@ export default function Dashboard() {
           onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
         <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
           onTargetChange={setTargetSetId} onCreateSet={createTargetSet} onAdd={addToSet} onEdit={setEditing}
-          onView={setViewing} onNew={() => setEditing(true)} />
+          onView={setViewing} onNew={() => setEditing(true)}
+          lastUsed={lastUsed} mainLanguage={user.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE} />
       </div>
 
       {viewing && <SongViewer song={viewing} onClose={() => setViewing(null)} />}
