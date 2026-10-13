@@ -163,10 +163,13 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
           <ul className="space-y-0.5">
             {filtered.map(song => (
               <li key={song.id} className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-[#1a1a1a] group">
-                <button onClick={() => onView(song)} className="flex-1 min-w-0 py-1 text-left truncate text-sm">
-                  <span className="font-medium">{song.title}</span>
-                  {song.artist && <span className="text-xs text-muted"> · {song.artist}</span>}
-                  {songKeys(song).length > 0 && <span className="text-xs text-muted"> · {songKeys(song).join(', ')}</span>}
+                <button onClick={() => onView(song)} className="flex-1 min-w-0 flex items-baseline gap-2 py-1 text-left text-sm">
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium">{song.title}</span>
+                    {song.artist && <span className="text-xs text-muted"> · {song.artist}</span>}
+                  </span>
+                  {/* keys stay visible: they sit at the right and never get cut off */}
+                  {songKeys(song).length > 0 && <span className="ml-auto shrink-0 text-xs text-muted">{songKeys(song).join(', ')}</span>}
                 </button>
                 {addMode && (
                   <button onClick={() => handleAdd(song)} disabled={noSets || !targetSetId}
