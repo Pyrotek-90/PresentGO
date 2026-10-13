@@ -1361,7 +1361,14 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const initialSnapshot = useRef(null)
   if (initialSnapshot.current === null) initialSnapshot.current = snapshot
   const dirty = snapshot !== initialSnapshot.current
-  const requestClose = () => { if (dirty && !saving) setConfirmLeave(true); else onClose() }
+  // Editing an existing song: X saves any changes and closes. A new song asks Save / Discard.
+  const editing = !!song?.id
+  const requestClose = () => {
+    if (saving) return
+    if (!dirty) return onClose()
+    if (editing) return handleSave()
+    setConfirmLeave(true)
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -1375,11 +1382,25 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
             <h2 className="text-lg font-semibold">{isNew ? 'Add Song' : 'Edit Song'}</h2>
             {title && <span className="text-muted text-sm hidden sm:block">— {title}</span>}
           </div>
-          <button onClick={requestClose} className="btn-ghost p-1.5 rounded-lg" aria-label="Close"><X size={18} /></button>
+          <div className="flex items-center gap-1">
+            {editing && onDelete && (
+              <button onClick={() => { if (confirmDelete) { onDelete(song); onClose() } else setConfirmDelete(true) }}
+                onBlur={() => setConfirmDelete(false)}
+                aria-label={confirmDelete ? 'Tap again to delete this song' : 'Delete song'} title={confirmDelete ? 'Tap again to delete' : 'Delete song'}
+                className={`sm:hidden w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${confirmDelete ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400'}`}>
+                <Trash2 size={16} />
+              </button>
+            )}
+            <button onClick={requestClose} disabled={saving} className="btn-ghost p-1.5 rounded-lg" aria-label={editing && dirty ? 'Save and close' : 'Close'}
+              title={editing && dirty ? 'Save and close' : 'Close'}>
+              {saving ? <Loader2 size={18} className="animate-spin" /> : <X size={18} />}
+            </button>
+          </div>
         </div>
 
         {/* Progress stepper */}
         <Stepper current={step} maxReached={maxReached} isNew={isNew} onSelect={jumpTo} />
+        {error && <p className="px-4 py-2 text-sm text-red-400 border-b border-red-500/30 bg-red-500/10 shrink-0">{error}</p>}
 
         {/* Step content */}
         <div className="overflow-y-auto flex-1 p-4 sm:p-5">
@@ -1388,7 +1409,6 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
           {step === 5 && renderStep5()}
-          {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
         </div>
 
         {confirmLeave && (
@@ -1400,7 +1420,7 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         )}
 
         {/* Footer navigation */}
-        <div className="flex items-center justify-between px-3 sm:px-5 py-3 border-t border-border shrink-0 gap-2 sm:gap-3">
+        <div className={`${editing ? 'hidden sm:flex' : 'flex'} items-center justify-between px-3 sm:px-5 py-3 border-t border-border shrink-0 gap-2 sm:gap-3`}>
           <div className="flex items-center gap-2">
             {step > 1 && (
               <button onClick={() => setStep(s => s - 1)} aria-label="Back" title="Back"
