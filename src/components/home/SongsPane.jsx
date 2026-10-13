@@ -11,7 +11,7 @@ const songKeys = song => {
   const m = song.metadata || {}
   const pref = m.preferred_key ? shortKey(m.preferred_key) : ''
   return [...new Set([m.original_key || m.key, ...(m.transposed_keys || [])].filter(Boolean).map(shortKey))]
-    .map(k => (k === pref ? `${k} ★` : k))
+    .map(k => ({ k, pref: k === pref }))
 }
 
 // Small popover menu that closes on an outside tap.
@@ -55,6 +55,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
   const [showFilters, setShowFilters] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
   const [sort, setSort] = useState(() => getPref('librarySort', 'az'))   // 'az' | 'recent'
+  const [rotationOnly, setRotationOnly] = useState(false)
   const [include, setInclude] = useState([])                             // e.g. ['occ:Christmas', 'lang:Hindi']
 
   const pickSort = v => { setSort(v); setPref('librarySort', v) }
@@ -98,11 +99,13 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
     const byTitle = (a, b) => a.song.title.localeCompare(b.song.title, undefined, { sensitivity: 'base' })
     return pool
       .filter(({ song: s }) => !q || s.title.toLowerCase().includes(q) || (s.artist || '').toLowerCase().includes(q) || (s.ccli_number || '').includes(q))
+      .filter(t => !rotationOnly || t.song.metadata?.rotation)
       .filter(t => !activeThemes.length || t.themes.some(th => activeThemes.includes(th)))
       .sort(sort === 'recent'
         ? (a, b) => (lastUsed[b.song.id] || '').localeCompare(lastUsed[a.song.id] || '') || byTitle(a, b)
         : byTitle)
-  }, [tagged, inView, query, activeThemes, sort, lastUsed])
+  }, [tagged, inView, query, activeThemes, rotationOnly, sort, lastUsed])
+  const rotationCount = inView.filter(t => t.song.metadata?.rotation).length
 
   const hiddenCount = tagged.length - inView.length
 
@@ -164,34 +167,6 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             className="btn-primary flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto !p-0 sm:!px-3 text-sm whitespace-nowrap">
             <Plus size={14} /> <span className="hidden sm:inline">New Song</span>
           </button>
-          <div className="relative">
-            <button onClick={() => setSortOpen(o => !o)} title="Sort and show more songs" aria-label="Sort and show more songs" aria-expanded={sortOpen}
-              className={`relative flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg border text-sm transition-colors ${
-                include.length ? 'border-accent bg-accent/15 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
-              }`}>
-              <ArrowUpDown size={14} /> <span className="hidden sm:inline text-xs">{sort === 'recent' ? 'Recent' : 'A–Z'}</span>
-              {include.length > 0 && <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] leading-4 text-center">{include.length}</span>}
-            </button>
-            <Menu open={sortOpen} onClose={() => setSortOpen(false)}>
-              <MenuHeading>Sort</MenuHeading>
-              <MenuItem on={sort === 'recent'} onClick={() => pickSort('recent')}>Recently used in a set</MenuItem>
-              <MenuItem on={sort === 'az'} onClick={() => pickSort('az')}>A–Z</MenuItem>
-              {(occasionCounts.length > 0 || languageCounts.length > 0) && (
-                <div className="border-t border-border mt-1.5 pt-0.5">
-                  <MenuHeading>Also show</MenuHeading>
-                  {occasionCounts.map(([o, n]) => (
-                    <MenuItem key={o} on={include.includes(`occ:${o}`)} count={n} onClick={() => toggleInclude(`occ:${o}`)}>{o}</MenuItem>
-                  ))}
-                  {languageCounts.map(([l, n]) => (
-                    <MenuItem key={l} on={include.includes(`lang:${l}`)} count={n} onClick={() => toggleInclude(`lang:${l}`)}>{l}</MenuItem>
-                  ))}
-                  {include.length > 0 && (
-                    <button onClick={() => setInclude([])} className="w-full px-3 h-8 text-left text-xs text-muted hover:text-[#f5f5f5]">Back to the main list</button>
-                  )}
-                </div>
-              )}
-            </Menu>
-          </div>
         </div>
       </div>
 
@@ -201,13 +176,41 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input className="input !pl-9 !h-8 text-sm" placeholder="Search title, artist, or CCLI #…" value={query} onChange={e => setQuery(e.target.value)} />
           </div>
-          <button onClick={() => setShowFilters(v => !v)} aria-expanded={showFilters} title="Filter by theme" aria-label="Filter by theme"
+          <button onClick={() => setShowFilters(v => !v)} aria-expanded={showFilters} title="Filter" aria-label="Filter songs"
             className={`relative shrink-0 flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg border text-sm transition-colors ${
-              showFilters || activeThemes.length ? 'border-accent bg-accent/15 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+              showFilters || activeThemes.length || rotationOnly ? 'border-accent bg-accent/15 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
             }`}>
             <Filter size={14} /> <span className="hidden sm:inline text-xs">Filter</span>
-            {activeThemes.length > 0 && <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] leading-4 text-center">{activeThemes.length}</span>}
+            {activeThemes.length + rotationOnly > 0 && <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] leading-4 text-center">{activeThemes.length + rotationOnly}</span>}
           </button>
+        <div className="relative shrink-0">
+          <button onClick={() => setSortOpen(o => !o)} title="Sort and show more songs" aria-label="Sort and show more songs" aria-expanded={sortOpen}
+            className={`relative flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg border text-sm transition-colors ${
+              include.length ? 'border-accent bg-accent/15 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
+            }`}>
+            <ArrowUpDown size={14} /> <span className="hidden sm:inline text-xs">{sort === 'recent' ? 'Recent' : 'A–Z'}</span>
+            {include.length > 0 && <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] leading-4 text-center">{include.length}</span>}
+          </button>
+          <Menu open={sortOpen} onClose={() => setSortOpen(false)}>
+            <MenuHeading>Sort</MenuHeading>
+            <MenuItem on={sort === 'recent'} onClick={() => pickSort('recent')}>Recently used in a set</MenuItem>
+            <MenuItem on={sort === 'az'} onClick={() => pickSort('az')}>A–Z</MenuItem>
+            {(occasionCounts.length > 0 || languageCounts.length > 0) && (
+              <div className="border-t border-border mt-1.5 pt-0.5">
+                <MenuHeading>Also show</MenuHeading>
+                {occasionCounts.map(([o, n]) => (
+                <MenuItem key={o} on={include.includes(`occ:${o}`)} count={n} onClick={() => toggleInclude(`occ:${o}`)}>{o}</MenuItem>
+                ))}
+                {languageCounts.map(([l, n]) => (
+                <MenuItem key={l} on={include.includes(`lang:${l}`)} count={n} onClick={() => toggleInclude(`lang:${l}`)}>{l}</MenuItem>
+                ))}
+                {include.length > 0 && (
+                <button onClick={() => setInclude([])} className="w-full px-3 h-8 text-left text-xs text-muted hover:text-[#f5f5f5]">Back to the main list</button>
+                )}
+              </div>
+            )}
+          </Menu>
+        </div>
           {addMode && <span className="text-[10px] uppercase tracking-widest text-muted">Add to</span>}
           {addMode && <select className="input !h-8 !py-0 !px-2 text-sm !w-auto max-w-[14rem]" value={newSetOpen ? '__new' : targetSetId || ''}
             onChange={e => { if (e.target.value === '__new') setNewSetOpen(true); else { closeNewSet(); onTargetChange(e.target.value) } }}>
@@ -233,14 +236,19 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
         )}
         {showFilters && (
           <div className="flex flex-wrap items-center gap-1">
+            <button onClick={() => setRotationOnly(v => !v)} aria-pressed={rotationOnly}
+              className={`px-2.5 h-6 rounded-full border text-[11px] font-medium transition-colors ${
+                rotationOnly ? 'border-accent bg-accent text-white' : 'border-accent/50 text-accent-light hover:bg-accent/10'
+              }`}>Rotation List <span className="opacity-70">{rotationCount}</span></button>
+            <span className="w-px h-4 bg-border mx-0.5" />
             {themeCounts.map(([t, n]) => (
               <button key={t} onClick={() => toggleTheme(t)} disabled={!n && !activeThemes.includes(t)}
                 className={`px-2 h-6 rounded-full border text-[11px] transition-colors ${
                   activeThemes.includes(t) ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
                 } disabled:opacity-35 disabled:cursor-default`}>{t} <span className="opacity-60">{n}</span></button>
             ))}
-            {activeThemes.length > 0 && (
-              <button onClick={() => setActiveThemes([])} className="flex items-center gap-0.5 px-1.5 h-6 text-[11px] text-muted hover:text-[#f5f5f5]">
+            {(activeThemes.length > 0 || rotationOnly) && (
+              <button onClick={() => { setActiveThemes([]); setRotationOnly(false) }} className="flex items-center gap-0.5 px-1.5 h-6 text-[11px] text-muted hover:text-[#f5f5f5]">
                 <X size={10} /> Clear
               </button>
             )}
@@ -278,7 +286,13 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
                     )}
                   </span>
                   {/* keys stay visible: they sit at the right and never get cut off */}
-                  {songKeys(song).length > 0 && <span className="ml-auto shrink-0 text-xs text-muted">{songKeys(song).join(', ')}</span>}
+                  {songKeys(song).length > 0 && (
+                    <span className="ml-auto shrink-0 text-xs text-muted">
+                      {songKeys(song).map(({ k, pref }, i) => (
+                        <span key={k}>{i > 0 && ', '}<span className={pref ? 'text-accent-light font-semibold' : ''} title={pref ? 'Preferred key' : undefined}>{k}</span></span>
+                      ))}
+                    </span>
+                  )}
                 </button>
                 {addMode && (
                   <button onClick={() => handleAdd(song)} disabled={noSets || !targetSetId}
