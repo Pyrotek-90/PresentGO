@@ -407,6 +407,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  const [savedId, setSavedId] = useState(song?.id || null)   // set once a new song is first saved
+  const [keysSaved, setKeysSaved] = useState(false)
 
   const lyricsRef = useRef(null)
 
@@ -675,9 +677,12 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
   }
 
   // ── Save ─────────────────────────────────────────────────────────────────────
-  const handleSave = async () => {
-    if (!title.trim()) { setError('Song title is required.'); setStep(1); return }
+  // Saves the song. `opts.keys` overrides the transposed keys (used by "Save keys", which
+  // saves straight away and keeps the editor open).
+  const handleSave = async (opts = {}) => {
+    if (!title.trim()) { setError('Song title is required.'); setStep(1); return false }
     setSaving(true); setError(null)
+    const tKeys = opts.keys || transposedKeys
 
     const payload = {
       user_id: user.id,
@@ -696,23 +701,26 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         author,
         youtube_url: youtubeUrl.trim(),
         original_key: songKey,
-        transposed_keys: transposedKeys,
-        key_notes: Object.fromEntries(Object.entries(keyNotes).filter(([k, v]) => v && (k === songKey || transposedKeys.includes(k)))),
-        preferred_key: preferredKey && (preferredKey === songKey || transposedKeys.includes(preferredKey)) ? preferredKey : '',
+        transposed_keys: tKeys,
+        key_notes: Object.fromEntries(Object.entries(keyNotes).filter(([k, v]) => v && (k === songKey || tKeys.includes(k)))),
+        preferred_key: preferredKey && (preferredKey === songKey || tKeys.includes(preferredKey)) ? preferredKey : '',
       },
     }
 
     let result
-    if (song?.id) {
-      result = await supabase.from('songs').update(payload).eq('id', song.id).select().single()
+    if (savedId) {
+      result = await supabase.from('songs').update(payload).eq('id', savedId).select().single()
     } else {
       result = await supabase.from('songs').insert(payload).select().single()
     }
 
     setSaving(false)
-    if (result.error) { setError(result.error.message); return }
+    if (result.error) { setError(result.error.message); return false }
+    setSavedId(result.data.id)
     onSaved?.(result.data)
+    if (opts.stayOpen) { initialSnapshot.current = null; return true }
     onClose()
+    return true
   }
 
   // ── Step content ─────────────────────────────────────────────────────────────
@@ -1176,27 +1184,48 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       <div className="rounded-xl border border-border bg-card p-3 space-y-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-semibold mr-auto">Transposed Keys</p>
-          <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={effTMode} disabled={!keyOptions.length}
-            onChange={e => setTMode(e.target.value)} aria-label="Major or minor">
-            <option>Major</option><option>Minor</option>
-          </select>
+          {keysSaved && !wantTransposed && <span className="flex items-center gap-1 text-[11px] text-green-400"><Check size={12} /> Saved</span>}
+          <button type="button" disabled={!keyOptions.length}
+            onClick={() => { setWantTransposed(v => !v); setPendingKeys([]); setKeysSaved(false) }}
+            className="h-8 px-3 rounded-lg border border-accent/50 bg-accent/10 text-xs font-medium text-accent-light hover:bg-accent/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1">
+            {wantTransposed ? <X size={12} /> : <Plus size={12} />} {wantTransposed ? 'Cancel' : 'Add Keys'}
+          </button>
         </div>
         {!songKey && <p className="text-[11px] text-muted">Set the Original Key on the Chords step to add transposed keys.</p>}
-        {keyOptions.length > 0 && (
-          <div className="space-y-1">
+        {wantTransposed && keyOptions.length > 0 && (
+          <div className="rounded-lg border border-accent/30 bg-accent/5 p-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-muted">Transpose to</span>
+              <select className="input !w-[5.5rem] !h-8 !py-0 !px-2 text-sm" value={effTMode}
+                onChange={e => { setTMode(e.target.value); setPendingKeys([]) }} aria-label="Major or minor">
+                <option>Major</option><option>Minor</option>
+              </select>
+            </div>
             <div className="flex flex-wrap items-center gap-1">
               {keyOptions.map(k => {
                 const added = transposedKeys.includes(k)
+                const picked = pendingKeys.includes(k)
                 return (
-                  <button key={k} type="button" aria-pressed={added}
-                    onClick={() => (added ? (removeKey(k), preferredKey === k && setPreferredKey('')) : setTransposedKeys(prev => [...prev, k]))}
+                  <button key={k} type="button" disabled={added} aria-pressed={picked}
+                    onClick={() => setPendingKeys(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]))}
                     className={`px-2 h-8 min-w-[2.25rem] rounded-md border text-xs font-medium transition-colors ${
-                      added ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
-                    }`}>{added && <Check size={9} className="inline mr-0.5" />}{k.replace(/ (Major|Minor)$/, '')}</button>
+                      added ? 'border-border text-muted/40 cursor-default' :
+                      picked ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-accent/40'
+                    }`}>{(added || picked) && <Check size={9} className="inline mr-0.5" />}{k.replace(/ (Major|Minor)$/, '')}</button>
                 )
               })}
             </div>
-            <p className="text-[11px] text-muted">Tap a key to add it, tap again to remove. Star your preferred key and add notes below, then save with ✓.</p>
+            <button type="button" disabled={!pendingKeys.length || saving}
+              onClick={async () => {
+                const next = [...transposedKeys, ...pendingKeys.filter(k => !transposedKeys.includes(k))]
+                setTransposedKeys(next)
+                const ok = await handleSave({ keys: next, stayOpen: true })
+                if (ok) { setPendingKeys([]); setWantTransposed(false); setKeysSaved(true) }
+              }}
+              className="btn-primary w-full !h-9 !py-0 text-sm flex items-center justify-center gap-1.5 disabled:opacity-40">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {pendingKeys.length ? `Save ${pendingKeys.length} key${pendingKeys.length > 1 ? 's' : ''}` : 'Select keys to add'}
+            </button>
           </div>
         )}
         {songKey && (
