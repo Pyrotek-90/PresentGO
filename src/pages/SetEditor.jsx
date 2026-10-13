@@ -107,6 +107,7 @@ export default function SetEditor() {
   const [set, setSet]       = useState(null)
   const [items, setItems]   = useState([])
   const [songs, setSongs]   = useState({})
+  const [team, setTeam]     = useState([])   // people assigned to this set: { id, name, positions[], status }
   const [editItem, setEditItem] = useState(null)
   const [editSong, setEditSong] = useState(null)
   const [viewerOpen, setViewerOpen] = useState(false)
@@ -151,6 +152,19 @@ export default function SetEditor() {
       if (!setData) { navigate('/'); return }
       setSet(setData)
       setItems(itemsData || [])
+      // Team assigned to this set (for choosing a lead singer per song). Fine if the team tables aren't set up.
+      supabase.from('set_assignments').select('status, member:team_members(id, name), position:positions(name, category)').eq('set_id', setId)
+        .then(({ data }) => {
+          const byId = {}
+          for (const a of data || []) {
+            if (!a.member) continue
+            const m = byId[a.member.id] || (byId[a.member.id] = { id: a.member.id, name: a.member.name, positions: [], singer: false, status: a.status })
+            if (a.position?.name) m.positions.push(a.position.name)
+            if (a.position?.category === 'Singers' || /sing|vocal|lead/i.test(a.position?.name || '')) m.singer = true
+            if (a.status === 'accepted') m.status = 'accepted'
+          }
+          setTeam(Object.values(byId).sort((x, y) => (y.singer - x.singer) || x.name.localeCompare(y.name)))
+        }, () => {})
       if (location.state?.newSet) {
         openDetailsFor(setData, { name: '' })
         navigate(location.pathname, { replace: true, state: null })   // a refresh shouldn't reopen it
@@ -194,6 +208,15 @@ export default function SetEditor() {
   const handleSetArrangement = async (item, arrangement) => {
     const content = { ...item.content }
     if (arrangement?.length) content.arrangement = arrangement; else delete content.arrangement
+    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, content } : i)))
+    setOptionsItem(o => (o && o.id === item.id ? { ...o, content } : o))
+    if (setId !== 'mock') await supabase.from('set_items').update({ content }).eq('id', item.id)
+  }
+
+  // Lead singer for a song in this set (null = none).
+  const handleSetLead = async (item, lead) => {
+    const content = { ...item.content }
+    if (lead) content.lead = lead; else delete content.lead
     setItems(prev => prev.map(i => (i.id === item.id ? { ...i, content } : i)))
     setOptionsItem(o => (o && o.id === item.id ? { ...o, content } : o))
     if (setId !== 'mock') await supabase.from('set_items').update({ content }).eq('id', item.id)
@@ -469,6 +492,7 @@ export default function SetEditor() {
           ? { ...songs[i.content.song_id], slides: arrangedSlides(songs[i.content.song_id], i.content.arrangement) }
           : songs[i.content.song_id],
         key: i.content?.key || null,
+        lead: i.content?.lead?.name || null,
       }
     : null).filter(Boolean)
 
@@ -685,7 +709,7 @@ export default function SetEditor() {
                         <SortableRow key={item.id} item={item} idx={idx}
                           ItemIcon={ITEM_ICONS[item.type] || Square} colorClass={ITEM_COLORS[item.type] || ITEM_COLORS.blank}
                           title={itemTitle(item)}
-                          subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
+                          subtitle={`${item.type === 'media' && item.content?.media_category === 'presentation' ? 'Presentation' : ITEM_LABELS[item.type]}${item.type === 'song' && item.content?.lead?.name ? ` · Lead: ${item.content.lead.name}` : item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}${slideCount > 0 ? ` · ${slideCount} slide${slideCount !== 1 ? 's' : ''}` : ''}`}
                           keyLabel={item.type === 'song' ? shortKey(item.content?.key || songs[item.content?.song_id]?.metadata?.preferred_key || songs[item.content?.song_id]?.metadata?.original_key || songs[item.content?.song_id]?.metadata?.key || '') : ''}
                           onOptions={it => (it.type === 'song' || it.type === 'blank' ? setOptionsItem(it) : handleEdit(it))}
                           open={swipedId === item.id} onSwipe={o => setSwipedId(o ? item.id : null)}
@@ -717,6 +741,7 @@ export default function SetEditor() {
           onClose={() => setOptionsItem(null)}
           onSetKey={key => handleSetKey(optionsItem, key)}
           onSetArrangement={arr => handleSetArrangement(optionsItem, arr)}
+          team={team} onSetLead={lead => handleSetLead(optionsItem, lead)}
           onEdit={() => { const it = optionsItem; setOptionsItem(null); handleEdit(it) }}
           onRemove={() => handleDelete(optionsItem)} />
       )}

@@ -99,7 +99,7 @@ function ChartBlock({ block }) {
 
 // `setNav` turns this into "set mode": the songs of a set played back to back.
 //   { index, total, titles, onNext(), onPrev(), onJump(i) }   `startAtEnd` lands on the last page (coming back from the next song).
-export default function SongViewer({ song, onClose, setNav, initialMode, onModeChange, startAtEnd, initialKey }) {
+export default function SongViewer({ song, onClose, setNav, initialMode, onModeChange, startAtEnd, initialKey, lead }) {
   const meta = song.metadata || {}
   const original = meta.original_key || meta.key || ''
   const keys = [...new Set([original, ...(meta.transposed_keys || []), initialKey].filter(Boolean))]
@@ -338,7 +338,11 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
       <header className="shrink-0 border-b border-border bg-surface px-3 py-2 flex flex-nowrap items-center gap-2 sm:gap-3">
         <div className="order-1 flex-1 min-w-0 basis-14">
           <p className="truncate font-semibold leading-tight">{song.title}</p>
-          {song.artist && <p className="truncate text-xs text-muted">{song.artist}</p>}
+          {(song.artist || lead) && (
+            <p className="truncate text-xs text-muted">
+              {lead && <span className="text-accent-light font-medium">Lead: {lead}</span>}{lead && song.artist && ' · '}{song.artist}
+            </p>
+          )}
         </div>
 
         <div className="hidden sm:flex order-2 items-center gap-3 min-w-0 shrink overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
