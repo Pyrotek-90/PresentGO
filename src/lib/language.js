@@ -42,3 +42,22 @@ export function looksNonEnglish(text) {
   }
   return judged >= 2 && foreign / judged >= 0.25
 }
+
+// Best guess at a language name from the writing system alone ('' when it's Latin script).
+const SCRIPTS = [
+  [/\p{Script=Devanagari}/u, 'Hindi'], [/\p{Script=Tamil}/u, 'Tamil'], [/\p{Script=Telugu}/u, 'Telugu'],
+  [/\p{Script=Malayalam}/u, 'Malayalam'], [/\p{Script=Kannada}/u, 'Kannada'], [/\p{Script=Bengali}/u, 'Bengali'],
+  [/\p{Script=Gurmukhi}/u, 'Punjabi'], [/\p{Script=Gujarati}/u, 'Gujarati'], [/\p{Script=Hangul}/u, 'Korean'],
+  [/\p{Script=Hiragana}|\p{Script=Katakana}/u, 'Japanese'], [/\p{Script=Han}/u, 'Chinese'], [/\p{Script=Arabic}/u, 'Arabic'],
+  [/\p{Script=Cyrillic}/u, 'Russian'], [/\p{Script=Greek}/u, 'Greek'], [/\p{Script=Hebrew}/u, 'Hebrew'], [/\p{Script=Thai}/u, 'Thai'],
+  [/\p{Script=Ethiopic}/u, 'Amharic'],
+]
+export function scriptLanguage(text) {
+  const t = text || ''
+  let best = '', count = 0
+  for (const [re, name] of SCRIPTS) {
+    const n = (t.match(new RegExp(re.source, 'gu')) || []).length
+    if (n > count) { best = name; count = n }
+  }
+  return count >= 4 ? best : ''
+}
