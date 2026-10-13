@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
 import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
+import ArrangementBuilder from './ArrangementBuilder'
 import {
   X, Wand2, Plus, Trash2, SplitSquareHorizontal,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Search, Loader2, Lock,
@@ -443,6 +444,25 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
       (map[entry.label] || []).map((s, i) => ({ ...s, label: i === 0 ? entry.label : null }))
     )
 
+  // Section labels in the order they appear in the lyrics, repeats included
+  // (a bare "[Chorus]" later in the lyrics means "sing the chorus again").
+  const lyricsOrder = (text, map) => {
+    const labels = []
+    let pending = false
+    for (const line of (text || '').split('\n')) {
+      const m = line.match(/^\[(.+?)\]$/)
+      if (m) { labels.push(m[1].trim()); pending = true }
+      else if (!labels.length && line.trim() && !pending) { labels.push(map.Intro ? 'Intro' : 'Song'); pending = true }
+    }
+    return labels.filter(l => map[l])
+  }
+
+  const setOrder = arr => {
+    setArrangement(arr)
+    setSlides(buildSlidesFromArrangement(sectionsMap, arr))
+    setShowSlides(arr.length > 0 || sectionOrder.length > 0)
+  }
+
   const handleChordProImport = p => {
     if (p.title) setTitle(p.title)
     if (p.artist) setArtist(p.artist)
@@ -572,7 +592,8 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
 
     setSectionsRaw(raw); setSectionLPS(lpsMap)
     setSectionsMap(map); setSectionOrder(order)
-    const defaultArr = order.map(label => ({ id: crypto.randomUUID(), label }))
+    const fromLyrics = lyricsOrder(rawLyrics, map)
+    const defaultArr = (fromLyrics.length ? fromLyrics : order).map(label => ({ id: crypto.randomUUID(), label }))
     setArrangement(defaultArr)
     setSlides(buildSlidesFromArrangement(map, defaultArr))
     setShowSlides(true)
@@ -783,19 +804,19 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
         <div className="flex items-center justify-between">
           <label className="label mb-0" title="Label sections like [Verse 1] and [Chorus], or use Insert Section">Lyrics</label>
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <button onClick={() => setShowInsertMenu(v => !v)}
-                className="flex items-center gap-1.5 text-xs text-muted hover:text-[#f5f5f5] border border-border rounded-lg px-2.5 py-1.5 hover:border-accent/50 transition-colors">
-                <Tag size={12} /> Insert Section
-                <ChevronDown size={11} className={`transition-transform ${showInsertMenu ? 'rotate-180' : ''}`} />
-              </button>
-              {showInsertMenu && <InsertLabelMenu onInsert={insertSectionLabel} onClose={() => setShowInsertMenu(false)} />}
-            </div>
             <button onClick={handleSmartCleanup} disabled={cleaningUp || !rawLyrics.trim()}
               className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40">
               {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
               {cleaningUp ? 'Cleaning…' : 'Smart Cleanup'}
             </button>
+            <div className="relative">
+              <button onClick={() => setShowInsertMenu(v => !v)}
+                className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors">
+                <Tag size={12} /> Insert Section
+                <ChevronDown size={11} className={`transition-transform ${showInsertMenu ? 'rotate-180' : ''}`} />
+              </button>
+              {showInsertMenu && <InsertLabelMenu onInsert={insertSectionLabel} onClose={() => setShowInsertMenu(false)} />}
+            </div>
           </div>
         </div>
         {cleanupErr && <p className="text-xs text-amber-400">{cleanupErr}</p>}
@@ -947,96 +968,29 @@ export default function SongEditor({ song, onClose, onSaved, onDelete }) {
     )
   }
 
-  const renderStep3 = () => (
-    <div className="space-y-5">
-      {sectionOrder.length > 0 ? (
-        <>
-          {/* Section palette */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Section Palette</p>
-              <p className="text-xs text-muted">Tap to add to arrangement</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {sectionOrder.map(label => (
-                <button key={label}
-                  onClick={() => {
-                    const newArr = [...arrangement, { id: crypto.randomUUID(), label }]
-                    setArrangement(newArr)
-                    setSlides(buildSlidesFromArrangement(sectionsMap, newArr))
-                  }}
-                  className="px-3 py-1.5 rounded-lg border border-accent/40 bg-accent/10 text-accent-light text-sm font-medium hover:bg-accent/20 transition-colors">
-                  + {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Arrangement builder */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium flex items-center gap-2">
-                <ListOrdered size={15} className="text-accent-light" />
-                Song Order
-                {arrangement.length > 0 && (
-                  <span className="text-xs text-muted font-normal">
-                    — {arrangement.length} sections · {slides.length} slides
-                  </span>
-                )}
-              </p>
-              {arrangement.length > 0 && (
-                <button onClick={() => { setArrangement([]); setSlides([]); setShowSlides(false) }}
-                  className="text-xs text-muted hover:text-red-400 transition-colors">Clear</button>
-              )}
-            </div>
-            {arrangement.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {arrangement.map((entry, i) => (
-                  <span key={entry.id}
-                    className="inline-flex items-center gap-0.5 pl-1 pr-1.5 py-1 rounded-lg bg-surface border border-border text-xs text-[#f5f5f5]">
-                    <button disabled={i === 0}
-                      onClick={() => {
-                        const n = [...arrangement]; [n[i-1], n[i]] = [n[i], n[i-1]]
-                        setArrangement(n); setSlides(buildSlidesFromArrangement(sectionsMap, n))
-                      }}
-                      className="p-0.5 rounded text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ArrowLeft size={10} /></button>
-                    <span className="px-1">{entry.label}</span>
-                    <button disabled={i === arrangement.length - 1}
-                      onClick={() => {
-                        const n = [...arrangement]; [n[i], n[i+1]] = [n[i+1], n[i]]
-                        setArrangement(n); setSlides(buildSlidesFromArrangement(sectionsMap, n))
-                      }}
-                      className="p-0.5 rounded text-muted hover:text-[#f5f5f5] disabled:opacity-20"><ArrowRight size={10} /></button>
-                    <button
-                      onClick={() => {
-                        const n = arrangement.filter((_, ai) => ai !== i)
-                        setArrangement(n); setSlides(buildSlidesFromArrangement(sectionsMap, n))
-                        if (n.length === 0) setShowSlides(false)
-                      }}
-                      className="p-0.5 rounded text-muted hover:text-red-400"><X size={10} /></button>
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted italic">Tap sections above to build your arrangement (e.g. V1 → C → V2 → C → B → C).</p>
-            )}
-          </div>
-
-          {/* Compact preview */}
-          {slides.length > 0 && (
-            <p className="text-xs text-muted text-center">
-              {slides.length} slides will be generated · go back to <strong>Slides</strong> to edit individual slides
-            </p>
-          )}
-        </>
-      ) : (
-        <div className="text-center py-10 text-muted space-y-3">
-          <ListOrdered size={32} className="mx-auto opacity-30" />
-          <p className="text-sm">No sections detected. Go back to <strong>Lyrics</strong> and add <code className="bg-card px-1 rounded">[Verse 1]</code>, <code className="bg-card px-1 rounded">[Chorus]</code> etc., then reformat.</p>
-        </div>
-      )}
-    </div>
-  )
+  const renderStep3 = () => {
+    if (sectionOrder.length === 0) return (
+      <div className="text-center py-10 text-muted space-y-3">
+        <ListOrdered size={32} className="mx-auto opacity-30" />
+        <p className="text-sm">No sections detected. Go back to <strong>Lyrics</strong> and add <code className="bg-card px-1 rounded">[Verse 1]</code>, <code className="bg-card px-1 rounded">[Chorus]</code> etc., then reformat.</p>
+      </div>
+    )
+    const fromLyrics = lyricsOrder(rawLyrics, sectionsMap)
+    const same = fromLyrics.length === arrangement.length && fromLyrics.every((l, i) => arrangement[i].label === l)
+    return (
+      <div className="space-y-3">
+        <ArrangementBuilder
+          sections={sectionOrder}
+          slideCounts={Object.fromEntries(sectionOrder.map(l => [l, (sectionsMap[l] || []).length]))}
+          arrangement={arrangement}
+          onChange={setOrder}
+          canReset={fromLyrics.length > 0 && !same}
+          onReset={() => setOrder(fromLyrics.map(label => ({ id: crypto.randomUUID(), label })))}
+        />
+        <p className="text-xs text-muted text-center">Drag <span className="inline-block align-middle">⋮⋮</span> to reorder · go back to <strong>Slides</strong> to edit the words on each slide</p>
+      </div>
+    )
+  }
 
   const renderStep4 = () => {
     const applyKey = (root, acc, mode) => {
