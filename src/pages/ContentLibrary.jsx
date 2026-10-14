@@ -355,36 +355,13 @@ export default function ContentLibrary() {
 
           {/* Files pane */}
           <section className={`flex-1 min-w-0 rounded-xl border bg-card overflow-hidden ${dragOver ? 'border-accent ring-2 ring-accent/40' : 'border-border'}`}>
-            {/* Storage · Search · List / Tiles · Import */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-[#1a1a1a]">
-              <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border bg-[#242424] text-xs text-muted shrink-0" title={`${items.length} files use ${formatBytes(totalBytes)}`}>
-                <HardDrive size={14} className="text-accent-light" />
-                <span><span className="text-[#f5f5f5] font-medium">{formatBytes(totalBytes)}</span><span className="hidden sm:inline"> used · {items.length} file{items.length !== 1 ? 's' : ''}</span></span>
-              </div>
-              <div className="relative flex-1 min-w-0">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input className="input !pl-9 !h-8 text-sm" placeholder="Search all folders…" value={query} onChange={e => setQuery(e.target.value)} />
-              </div>
-              <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
-                {[['list', List, 'List view'], ['preview', LayoutGrid, 'Tiles view']].map(([v, I, t]) => (
-                  <button key={v} onClick={() => chooseView(v)} title={t} aria-label={t} aria-pressed={view === v}
-                    className={`h-8 w-9 flex items-center justify-center transition-colors ${view === v ? 'bg-accent/20 text-accent-light' : 'bg-[#242424] text-muted hover:text-[#f5f5f5]'}`}>
-                    <I size={15} />
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => fileRef.current?.click()} disabled={!!busy || !!review}
-                className="btn-primary shrink-0 flex items-center justify-center gap-1.5 !h-8 !py-0 w-9 lg:w-auto !px-0 lg:!px-3 text-sm disabled:opacity-60" title="Import PDF or Image" aria-label="Import PDF or Image">
-                {busy && !review ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                <span className="hidden lg:inline">Import</span>
-              </button>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-border min-h-[48px]">
+            {/* Header: Library path · folder actions · search · List / Tiles · Import */}
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border min-h-[52px]">
               {q ? (
-                <p className="text-sm font-medium flex-1 truncate">Results for “{query.trim()}”</p>
+                <p className="text-sm font-medium flex-1 min-w-0 truncate">Results for “{query.trim()}”</p>
               ) : (
                 <nav className="flex items-center gap-1 flex-1 min-w-0 text-sm overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                  <button onClick={() => openFolder(null)} className={`shrink-0 ${current ? 'text-muted hover:text-[#f5f5f5]' : 'font-semibold'}`}>Library</button>
+                  <button onClick={() => openFolder(null)} className={`shrink-0 flex items-center gap-1.5 ${current ? 'text-muted hover:text-[#f5f5f5]' : 'font-semibold'}`}><Library size={15} /> Library</button>
                   {path.map((f, i) => (
                     <span key={f.id} className="flex items-center gap-1 shrink-0">
                       <ChevronRight size={14} className="text-muted" />
@@ -393,20 +370,36 @@ export default function ContentLibrary() {
                       )}
                     </span>
                   ))}
+                  {current && (
+                    <>
+                      <button onClick={() => setRenaming({ id: current.id, name: current.name })} className={`${iconBtn} ml-1`} title="Rename folder" aria-label="Rename folder"><Pencil size={13} /></button>
+                      <button onClick={() => removeFolder(current)} className={delBtn(current.id)} title={confirmDel === current.id ? 'Tap again to delete' : 'Delete folder'} aria-label="Delete folder"><Trash2 size={13} /></button>
+                    </>
+                  )}
                 </nav>
               )}
-              {current && !q && (
-                <>
-                  <button onClick={() => setRenaming({ id: current.id, name: current.name })} className={iconBtn} title="Rename folder" aria-label="Rename folder"><Pencil size={14} /></button>
-                  <button onClick={() => removeFolder(current)} className={delBtn(current.id)} title={confirmDel === current.id ? 'Tap again to delete' : 'Delete folder'} aria-label="Delete folder"><Trash2 size={14} /></button>
-                </>
-              )}
-              {!q && (
-                <button onClick={() => setNewFolder('')} disabled={!foldersReady} title="New folder" aria-label="New folder"
-                  className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 shrink-0 disabled:opacity-40">
-                  <FolderPlus size={14} /><span className="hidden sm:inline">New Folder</span>
-                </button>
-              )}
+              <div className="relative order-last w-full sm:order-none sm:w-52 lg:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input className="input !pl-9 !h-8 text-sm" placeholder="Search all folders…" value={query} onChange={e => setQuery(e.target.value)} />
+              </div>
+              <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+                {[['list', List, 'List view'], ['preview', LayoutGrid, 'Tiles view']].map(([v, I, t]) => (
+                  <button key={v} onClick={() => chooseView(v)} title={t} aria-label={t} aria-pressed={view === v}
+                    className={`h-8 w-9 flex items-center justify-center transition-colors ${view === v ? 'bg-accent/20 text-accent-light' : 'bg-[#1a1a1a] text-muted hover:text-[#f5f5f5]'}`}>
+                    <I size={15} />
+                  </button>
+                ))}
+              </div>
+              {/* Phones have no Folders pane, so keep a New Folder button here for them */}
+              <button onClick={() => setNewFolder('')} disabled={!foldersReady || !!q} title="New folder" aria-label="New folder"
+                className="md:hidden h-8 w-9 flex items-center justify-center rounded-lg border border-accent/50 text-accent-light hover:bg-accent/10 shrink-0 disabled:opacity-40">
+                <FolderPlus size={15} />
+              </button>
+              <button onClick={() => fileRef.current?.click()} disabled={!!busy || !!review}
+                className="btn-primary shrink-0 flex items-center justify-center gap-1.5 !h-8 !py-0 w-9 lg:w-auto !px-0 lg:!px-3 text-sm disabled:opacity-60" title="Import PDF or Image" aria-label="Import PDF or Image">
+                {busy && !review ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                <span className="hidden lg:inline">Import</span>
+              </button>
             </div>
             {current && confirmDel === current.id && (
               <p className="px-3 py-1.5 text-[11px] text-red-300 border-b border-border">Tap delete again to remove “{current.name}”. Its files move up to {path[path.length - 2]?.name || 'Library'}.</p>
@@ -540,6 +533,11 @@ export default function ContentLibrary() {
                   })}
                 </div>
               )}
+            </div>
+            {/* Footer: storage used */}
+            <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-[#1a1a1a] text-xs text-muted">
+              <HardDrive size={14} className="text-accent-light shrink-0" />
+              <span><span className="text-[#f5f5f5] font-medium">{formatBytes(totalBytes)}</span> used · {items.length} file{items.length !== 1 ? 's' : ''}{folders.length ? ` · ${folders.length} folder${folders.length !== 1 ? 's' : ''}` : ''}</span>
             </div>
           </section>
         </div>
