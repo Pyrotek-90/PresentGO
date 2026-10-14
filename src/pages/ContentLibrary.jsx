@@ -4,7 +4,7 @@ import Layout from '../components/Layout'
 import FolderSelect from '../components/FolderSelect'
 import {
   ACCEPT, readImports, saveImport, itemSlides, deleteLibraryItem, renameLibraryItem,
-  loadLibrary, createFolder, renameFolder, deleteFolder, moveItems, folderPath, folderAndDescendants,
+  loadLibrary, createFolder, renameFolder, deleteFolder, moveItems, moveFolder, folderPath, folderAndDescendants,
   itemBytes, formatBytes, sortFiles,
 } from '../lib/contentLibrary'
 import {
@@ -281,6 +281,93 @@ export default function ContentLibrary() {
     try { await moveItems(ids, target) } catch (e) { setItems(before); setError(e.message) }
   }
 
+  // ── Drag a file (or the selected files) or a folder onto a folder or a path crumb to move it ──
+  // Mouse: press and move. Touch (iPad): press and hold, then drag.
+  const [drag, setDrag] = useState(null)   // { files, folder, label, x, y, over }  over: folder id, null = Library, undefined = nothing
+  const dragRef = useRef(null)
+  const suppressClick = useRef(false)
+  const guard = fn => () => { if (!suppressClick.current) fn() }
+
+  const canDropInto = (d, target) => {
+    if (!d || target === undefined) return false
+    if (d.folder) {
+      if (target && folderAndDescendants(folders, d.folder).has(target)) return false
+      return (folders.find(f => f.id === d.folder)?.parent_id || null) !== target
+    }
+    return d.files.some(id => (items.find(i => i.id === id)?.folder_id || null) !== target)
+  }
+  const dropInto = async (d, target) => {
+    setError(null)
+    if (d.folder) {
+      const before = folders
+      setFolders(prev => prev.map(f => (f.id === d.folder ? { ...f, parent_id: target } : f)))
+      try { await moveFolder(d.folder, target) } catch (e) { setFolders(before); setError(e.message) }
+    } else {
+      const before = items
+      setItems(prev => prev.map(i => (d.files.includes(i.id) ? { ...i, folder_id: target } : i)))
+      setSelected(new Set())
+      try { await moveItems(d.files, target) } catch (e) { setItems(before); setError(e.message) }
+    }
+  }
+  const startDrag = (e, kind, id) => {
+    if ((e.button !== undefined && e.button !== 0) || e.target.closest('[data-nodrag]') || !foldersReady || renaming) return
+    const sx = e.clientX, sy = e.clientY, touch = e.pointerType === 'touch'
+    const ids = kind === 'file' ? (selected.has(id) ? [...selected] : [id]) : []
+    const payload = kind === 'folder'
+      ? { files: [], folder: id, label: folders.find(f => f.id === id)?.name || 'Folder' }
+      : { files: ids, folder: null, label: ids.length > 1 ? `${ids.length} files` : items.find(i => i.id === id)?.name || 'File' }
+    let active = false
+    let timer = null
+    const cleanup = () => {
+      clearTimeout(timer)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cleanup)
+      window.removeEventListener('touchmove', holdStill)
+      dragRef.current = null
+      setDrag(null)
+    }
+    const activate = (x, y) => {
+      active = true
+      dragRef.current = { ...payload, over: undefined }
+      setDrag({ ...payload, x, y, over: undefined })
+      try { navigator.vibrate?.(10) } catch { /* ignore */ }
+    }
+    const move = ev => {
+      const x = ev.clientX, y = ev.clientY
+      if (!active) {
+        if (Math.hypot(x - sx, y - sy) < 8) return
+        if (touch) { cleanup(); return }   // finger moved before the hold: it's a scroll
+        activate(x, y)
+      }
+      const el = document.elementFromPoint(x, y)?.closest('[data-drop]')
+      const over = el ? (el.dataset.drop === 'root' ? null : el.dataset.drop) : undefined
+      dragRef.current.over = over
+      setDrag(d => d && { ...d, x, y, over })
+    }
+    const holdStill = ev => { if (active) ev.preventDefault() }   // stop the page scrolling while dragging
+    const up = () => {
+      const d = dragRef.current
+      const wasActive = active
+      cleanup()
+      if (!wasActive || !d) return
+      suppressClick.current = true
+      setTimeout(() => { suppressClick.current = false }, 100)
+      if (canDropInto(d, d.over)) dropInto(d, d.over)
+    }
+    if (touch) timer = setTimeout(() => activate(sx, sy), 350)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cleanup)
+    window.addEventListener('touchmove', holdStill, { passive: false })
+  }
+  const dropCls = id => (drag && drag.over === id && canDropInto(drag, id) ? '!border-accent ring-2 ring-accent bg-accent/15' : '')
+  const dragging = (kind, id) => drag && (kind === 'folder' ? drag.folder === id : drag.files.includes(id))
+  const dragProps = (kind, id) => ({
+    onPointerDown: e => startDrag(e, kind, id),
+    style: { WebkitTouchCallout: 'none', touchAction: 'pan-y' },
+  })
+
   const saveRename = async () => {
     const r = renaming
     setRenaming(null)
@@ -339,21 +426,15 @@ export default function ContentLibrary() {
                 <p className="text-sm font-medium flex-1 min-w-0 truncate">Results for “{query.trim()}”</p>
               ) : (
                 <nav className="flex items-center gap-1 flex-1 min-w-0 text-sm overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                  <h1 className="shrink-0"><button onClick={() => openFolder(null)} className={`flex items-center gap-1.5 text-base ${current ? 'text-muted hover:text-[#f5f5f5]' : 'font-semibold'}`}><Library size={15} /> Library</button></h1>
+                  <h1 className="shrink-0"><button data-drop="root" onClick={() => openFolder(null)} className={`flex items-center gap-1.5 text-base rounded-md px-1 -mx-1 ${dropCls(null)} ${current ? 'text-muted hover:text-[#f5f5f5]' : 'font-semibold'}`}><Library size={15} /> Library</button></h1>
                   {path.map((f, i) => (
                     <span key={f.id} className="flex items-center gap-1 shrink-0">
                       <ChevronRight size={14} className="text-muted" />
                       {renaming?.id === f.id ? renameInput('w-40') : (
-                        <button onClick={() => openFolder(f.id)} className={`text-base ${i === path.length - 1 ? 'font-semibold' : 'text-muted hover:text-[#f5f5f5]'}`}>{f.name}</button>
+                        <button data-drop={f.id} onClick={() => openFolder(f.id)} className={`text-base rounded-md px-1 ${dropCls(f.id)} ${i === path.length - 1 ? 'font-semibold' : 'text-muted hover:text-[#f5f5f5]'}`}>{f.name}</button>
                       )}
                     </span>
                   ))}
-                  {current && (
-                    <>
-                      <button onClick={() => setRenaming({ id: current.id, name: current.name })} className={`${iconBtn} ml-1`} title="Rename folder" aria-label="Rename folder"><Pencil size={13} /></button>
-                      <button onClick={() => removeFolder(current)} className={delBtn(current.id)} title={confirmDel === current.id ? 'Tap again to delete' : 'Delete folder'} aria-label="Delete folder"><Trash2 size={13} /></button>
-                    </>
-                  )}
                 </nav>
               )}
               <div className="relative order-last w-full sm:order-none sm:w-48 lg:w-56">
@@ -378,9 +459,6 @@ export default function ContentLibrary() {
                 <span className="hidden lg:inline">Import</span>
               </button>
             </div>
-            {current && confirmDel === current.id && (
-              <p className="px-3 py-1.5 text-[11px] text-red-300 border-b border-border">Tap delete again to remove “{current.name}”. Its files move up to {path[path.length - 2]?.name || 'Library'}.</p>
-            )}
 
             {newFolder !== null && (
               <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-[#1a1a1a]">
@@ -424,75 +502,90 @@ export default function ContentLibrary() {
                   </button>
                 )
               ) : view === 'list' ? (
-                <ul className="divide-y divide-border/60 -my-1">
+                <ul className="divide-y divide-border/60 -my-1 select-none">
                   {shownFolders.map(f => (
-                    <li key={f.id}>
-                      <button onClick={() => openFolder(f.id)} className="w-full flex items-center gap-3 py-2 px-1 text-left hover:bg-[#1f1f1f] rounded-lg">
-                        <span className="w-6" />
-                        <span className="w-16 aspect-video rounded bg-[#1a1a1a] border border-border flex items-center justify-center shrink-0"><Folder size={18} className="text-accent-light" /></span>
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-medium truncate">{f.name}</span>
-                          <span className="block text-[11px] text-muted">Folder · {counts[f.id] || 0} file{counts[f.id] === 1 ? '' : 's'}{q && f.parent_id ? ` · in ${folderLabel(f.parent_id)}` : ''}</span>
-                        </span>
-                        <ChevronRight size={16} className="text-muted shrink-0" />
-                      </button>
+                    <li key={f.id} data-drop={f.id} {...dragProps('folder', f.id)}
+                      className={`flex items-center gap-3 py-2 px-1 rounded-lg border border-transparent transition-colors ${dropCls(f.id)} ${dragging('folder', f.id) ? 'opacity-40' : ''}`}>
+                      <span className="w-6" />
+                      <button onClick={guard(() => openFolder(f.id))} className="w-16 aspect-video rounded bg-[#1a1a1a] border border-border flex items-center justify-center shrink-0"><Folder size={18} className="text-accent-light" /></button>
+                      <div className="flex-1 min-w-0">
+                        {renaming?.id === f.id ? renameInput('w-full') : (
+                          <button onClick={guard(() => openFolder(f.id))} className="block w-full text-left text-sm font-medium truncate">{f.name}</button>
+                        )}
+                        <p className="text-[11px] text-muted truncate">Folder · {counts[f.id] || 0} file{counts[f.id] === 1 ? '' : 's'}{q && f.parent_id ? ` · in ${folderLabel(f.parent_id)}` : ''}</p>
+                        {confirmDel === f.id && <p className="text-[10px] text-red-300">Tap again to delete the folder. Its files move up a level.</p>}
+                      </div>
+                      <button data-nodrag onClick={() => setRenaming({ id: f.id, name: f.name })} className={iconBtn} title="Rename folder" aria-label={`Rename ${f.name}`}><Pencil size={13} /></button>
+                      <button data-nodrag onClick={() => removeFolder(f)} className={delBtn(f.id)} title={confirmDel === f.id ? 'Tap again to delete' : 'Delete folder'} aria-label={`Delete ${f.name}`}><Trash2 size={13} /></button>
                     </li>
                   ))}
                   {shownFiles.map(item => {
                     const slides = itemSlides(item)
                     const on = selected.has(item.id)
                     return (
-                      <li key={item.id} className={`flex items-center gap-3 py-2 px-1 rounded-lg ${on ? 'bg-accent/10' : ''}`}>
-                        <Checkbox on={on} onClick={() => toggle(item.id)} label={`Select ${item.name}`} />
-                        <button onClick={() => slides.length && setViewing(item)} className="w-16 aspect-video rounded bg-black border border-border overflow-hidden shrink-0 flex items-center justify-center">
-                          {slides.length ? <img src={slides[0].url} alt="" className="w-full h-full object-contain" loading="lazy" /> : <Monitor size={14} className="text-muted" />}
+                      <li key={item.id} {...dragProps('file', item.id)}
+                        className={`flex items-center gap-3 py-2 px-1 rounded-lg ${on ? 'bg-accent/10' : ''} ${dragging('file', item.id) ? 'opacity-40' : ''}`}>
+                        <span data-nodrag><Checkbox on={on} onClick={() => toggle(item.id)} label={`Select ${item.name}`} /></span>
+                        <button onClick={guard(() => slides.length && setViewing(item))} className="w-16 aspect-video rounded bg-black border border-border overflow-hidden shrink-0 flex items-center justify-center">
+                          {slides.length ? <img src={slides[0].url} alt="" draggable={false} className="w-full h-full object-contain" loading="lazy" /> : <Monitor size={14} className="text-muted" />}
                         </button>
                         <div className="flex-1 min-w-0">
                           {renaming?.id === item.id ? renameInput('w-full') : (
-                            <button onClick={() => slides.length && setViewing(item)} className="block w-full text-left text-sm font-medium truncate" title={item.name}>{item.name}</button>
+                            <button onClick={guard(() => slides.length && setViewing(item))} className="block w-full text-left text-sm font-medium truncate" title={item.name}>{item.name}</button>
                           )}
                           <p className="text-[11px] text-muted truncate">
                             {fileMeta(item)} · {formatDate(item.created_at)}{itemBytes(item) ? ` · ${formatBytes(itemBytes(item))}` : ''}{q ? ` · ${folderLabel(item.folder_id)}` : ''}
                           </p>
                           {confirmDel === item.id && <p className="text-[10px] text-red-300">Tap again to delete. Sets that use it will lose these slides.</p>}
                         </div>
-                        <button onClick={() => setRenaming({ id: item.id, name: item.name })} className={iconBtn} title="Rename" aria-label={`Rename ${item.name}`}><Pencil size={13} /></button>
-                        <button onClick={() => remove(item)} className={delBtn(item.id)} title={confirmDel === item.id ? 'Tap again to delete' : 'Delete'} aria-label={`Delete ${item.name}`}><Trash2 size={13} /></button>
+                        <button data-nodrag onClick={() => setRenaming({ id: item.id, name: item.name })} className={iconBtn} title="Rename" aria-label={`Rename ${item.name}`}><Pencil size={13} /></button>
+                        <button data-nodrag onClick={() => remove(item)} className={delBtn(item.id)} title={confirmDel === item.id ? 'Tap again to delete' : 'Delete'} aria-label={`Delete ${item.name}`}><Trash2 size={13} /></button>
                       </li>
                     )
                   })}
                 </ul>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 select-none">
                   {shownFolders.map(f => (
-                    <button key={f.id} onClick={() => openFolder(f.id)} className="rounded-xl border border-border bg-[#1a1a1a] overflow-hidden text-left hover:border-[#555] transition-colors">
-                      <span className="flex aspect-video items-center justify-center"><Folder size={40} className="text-accent-light" strokeWidth={1.5} /></span>
-                      <span className="block px-2 py-1.5 border-t border-border">
-                        <span className="block text-sm font-medium truncate">{f.name}</span>
-                        <span className="block text-[10px] text-muted">{counts[f.id] || 0} file{counts[f.id] === 1 ? '' : 's'}{q && f.parent_id ? ` · in ${folderLabel(f.parent_id)}` : ''}</span>
-                      </span>
-                    </button>
+                    <div key={f.id} data-drop={f.id} {...dragProps('folder', f.id)}
+                      className={`rounded-xl border border-border bg-[#1a1a1a] overflow-hidden hover:border-[#555] transition-colors ${dropCls(f.id)} ${dragging('folder', f.id) ? 'opacity-40' : ''}`}>
+                      <button onClick={guard(() => openFolder(f.id))} className="flex w-full aspect-video items-center justify-center">
+                        <Folder size={40} className="text-accent-light" strokeWidth={1.5} />
+                      </button>
+                      <div className="flex items-center gap-1 px-2 py-1.5 border-t border-border">
+                        {renaming?.id === f.id ? renameInput('flex-1') : (
+                          <button onClick={guard(() => openFolder(f.id))} className="flex-1 min-w-0 text-left">
+                            <span className="block text-sm font-medium truncate">{f.name}</span>
+                            <span className="block text-[10px] text-muted truncate">{counts[f.id] || 0} file{counts[f.id] === 1 ? '' : 's'}{q && f.parent_id ? ` · in ${folderLabel(f.parent_id)}` : ''}</span>
+                          </button>
+                        )}
+                        <button data-nodrag onClick={() => setRenaming({ id: f.id, name: f.name })} className={iconBtn} title="Rename folder" aria-label={`Rename ${f.name}`}><Pencil size={13} /></button>
+                        <button data-nodrag onClick={() => removeFolder(f)} className={delBtn(f.id)} title={confirmDel === f.id ? 'Tap again to delete' : 'Delete folder'} aria-label={`Delete ${f.name}`}><Trash2 size={13} /></button>
+                      </div>
+                      {confirmDel === f.id && <p className="px-2 pb-1.5 text-[10px] text-red-300 leading-snug">Tap again to delete the folder. Its files move up a level.</p>}
+                    </div>
                   ))}
                   {shownFiles.map(item => {
                     const slides = itemSlides(item)
                     const on = selected.has(item.id)
                     const old = slides.length === 0
                     return (
-                      <div key={item.id} className={`rounded-xl border overflow-hidden ${on ? 'border-accent ring-1 ring-accent' : 'border-border'} bg-[#1a1a1a]`}>
+                      <div key={item.id} {...dragProps('file', item.id)}
+                        className={`rounded-xl border overflow-hidden ${on ? 'border-accent ring-1 ring-accent' : 'border-border'} bg-[#1a1a1a] ${dragging('file', item.id) ? 'opacity-40' : ''}`}>
                         <div className="relative">
-                          <button onClick={() => !old && setViewing(item)} disabled={old} className="relative block w-full aspect-video bg-black">
+                          <button onClick={guard(() => !old && setViewing(item))} disabled={old} className="relative block w-full aspect-video bg-black">
                             {old ? (
                               <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted text-[11px] px-2 text-center">
                                 <Monitor size={20} /> Old file — re-import as a PDF to use it as slides
                               </span>
-                            ) : <img src={slides[0].url} alt="" className="w-full h-full object-contain" loading="lazy" />}
+                            ) : <img src={slides[0].url} alt="" draggable={false} className="w-full h-full object-contain" loading="lazy" />}
                             {slides.length > 1 && (
                               <span className="absolute bottom-1.5 right-1.5 flex items-center gap-1 px-1.5 h-5 rounded bg-black/75 text-white text-[10px]">
                                 <Monitor size={10} /> {slides.length}
                               </span>
                             )}
                           </button>
-                          <Checkbox on={on} onClick={() => toggle(item.id)} label={`Select ${item.name}`} className="absolute top-1.5 left-1.5" />
+                          <span data-nodrag className="absolute top-1.5 left-1.5"><Checkbox on={on} onClick={() => toggle(item.id)} label={`Select ${item.name}`} /></span>
                         </div>
                         <div className="flex items-center gap-1 px-2 py-1.5">
                           {renaming?.id === item.id ? renameInput('flex-1') : (
@@ -501,8 +594,8 @@ export default function ContentLibrary() {
                               <p className="text-[10px] text-muted truncate">{fileMeta(item)} · {q ? folderLabel(item.folder_id) : formatDate(item.created_at)}</p>
                             </div>
                           )}
-                          <button onClick={() => setRenaming({ id: item.id, name: item.name })} className={iconBtn} title="Rename" aria-label={`Rename ${item.name}`}><Pencil size={13} /></button>
-                          <button onClick={() => remove(item)} className={delBtn(item.id)} title={confirmDel === item.id ? 'Tap again to delete' : 'Delete'} aria-label={`Delete ${item.name}`}><Trash2 size={13} /></button>
+                          <button data-nodrag onClick={() => setRenaming({ id: item.id, name: item.name })} className={iconBtn} title="Rename" aria-label={`Rename ${item.name}`}><Pencil size={13} /></button>
+                          <button data-nodrag onClick={() => remove(item)} className={delBtn(item.id)} title={confirmDel === item.id ? 'Tap again to delete' : 'Delete'} aria-label={`Delete ${item.name}`}><Trash2 size={13} /></button>
                         </div>
                         {confirmDel === item.id && <p className="px-2 pb-1.5 text-[10px] text-red-300 leading-snug">Tap again to delete. Sets that use it will lose these slides.</p>}
                       </div>
@@ -512,12 +605,20 @@ export default function ContentLibrary() {
               )}
             </div>
             {/* Footer: storage used */}
-            <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-[#1a1a1a] text-xs text-muted">
+            <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-border bg-[#1a1a1a] text-xs text-muted">
               <HardDrive size={14} className="text-accent-light shrink-0" />
               <span><span className="text-[#f5f5f5] font-medium">{formatBytes(totalBytes)}</span> used · {items.length} file{items.length !== 1 ? 's' : ''}{folders.length ? ` · ${folders.length} folder${folders.length !== 1 ? 's' : ''}` : ''}</span>
             </div>
           </section>
       </div>
+      {drag && (
+        <div className="fixed z-[60] pointer-events-none flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-accent text-white text-xs font-medium shadow-lg max-w-[16rem]"
+          style={{ left: drag.x + 14, top: drag.y + 14 }}>
+          {drag.folder ? <Folder size={13} /> : <FolderInput size={13} />}
+          <span className="truncate">{drag.label}</span>
+          {canDropInto(drag, drag.over) && <span className="shrink-0 opacity-80">→ {drag.over ? folders.find(f => f.id === drag.over)?.name : 'Library'}</span>}
+        </div>
+      )}
       {viewing && <SlidesViewer item={viewing} onClose={() => setViewing(null)} />}
       {moving && <MoveDialog folders={folders} count={selected.size} from={q ? undefined : folderId}
         onMove={moveSelected} onClose={() => setMoving(false)} />}
