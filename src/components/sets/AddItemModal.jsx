@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2, Filter, NotebookPen, Check } from 'lucide-react'
 import { filesToSlideImages } from '../../lib/importSlides'
-import { ACCEPT, readImports, saveImport, itemSlides, setItemContent } from '../../lib/contentLibrary'
+import ContentPicker from './ContentPicker'
 import TitleSlide from '../TitleSlide'
 import TitleSlideToolbar from '../TitleSlideToolbar'
 import SongEditor from '../songs/SongEditor'
@@ -28,17 +28,13 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
   const [confirmDelete, setConfirmDelete] = useState(false)
   const editing = !!item
   const { user } = useAuth()
-  const [type, setType] = useState(item ? (item.type === 'media' ? (item.content?.media_category === 'presentation' ? 'announcement' : 'content') : item.type) : 'welcome')
+  const [type, setType] = useState(item ? (item.type === 'media' ? (item.content?.files || item.content?.media_id || item.content?.media_category !== 'presentation' ? 'content' : 'announcement') : item.type) : 'welcome')
   const [songs, setSongs] = useState([])
   const [query, setQuery] = useState('')
   const [showNewSong, setShowNewSong] = useState(false)
   const [showSongFilters, setShowSongFilters] = useState(false)
   const [songFilters, setSongFilters] = useState([])   // e.g. ['rotation', 'theme:Praise', 'occ:Easter', 'lang:Hindi']
 
-  // Content library state
-  const [mediaItems, setMediaItems]   = useState([])
-  const [mediaQuery, setMediaQuery]   = useState('')
-  const [mediaLoaded, setMediaLoaded] = useState(false)
   // Worship Leader Notes
   const [notePick, setNotePick] = useState(() => setSongItems.filter(s => !s.hasNote).map(s => s.itemId))
   const [noteBusy, setNoteBusy] = useState(null)
@@ -46,9 +42,6 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
   const [noteEdit, setNoteEdit] = useState(item?.type === 'note' ? {
     ...item.content, versesText: (item.content?.verses || []).map(v => `${v.reference} — ${v.text}`).join('\n'),
   } : null)
-  const [cImport, setCImport] = useState(null)   // one file read for import: { group, name }
-  const [cBusy, setCBusy]     = useState(null)
-  const [cErr, setCErr]       = useState(null)
 
   // Welcome slide state
   const [welcomeTitle, setWelcomeTitle] = useState(item?.type === 'welcome' ? item.content?.title || '' : 'Welcome')
@@ -79,18 +72,6 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
       .order('title')
       .then(({ data }) => setSongs(data || []))
   }, [user?.id])
-
-  // Load media items when Content tab is selected
-  useEffect(() => {
-    if (type !== 'content' || mediaLoaded) return
-    supabase
-      .from('media_items')
-      .select('*')
-      .eq('user_id', user?.id)
-      .in('type', ['image', 'presentation'])
-      .order('created_at', { ascending: false })
-      .then(({ data }) => { setMediaItems(data || []); setMediaLoaded(true) })
-  }, [type, user?.id, mediaLoaded])
 
   const mainLanguage = user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE
   const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
@@ -190,31 +171,6 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
       content: { title: announcementTitle, slides: validSlides },
     })
     onClose()
-  }
-
-  const handleAddMedia = (item) => {
-    if (!itemSlides(item).length) return
-    onAdd({ type: 'media', content: setItemContent(item) })
-    onClose()
-  }
-
-  // Import one PDF or image into the Content Library, then add it to the set.
-  const pickContentFile = async files => {
-    if (!files?.length) return
-    setCErr(null); setCBusy('Reading…')
-    try {
-      const [group] = await readImports([files[0]], msg => setCBusy(`Reading ${msg}…`))
-      setCImport({ group, name: group.name })
-    } catch (e) { setCErr(e.message || 'Could not read that file.') } finally { setCBusy(null) }
-  }
-  const saveContentImport = async () => {
-    setCErr(null)
-    try {
-      const saved = await saveImport(user.id, cImport.group, cImport.name, (i, n) => setCBusy(`Uploading slide ${i} of ${n}…`))
-      cImport.group.pages.forEach(p => URL.revokeObjectURL(p.url))
-      setCImport(null); setCBusy(null)
-      handleAddMedia(saved)
-    } catch (e) { setCBusy(null); setCErr(`${e.message || 'Upload failed'} — try again.`) }
   }
 
   const updateAnnouncementSlide = (idx, lineIdx, value) => {
@@ -554,84 +510,11 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
             </div>
           )}
 
-          {/* Content: Content Library items, or import a PDF / image */}
-          {type === 'content' && (() => {
-            const q = mediaQuery.toLowerCase()
-            const list = mediaItems.filter(m => !q || m.name.toLowerCase().includes(q))
-            return (
-              <div className="space-y-2">
-                {editing && <p className="text-xs text-muted">Choose something else to replace <strong className="text-[#f5f5f5]">{item.content?.media_name}</strong>.</p>}
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1 min-w-0">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                    <input className="input !pl-9 !h-9 text-sm" placeholder="Search Content Library…" value={mediaQuery} onChange={e => setMediaQuery(e.target.value)} />
-                  </div>
-                  <label title="Import a PDF or image" aria-label="Import a PDF or image"
-                    className={`btn-primary shrink-0 flex items-center justify-center gap-1.5 h-9 w-9 sm:w-auto !p-0 sm:!px-3 text-sm cursor-pointer ${cBusy || cImport ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <Upload size={14} /> <span className="hidden sm:inline">PDF or Image</span>
-                    <input type="file" accept={ACCEPT} className="hidden" onChange={e => { pickContentFile(e.target.files); e.target.value = '' }} />
-                  </label>
-                </div>
-
-                {cBusy && !cImport && <p className="text-xs text-muted flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> {cBusy}</p>}
-                {cErr && <p className="text-xs text-red-400">{cErr}</p>}
-                {cImport && (
-                  <div className="rounded-xl border border-accent/40 bg-card p-2.5 space-y-2">
-                    <div className="flex items-center gap-2">
-                      {cImport.group.pages.length > 1 ? <Folder size={15} className="text-blue-400 shrink-0" /> : <Image size={15} className="text-green-400 shrink-0" />}
-                      <input autoFocus className="input !h-8 !py-0 text-sm flex-1 min-w-0" value={cImport.name} onChange={e => setCImport(c => ({ ...c, name: e.target.value }))}
-                        placeholder={cImport.group.pages.length > 1 ? 'Folder name' : 'Name'} aria-label="Name" />
-                      <span className="text-[11px] text-muted shrink-0">{cImport.group.pages.length} slide{cImport.group.pages.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="flex gap-1.5 overflow-x-auto pb-1">
-                      {cImport.group.pages.slice(0, 10).map((p, i) => <img key={i} src={p.url} alt="" className="h-11 aspect-video object-contain rounded border border-border bg-black shrink-0" />)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={saveContentImport} disabled={!!cBusy} className="btn-primary !h-8 !py-0 !px-3 text-sm flex items-center gap-1.5 disabled:opacity-60">
-                        {cBusy ? <><Loader2 size={13} className="animate-spin" /> {cBusy}</> : <><Plus size={13} /> Save &amp; add to set</>}
-                      </button>
-                      {!cBusy && <button onClick={() => { cImport.group.pages.forEach(p => URL.revokeObjectURL(p.url)); setCImport(null) }} className="btn-ghost text-sm">Cancel</button>}
-                    </div>
-                    <p className="text-[10px] text-muted">Saved to your Content Library too, so you can reuse it.</p>
-                  </div>
-                )}
-
-                <div className="rounded-xl border border-border bg-card overflow-hidden">
-                  {!mediaLoaded ? (
-                    <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
-                  ) : list.length ? (
-                    <ul className="divide-y divide-border/60">
-                      {list.map(m => {
-                        const slides = itemSlides(m)
-                        const folder = m.type === 'presentation'
-                        return (
-                          <li key={m.id}>
-                            <button onClick={() => handleAddMedia(m)} disabled={!slides.length}
-                              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left hover:bg-[#1a1a1a] transition-colors group disabled:opacity-50 disabled:cursor-not-allowed">
-                              <span className="w-14 aspect-video rounded bg-black border border-border overflow-hidden shrink-0 flex items-center justify-center">
-                                {slides.length ? <img src={slides[0].url} alt="" className="w-full h-full object-contain" loading="lazy" /> : <Monitor size={14} className="text-muted" />}
-                              </span>
-                              <span className="flex-1 min-w-0">
-                                <span className="block text-sm font-medium truncate">{m.name}</span>
-                                <span className="block text-[11px] text-muted">{!slides.length ? 'Old file — re-import as a PDF' : folder ? `Slide folder · ${slides.length} slides` : 'Image'}</span>
-                              </span>
-                              {slides.length > 0 && <Plus size={14} className="shrink-0 text-muted group-hover:text-accent-light" />}
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  ) : (
-                    <div className="text-center py-8 px-4 space-y-1">
-                      <FolderOpen size={26} className="mx-auto text-muted" />
-                      <p className="text-muted text-sm">{mediaQuery ? 'No matches.' : 'Your Content Library is empty.'}</p>
-                      {!mediaQuery && <p className="text-xs text-muted">Import a PDF or an image above.</p>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })()}
+          {/* Content: pick one or more Content Library files (or a whole folder) as one Program item */}
+          {type === 'content' && (
+            <ContentPicker userId={user?.id} item={editing && item?.type === 'media' ? item : null}
+              onAdd={content => { onAdd({ type: 'media', content }); onClose() }} />
+          )}
 
         </div>
       </div>

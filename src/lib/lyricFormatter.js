@@ -138,15 +138,20 @@ export function buildPresentationSlides(setItems, songs) {
         sectionLabel: null,
       })
     } else if (item.type === 'media' && item.content?.images?.length) {
+      // Several library files grouped in one item: each file's first slide is a section (its file name),
+      // so the presenter can jump between files.
       const imgs = item.content.images
+      const name = item.content?.media_name || 'Presentation'
+      const starts = new Map((item.content.files || []).map(f => [f.start, f.name]))
+      if (!starts.size) starts.set(0, name)
       imgs.forEach((img, i) => all.push({
         type: 'media',
         itemId: item.id,
-        itemTitle: item.content?.media_name || 'Presentation',
+        itemTitle: name,
         image: img.url,
         lines: [],
-        label: `${item.content?.media_name || 'Presentation'} · ${i + 1}/${imgs.length}`,
-        sectionLabel: i === 0 ? (item.content?.media_name || 'Presentation') : null,
+        label: starts.get(i) || null,
+        sectionLabel: starts.get(i) || null,
       }))
     } else if (item.type === 'media') {
       all.push({
