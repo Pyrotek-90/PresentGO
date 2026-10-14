@@ -323,11 +323,6 @@ export default function ContentLibrary() {
             <h1 className="text-xl sm:text-2xl font-bold">Content Library</h1>
             <p className="text-muted text-xs sm:text-sm mt-0.5">PDFs and images for announcements, sermons and more. Organise them in folders.</p>
           </div>
-          <button onClick={() => fileRef.current?.click()} disabled={!!busy || !!review}
-            className="btn-primary shrink-0 flex items-center gap-1.5 text-sm disabled:opacity-60">
-            {busy && !review ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-            <span className="hidden sm:inline">Import PDF or Image</span><span className="sm:hidden">Import</span>
-          </button>
           <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden"
             onChange={e => { pickFiles(e.target.files); e.target.value = '' }} />
         </div>
@@ -341,26 +336,6 @@ export default function ContentLibrary() {
           folderSelect={foldersReady && <FolderSelect folders={folders} value={dest} onChange={setDest} disabled={!!busy}
             onCreate={async (name, parent) => { const f = await createFolder(user.id, name, parent); setFolders(prev => [...prev, f]); return f }} />}
           onChangeName={(gi, name) => setReview(r => r.map((g, i) => (i === gi ? { ...g, name } : g)))} />}
-
-        {/* Storage · Search · List / Preview */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border bg-card text-xs text-muted shrink-0" title={`${items.length} files use ${formatBytes(totalBytes)}`}>
-            <HardDrive size={14} className="text-accent-light" />
-            <span><span className="text-[#f5f5f5] font-medium">{formatBytes(totalBytes)}</span><span className="hidden sm:inline"> used · {items.length} file{items.length !== 1 ? 's' : ''}</span></span>
-          </div>
-          <div className="relative flex-1 min-w-0 sm:max-w-sm">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input className="input !pl-9 !h-8 text-sm" placeholder="Search all folders…" value={query} onChange={e => setQuery(e.target.value)} />
-          </div>
-          <div className="ml-auto flex rounded-lg border border-border overflow-hidden shrink-0">
-            {[['list', List, 'List view'], ['preview', LayoutGrid, 'Preview view']].map(([v, I, t]) => (
-              <button key={v} onClick={() => chooseView(v)} title={t} aria-label={t} aria-pressed={view === v}
-                className={`h-8 w-9 flex items-center justify-center transition-colors ${view === v ? 'bg-accent/20 text-accent-light' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
-                <I size={15} />
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div className="flex gap-4 items-start">
           {/* Folders pane */}
@@ -380,6 +355,30 @@ export default function ContentLibrary() {
 
           {/* Files pane */}
           <section className={`flex-1 min-w-0 rounded-xl border bg-card overflow-hidden ${dragOver ? 'border-accent ring-2 ring-accent/40' : 'border-border'}`}>
+            {/* Storage · Search · List / Tiles · Import */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-[#1a1a1a]">
+              <div className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-border bg-[#242424] text-xs text-muted shrink-0" title={`${items.length} files use ${formatBytes(totalBytes)}`}>
+                <HardDrive size={14} className="text-accent-light" />
+                <span><span className="text-[#f5f5f5] font-medium">{formatBytes(totalBytes)}</span><span className="hidden sm:inline"> used · {items.length} file{items.length !== 1 ? 's' : ''}</span></span>
+              </div>
+              <div className="relative flex-1 min-w-0">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <input className="input !pl-9 !h-8 text-sm" placeholder="Search all folders…" value={query} onChange={e => setQuery(e.target.value)} />
+              </div>
+              <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+                {[['list', List, 'List view'], ['preview', LayoutGrid, 'Tiles view']].map(([v, I, t]) => (
+                  <button key={v} onClick={() => chooseView(v)} title={t} aria-label={t} aria-pressed={view === v}
+                    className={`h-8 w-9 flex items-center justify-center transition-colors ${view === v ? 'bg-accent/20 text-accent-light' : 'bg-[#242424] text-muted hover:text-[#f5f5f5]'}`}>
+                    <I size={15} />
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => fileRef.current?.click()} disabled={!!busy || !!review}
+                className="btn-primary shrink-0 flex items-center justify-center gap-1.5 !h-8 !py-0 w-9 lg:w-auto !px-0 lg:!px-3 text-sm disabled:opacity-60" title="Import PDF or Image" aria-label="Import PDF or Image">
+                {busy && !review ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                <span className="hidden lg:inline">Import</span>
+              </button>
+            </div>
             <div className="flex items-center gap-2 px-3 py-2 border-b border-border min-h-[48px]">
               {q ? (
                 <p className="text-sm font-medium flex-1 truncate">Results for “{query.trim()}”</p>
