@@ -8,7 +8,7 @@ import {
   itemBytes, formatBytes, sortFiles,
 } from '../lib/contentLibrary'
 import {
-  Upload, Image, Monitor, Trash2, X, Folder, FolderOpen, FolderPlus, FolderInput, Pencil, Check,
+  Upload, Image, Monitor, FileText, Trash2, X, Folder, FolderOpen, FolderPlus, FolderInput, Pencil, Check,
   Loader2, Search, HardDrive, List, LayoutGrid, ChevronRight, Library,
 } from 'lucide-react'
 
@@ -505,7 +505,7 @@ export default function ContentLibrary() {
                 <ul className="divide-y divide-border/60 -my-1 select-none">
                   {shownFolders.map(f => (
                     <li key={f.id} data-drop={f.id} {...dragProps('folder', f.id)}
-                      className={`flex items-center gap-3 py-2 px-1 rounded-lg border border-transparent transition-colors ${dropCls(f.id)} ${dragging('folder', f.id) ? 'opacity-40' : ''}`}>
+                      className={`flex items-center gap-3 py-2 px-1 rounded-lg transition-colors ${dropCls(f.id)} ${dragging('folder', f.id) ? 'opacity-40' : ''}`}>
                       <span className="w-6" />
                       <button onClick={guard(() => openFolder(f.id))} className="w-16 aspect-video rounded bg-[#1a1a1a] border border-border flex items-center justify-center shrink-0"><Folder size={18} className="text-accent-light" /></button>
                       <div className="flex-1 min-w-0">
@@ -526,8 +526,11 @@ export default function ContentLibrary() {
                       <li key={item.id} {...dragProps('file', item.id)}
                         className={`flex items-center gap-3 py-2 px-1 rounded-lg ${on ? 'bg-accent/10' : ''} ${dragging('file', item.id) ? 'opacity-40' : ''}`}>
                         <span data-nodrag><Checkbox on={on} onClick={() => toggle(item.id)} label={`Select ${item.name}`} /></span>
-                        <button onClick={guard(() => slides.length && setViewing(item))} className="w-16 aspect-video rounded bg-black border border-border overflow-hidden shrink-0 flex items-center justify-center">
-                          {slides.length ? <img src={slides[0].url} alt="" draggable={false} className="w-full h-full object-contain" loading="lazy" /> : <Monitor size={14} className="text-muted" />}
+                        <button onClick={guard(() => slides.length && setViewing(item))} title={fileMeta(item)}
+                          className="w-16 aspect-video rounded bg-[#1a1a1a] border border-border shrink-0 flex items-center justify-center">
+                          {!slides.length ? <Monitor size={18} className="text-muted" />
+                            : item.type === 'presentation' ? <FileText size={18} className="text-blue-400" />
+                            : <Image size={18} className="text-green-400" />}
                         </button>
                         <div className="flex-1 min-w-0">
                           {renaming?.id === item.id ? renameInput('w-full') : (
