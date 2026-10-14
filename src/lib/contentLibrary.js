@@ -183,3 +183,9 @@ export const contentMediaIds = content => content?.files?.length ? content.files
 
 // Files in name order, numbers sorted naturally (Slide 2 before Slide 10).
 export const sortFiles = list => [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+
+// Folders in tree order with their depth, for folder pickers.
+export function folderOptions(folders, parentId = null, depth = 0) {
+  return folders.filter(f => (f.parent_id || null) === parentId).sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap(f => [{ id: f.id, name: f.name, depth }, ...folderOptions(folders, f.id, depth + 1)])
+}
