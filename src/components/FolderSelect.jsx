@@ -7,6 +7,7 @@ export default function FolderSelect({ folders, value, onChange, onCreate, disab
   const [naming, setNaming] = useState(null)   // new folder name being typed
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+  const parentName = folders.find(f => f.id === value)?.name
 
   const create = async () => {
     const name = (naming || '').trim()
@@ -20,7 +21,7 @@ export default function FolderSelect({ folders, value, onChange, onCreate, disab
     return (
       <div className="flex items-center gap-1.5 flex-wrap">
         <FolderPlus size={14} className="text-accent-light shrink-0" />
-        <input autoFocus className="input !h-8 !py-0 text-sm flex-1 min-w-[8rem]" placeholder="New folder name" value={naming}
+        <input autoFocus className="input !h-8 !py-0 text-sm flex-1 min-w-[8rem]" placeholder={parentName ? `New folder inside ${parentName}` : 'New folder name'} value={naming}
           onChange={e => setNaming(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') create(); if (e.key === 'Escape') setNaming(null) }} />
         <button onClick={create} disabled={busy} className="btn-primary !h-8 !py-0 !px-3 text-sm flex items-center gap-1">{busy && <Loader2 size={12} className="animate-spin" />} Create</button>
         <button onClick={() => setNaming(null)} className="btn-ghost !h-8 !py-0 !px-2 text-sm">Cancel</button>
@@ -38,7 +39,7 @@ export default function FolderSelect({ folders, value, onChange, onCreate, disab
           className="input !h-8 !py-0 !pl-8 text-sm w-full">
           <option value="">Library (top level)</option>
           {folderOptions(folders).map(o => <option key={o.id} value={o.id}>{' '.repeat(o.depth + 1)}{o.name}</option>)}
-          {onCreate && <option value="__new">+ New folder…</option>}
+          {onCreate && <option value="__new">{parentName ? `+ New folder inside ${parentName}…` : '+ New folder…'}</option>}
         </select>
       </span>
     </label>

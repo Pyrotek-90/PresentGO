@@ -189,3 +189,8 @@ export function folderOptions(folders, parentId = null, depth = 0) {
   return folders.filter(f => (f.parent_id || null) === parentId).sort((a, b) => a.name.localeCompare(b.name))
     .flatMap(f => [{ id: f.id, name: f.name, depth }, ...folderOptions(folders, f.id, depth + 1)])
 }
+
+export async function moveFolder(id, parentId) {
+  const { error } = await supabase.from('media_folders').update({ parent_id: parentId || null }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
