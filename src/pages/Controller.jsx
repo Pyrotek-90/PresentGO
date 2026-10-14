@@ -475,7 +475,7 @@ export default function Controller() {
         <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {groupForGrid?.itemId === currentGroup?.itemId && currentSections.map(sec => (
             <button key={sec.idx} onClick={() => jumpToSection(sec.idx)} title={sec.label}
-              className={`shrink-0 h-8 min-w-[2.5rem] px-2.5 rounded-lg border text-xs font-semibold transition-colors ${
+              className={`shrink-0 h-8 min-w-[2.5rem] max-w-[11rem] truncate px-2.5 rounded-lg border text-xs font-semibold transition-colors ${
                 activeSection?.idx === sec.idx ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#555]'}`}>
               {abbreviate(sec.label)}
             </button>

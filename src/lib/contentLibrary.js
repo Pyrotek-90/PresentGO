@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
 import { filesToSlideImages } from './importSlides'
 
-// Content Library imports: PDFs and images only. Everything is stored as compressed slide JPEGs:
+// Content Library imports: PDFs and images only, organised into folders (media_folders).
+// Everything is stored as compressed slide JPEGs:
 //  - an image (or a 1-page PDF)  → media_items row, type 'image', url = the slide
 //  - a PDF with several pages    → media_items row, type 'presentation' (a "slide folder"),
 //                                  metadata.images = [{ url, storage_path }, …] in page order
@@ -35,7 +36,7 @@ async function uploadPage(userId, folder, page, i) {
 }
 
 // Save one group (from readImports) to the library. `name` overrides the folder / image name.
-export async function saveImport(userId, group, name, onProgress) {
+export async function saveImport(userId, group, name, onProgress, folderId = null) {
   const folder = crypto.randomUUID()
   const images = []
   for (let i = 0; i < group.pages.length; i++) {
@@ -52,6 +53,7 @@ export async function saveImport(userId, group, name, onProgress) {
     file_size: group.pages.reduce((n, p) => n + (p.blob?.size || 0), 0),
     mime_type: 'image/jpeg',
     metadata: multi ? { images, pages: images.length, source: group.file.name } : { source: group.file.name },
+    ...(folderId ? { folder_id: folderId } : {}),
   }
   const { data, error } = await supabase.from('media_items').insert(row).select().single()
   if (error) {
@@ -88,3 +90,96 @@ export const setItemContent = item => ({
   media_category: item.type === 'presentation' ? 'presentation' : 'image',
   images: itemSlides(item).map(({ url, storage_path }) => ({ url, storage_path })),
 })
+
+// ─── Folders ──────────────────────────────────────────────────────────────────
+
+// Files and folders for the library. Folders come back [] if the folders table isn't set up yet.
+export async function loadLibrary(userId) {
+  const [it, fo] = await Promise.all([
+    supabase.from('media_items').select('*').eq('user_id', userId).in('type', ['image', 'presentation']).order('created_at', { ascending: false }),
+    supabase.from('media_folders').select('*').eq('user_id', userId).order('name'),
+  ])
+  return { items: it.data || [], folders: fo.error ? [] : (fo.data || []), foldersReady: !fo.error, error: it.error?.message || null }
+}
+
+export async function createFolder(userId, name, parentId = null) {
+  const { data, error } = await supabase.from('media_folders')
+    .insert({ user_id: userId, name: name.trim() || 'New Folder', parent_id: parentId || null }).select().single()
+  if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message)
+    ? 'Folders need a one-time database update — run the content folders SQL in Supabase.' : error.message)
+  return data
+}
+
+export async function renameFolder(folder, name) {
+  const { error } = await supabase.from('media_folders').update({ name }).eq('id', folder.id)
+  if (error) throw new Error(error.message)
+}
+
+// Delete a folder; its files and sub-folders move up to the folder it was in.
+export async function deleteFolder(folder) {
+  const parent = folder.parent_id || null
+  await supabase.from('media_items').update({ folder_id: parent }).eq('folder_id', folder.id)
+  await supabase.from('media_folders').update({ parent_id: parent }).eq('parent_id', folder.id)
+  const { error } = await supabase.from('media_folders').delete().eq('id', folder.id)
+  if (error) throw new Error(error.message)
+}
+
+export async function moveItems(ids, folderId) {
+  if (!ids.length) return
+  const { error } = await supabase.from('media_items').update({ folder_id: folderId || null }).in('id', ids)
+  if (error) throw new Error(error.message)
+}
+
+// Folder ids from the top down to `id` (for breadcrumbs).
+export function folderPath(folders, id) {
+  const byId = Object.fromEntries(folders.map(f => [f.id, f]))
+  const path = []
+  let f = byId[id]
+  while (f && path.length < 20) { path.unshift(f); f = byId[f.parent_id] }
+  return path
+}
+
+// `id` and every folder inside it.
+export function folderAndDescendants(folders, id) {
+  const out = new Set([id])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const f of folders) if (f.parent_id && out.has(f.parent_id) && !out.has(f.id)) { out.add(f.id); grew = true }
+  }
+  return out
+}
+
+export const itemBytes = item => Number(item?.file_size) || 0
+
+export function formatBytes(n) {
+  if (!n) return '0 MB'
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+// One Program item for several library files: all their slides in order, remembering where each file starts.
+export function groupContent(items, title) {
+  const files = []
+  const images = []
+  for (const it of items) {
+    const slides = itemSlides(it)
+    if (!slides.length) continue
+    files.push({ media_id: it.id, name: it.name, start: images.length, count: slides.length })
+    images.push(...slides.map(({ url, storage_path }) => ({ url, storage_path })))
+  }
+  if (files.length === 1 && !title) return setItemContent(items.find(i => i.id === files[0].media_id))
+  return {
+    media_name: (title || '').trim() || files[0]?.name || 'Content',
+    media_category: 'presentation',
+    images,
+    files,
+  }
+}
+
+// The library files a set item was made from (for re-editing).
+export const contentMediaIds = content => content?.files?.length ? content.files.map(f => f.media_id) : content?.media_id ? [content.media_id] : []
+
+// Files in name order, numbers sorted naturally (Slide 2 before Slide 10).
+export const sortFiles = list => [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
