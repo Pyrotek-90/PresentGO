@@ -313,19 +313,11 @@ export default function ContentLibrary() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4"
+      <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-3"
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={e => { if (e.currentTarget === e.target) setDragOver(false) }}
         onDrop={e => { e.preventDefault(); setDragOver(false); if (!review) pickFiles(e.dataTransfer.files) }}>
 
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold">Content Library</h1>
-            <p className="text-muted text-xs sm:text-sm mt-0.5">PDFs and images for announcements, sermons and more. Organise them in folders.</p>
-          </div>
-          <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden"
-            onChange={e => { pickFiles(e.target.files); e.target.value = '' }} />
-        </div>
 
         {busy && !review && <p className="text-xs text-muted flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> {busy}</p>}
         {error && !review && <p className="text-xs text-red-400">{error}</p>}
@@ -337,36 +329,22 @@ export default function ContentLibrary() {
             onCreate={async (name, parent) => { const f = await createFolder(user.id, name, parent); setFolders(prev => [...prev, f]); return f }} />}
           onChangeName={(gi, name) => setReview(r => r.map((g, i) => (i === gi ? { ...g, name } : g)))} />}
 
-        <div className="flex gap-4 items-start">
-          {/* Folders pane */}
-          <aside className="hidden md:block w-56 shrink-0 rounded-xl border border-border bg-card p-2 space-y-0.5 sticky top-4">
-            <p className="px-2 pt-1 pb-1.5 text-[10px] font-semibold tracking-widest text-muted uppercase">Folders</p>
-            <button onClick={() => openFolder(null)}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-left transition-colors ${folderId === null && !q ? 'bg-accent/20 text-accent-light font-medium' : 'text-[#e5e5e5] hover:bg-[#2e2e2e]'}`}>
-              <Library size={15} className="shrink-0" /> <span className="flex-1">Library</span>
-              <span className="text-[11px] text-muted">{items.length}</span>
-            </button>
-            <FolderTree folders={folders} current={q ? undefined : folderId} onOpen={openFolder} counts={counts} />
-            <button onClick={() => setNewFolder('')} disabled={!foldersReady}
-              className="w-full flex items-center gap-2 px-2 py-1.5 mt-1 rounded-lg text-sm text-accent-light hover:bg-accent/10 disabled:opacity-40">
-              <FolderPlus size={15} /> New Folder
-            </button>
-          </aside>
-
           {/* Files pane */}
           <section className={`flex-1 min-w-0 rounded-xl border bg-card overflow-hidden ${dragOver ? 'border-accent ring-2 ring-accent/40' : 'border-border'}`}>
             {/* Header: Library path · folder actions · search · List / Tiles · Import */}
-            <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border min-h-[52px]">
+            <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden"
+              onChange={e => { pickFiles(e.target.files); e.target.value = '' }} />
+            <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 border-b border-border">
               {q ? (
                 <p className="text-sm font-medium flex-1 min-w-0 truncate">Results for “{query.trim()}”</p>
               ) : (
                 <nav className="flex items-center gap-1 flex-1 min-w-0 text-sm overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                  <button onClick={() => openFolder(null)} className={`shrink-0 flex items-center gap-1.5 ${current ? 'text-muted hover:text-[#f5f5f5]' : 'font-semibold'}`}><Library size={15} /> Library</button>
+                  <h1 className="shrink-0"><button onClick={() => openFolder(null)} className={`flex items-center gap-1.5 text-base ${current ? 'text-muted hover:text-[#f5f5f5]' : 'font-semibold'}`}><Library size={15} /> Library</button></h1>
                   {path.map((f, i) => (
                     <span key={f.id} className="flex items-center gap-1 shrink-0">
                       <ChevronRight size={14} className="text-muted" />
                       {renaming?.id === f.id ? renameInput('w-40') : (
-                        <button onClick={() => openFolder(f.id)} className={i === path.length - 1 ? 'font-semibold' : 'text-muted hover:text-[#f5f5f5]'}>{f.name}</button>
+                        <button onClick={() => openFolder(f.id)} className={`text-base ${i === path.length - 1 ? 'font-semibold' : 'text-muted hover:text-[#f5f5f5]'}`}>{f.name}</button>
                       )}
                     </span>
                   ))}
@@ -378,7 +356,7 @@ export default function ContentLibrary() {
                   )}
                 </nav>
               )}
-              <div className="relative order-last w-full sm:order-none sm:w-52 lg:w-64">
+              <div className="relative order-last w-full sm:order-none sm:w-48 lg:w-56">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <input className="input !pl-9 !h-8 text-sm" placeholder="Search all folders…" value={query} onChange={e => setQuery(e.target.value)} />
               </div>
@@ -390,10 +368,9 @@ export default function ContentLibrary() {
                   </button>
                 ))}
               </div>
-              {/* Phones have no Folders pane, so keep a New Folder button here for them */}
               <button onClick={() => setNewFolder('')} disabled={!foldersReady || !!q} title="New folder" aria-label="New folder"
-                className="md:hidden h-8 w-9 flex items-center justify-center rounded-lg border border-accent/50 text-accent-light hover:bg-accent/10 shrink-0 disabled:opacity-40">
-                <FolderPlus size={15} />
+                className="h-8 w-9 lg:w-auto lg:px-3 flex items-center justify-center gap-1.5 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 shrink-0 disabled:opacity-40">
+                <FolderPlus size={15} /><span className="hidden lg:inline">New Folder</span>
               </button>
               <button onClick={() => fileRef.current?.click()} disabled={!!busy || !!review}
                 className="btn-primary shrink-0 flex items-center justify-center gap-1.5 !h-8 !py-0 w-9 lg:w-auto !px-0 lg:!px-3 text-sm disabled:opacity-60" title="Import PDF or Image" aria-label="Import PDF or Image">
@@ -540,7 +517,6 @@ export default function ContentLibrary() {
               <span><span className="text-[#f5f5f5] font-medium">{formatBytes(totalBytes)}</span> used · {items.length} file{items.length !== 1 ? 's' : ''}{folders.length ? ` · ${folders.length} folder${folders.length !== 1 ? 's' : ''}` : ''}</span>
             </div>
           </section>
-        </div>
       </div>
       {viewing && <SlidesViewer item={viewing} onClose={() => setViewing(null)} />}
       {moving && <MoveDialog folders={folders} count={selected.size} from={q ? undefined : folderId}
