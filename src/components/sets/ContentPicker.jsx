@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Upload, Loader2, Folder, FolderOpen, ChevronRight, Check, Monitor, Image, Plus, Library } from 'lucide-react'
+import FolderSelect from '../FolderSelect'
 import {
   ACCEPT, readImports, saveImport, itemSlides, loadLibrary, folderPath, folderAndDescendants,
-  groupContent, contentMediaIds, sortFiles,
+  groupContent, contentMediaIds, sortFiles, createFolder,
 } from '../../lib/contentLibrary'
 
 // Add to Set → Content: browse Content Library folders, pick one or several files (or a whole
@@ -81,7 +82,7 @@ export default function ContentPicker({ userId, item, onAdd }) {
     setErr(null); setBusy('Reading…')
     try {
       const groups = await readImports(files, msg => setBusy(`Reading ${msg}…`))
-      setImp({ groups })
+      setImp({ groups, dest: folderId })
     } catch (e) { setErr(e.message || 'Could not read that file.') } finally { setBusy(null) }
   }
   const saveImp = async () => {
@@ -90,11 +91,12 @@ export default function ContentPicker({ userId, item, onAdd }) {
       const saved = []
       for (let gi = 0; gi < imp.groups.length; gi++) {
         const g = imp.groups[gi]
-        saved.push(await saveImport(userId, g, g.name, (i, n) => setBusy(`Uploading ${imp.groups.length > 1 ? `file ${gi + 1}, ` : ''}slide ${i} of ${n}…`), ready ? folderId : null))
+        saved.push(await saveImport(userId, g, g.name, (i, n) => setBusy(`Uploading ${imp.groups.length > 1 ? `file ${gi + 1}, ` : ''}slide ${i} of ${n}…`), ready ? imp.dest : null))
       }
       imp.groups.forEach(g => g.pages.forEach(p => URL.revokeObjectURL(p.url)))
       setItems(prev => [...saved, ...prev])
       setPicked(p => [...p, ...saved.map(s => s.id)])
+      if (ready) setFolderId(imp.dest)
       setImp(null); setBusy(null); setQuery('')
     } catch (e) { setBusy(null); setErr(`${e.message || 'Upload failed'} — try again.`) }
   }
@@ -117,6 +119,8 @@ export default function ContentPicker({ userId, item, onAdd }) {
       {err && <p className="text-xs text-red-400">{err}</p>}
       {imp && (
         <div className="rounded-xl border border-accent/40 bg-card p-2.5 space-y-2">
+          {ready && <FolderSelect folders={folders} value={imp.dest} onChange={id => setImp(c => ({ ...c, dest: id }))} disabled={!!busy}
+            onCreate={async (name, parent) => { const f = await createFolder(userId, name, parent); setFolders(prev => [...prev, f]); return f }} />}
           {imp.groups.map((g, gi) => (
             <div key={gi} className="flex items-center gap-2">
               {g.pages.length > 1 ? <Monitor size={15} className="text-blue-400 shrink-0" /> : <Image size={15} className="text-green-400 shrink-0" />}
@@ -127,7 +131,7 @@ export default function ContentPicker({ userId, item, onAdd }) {
           ))}
           <div className="flex items-center gap-2">
             <button onClick={saveImp} disabled={!!busy} className="btn-primary !h-8 !py-0 !px-3 text-sm flex items-center gap-1.5 disabled:opacity-60">
-              {busy ? <><Loader2 size={13} className="animate-spin" /> {busy}</> : <><Check size={13} /> Save to {current?.name || 'Library'}</>}
+              {busy ? <><Loader2 size={13} className="animate-spin" /> {busy}</> : <><Check size={13} /> Save &amp; select</>}
             </button>
             {!busy && <button onClick={() => { imp.groups.forEach(g => g.pages.forEach(p => URL.revokeObjectURL(p.url))); setImp(null) }} className="btn-ghost text-sm">Cancel</button>}
           </div>

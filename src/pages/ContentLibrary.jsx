@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
+import FolderSelect from '../components/FolderSelect'
 import {
   ACCEPT, readImports, saveImport, itemSlides, deleteLibraryItem, renameLibraryItem,
   loadLibrary, createFolder, renameFolder, deleteFolder, moveItems, folderPath, folderAndDescendants,
@@ -28,17 +29,17 @@ const fileMeta = item => {
   return item.type === 'presentation' ? `PDF · ${n} slides` : 'Image'
 }
 
-function ImportReview({ groups, busy, error, folderName, onChangeName, onCancel, onSave }) {
+function ImportReview({ groups, busy, error, folderSelect, onChangeName, onCancel, onSave }) {
   const total = groups.reduce((n, g) => n + g.pages.length, 0)
   return (
     <div className="card space-y-3 border-accent/40">
       <div className="flex items-center justify-between gap-2">
         <p className="font-semibold text-sm">
           Ready to add {groups.length === 1 ? '1 file' : `${groups.length} files`} · {total} slide{total !== 1 ? 's' : ''}
-          <span className="font-normal text-muted"> to <Folder size={12} className="inline -mt-0.5" /> {folderName}</span>
         </p>
         <button onClick={onCancel} disabled={!!busy} className="btn-ghost p-1 rounded-lg" aria-label="Cancel import"><X size={16} /></button>
       </div>
+      {folderSelect}
       {groups.map((g, gi) => (
         <div key={gi} className="rounded-lg border border-border p-2.5 space-y-2">
           <div className="flex items-center gap-2">
@@ -150,6 +151,7 @@ export default function ContentLibrary() {
   const [view, setView]         = useState(() => { try { return localStorage.getItem(VIEW_KEY) || 'preview' } catch { return 'preview' } })
   const [selected, setSelected] = useState(() => new Set())
   const [review, setReview]     = useState(null)   // groups waiting to be saved
+  const [dest, setDest]         = useState(null)   // folder the import is saved to
   const [busy, setBusy]         = useState(null)
   const [error, setError]       = useState(null)
   const [dragOver, setDragOver] = useState(false)
@@ -202,7 +204,8 @@ export default function ContentLibrary() {
     if (!files?.length) return
     setError(null); setBusy('Reading…')
     try {
-      setReview(await readImports(files, msg => setBusy(`Reading ${msg}…`)))
+      const groups = await readImports(files, msg => setBusy(`Reading ${msg}…`))
+      setDest(folderId); setReview(groups)
     } catch (e) {
       setError(e.message || 'Could not read that file.')
     } finally { setBusy(null) }
@@ -215,11 +218,12 @@ export default function ContentLibrary() {
         const g = review[gi]
         saved.push(await saveImport(user.id, g, g.name,
           (i, n) => setBusy(`Uploading ${review.length > 1 ? `file ${gi + 1} of ${review.length}, ` : ''}slide ${i} of ${n}…`),
-          foldersReady ? folderId : null))
+          foldersReady ? dest : null))
       }
       review.forEach(g => g.pages.forEach(p => URL.revokeObjectURL(p.url)))
       setItems(prev => [...saved.reverse(), ...prev])
       setReview(null); setQuery('')
+      if (foldersReady && dest !== folderId) openFolder(dest)
     } catch (e) {
       setError(`${e.message || 'Upload failed'} — try again.`)
     } finally { setBusy(null) }
@@ -333,7 +337,9 @@ export default function ContentLibrary() {
         {!foldersReady && !loading && (
           <p className="text-xs text-amber-300 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">Folders need a one-time database update — run the content folders SQL in Supabase, then reload.</p>
         )}
-        {review && <ImportReview groups={review} busy={busy} error={error} folderName={folderName} onCancel={cancelReview} onSave={saveReview}
+        {review && <ImportReview groups={review} busy={busy} error={error} onCancel={cancelReview} onSave={saveReview}
+          folderSelect={foldersReady && <FolderSelect folders={folders} value={dest} onChange={setDest} disabled={!!busy}
+            onCreate={async (name, parent) => { const f = await createFolder(user.id, name, parent); setFolders(prev => [...prev, f]); return f }} />}
           onChangeName={(gi, name) => setReview(r => r.map((g, i) => (i === gi ? { ...g, name } : g)))} />}
 
         {/* Storage · Search · List / Preview */}
