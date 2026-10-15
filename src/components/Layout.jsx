@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Home, CalendarDays, Users, LogOut, FolderOpen, Settings, ChevronDown, FileBarChart, Upload } from 'lucide-react'
 import Logo from './Logo'
+import NotificationBell from './NotificationBell'
 import { useState, useRef, useEffect } from 'react'
 import { WifiOff } from 'lucide-react'
 
@@ -77,6 +78,7 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          <NotificationBell userId={user.id} onOpen={() => { setMenuOpen(false); setProfileOpen(false) }} />
           {/* Profile dropdown */}
           <div className="relative hidden md:block" ref={profileRef}>
             <button
