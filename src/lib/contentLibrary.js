@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { filesToSlideImages } from './importSlides'
+import { groupSets } from './sets'
 
 // Content Library imports: PDFs and images only, organised into folders (media_folders).
 // Everything is stored as compressed slide JPEGs:
@@ -194,3 +195,35 @@ export async function moveFolder(id, parentId) {
   const { error } = await supabase.from('media_folders').update({ parent_id: parentId || null }).eq('id', id)
   if (error) throw new Error(error.message)
 }
+
+// ─── Archive: find files that haven't been used in a while ────────────────────
+
+// Which sets use each library file. Returns { [mediaId]: { rank, setName, date } } where `rank` is
+// how many sets ago it was last used: 0 = in an upcoming (or today's) set, 1 = the most recent past
+// set, 2 = the one before, and so on. Files that were never put in a set are not listed.
+export async function loadMediaUsage(userId) {
+  const [s, it] = await Promise.all([
+    supabase.from('sets').select('id, name, service_date, service_time, updated_at').eq('user_id', userId),
+    supabase.from('set_items').select('set_id, content').eq('type', 'media'),
+  ])
+  if (s.error) throw new Error(s.error.message)
+  const { upcoming, past } = groupSets(s.data || [])
+  const rankOf = {}
+  upcoming.forEach(x => { rankOf[x.id] = { rank: 0, set: x } })
+  past.forEach((x, i) => { rankOf[x.id] = { rank: i + 1, set: x } })
+  const usage = {}
+  for (const row of it.data || []) {
+    const r = rankOf[row.set_id]
+    if (!r) continue
+    for (const id of contentMediaIds(row.content)) {
+      if (!usage[id] || r.rank < usage[id].rank) {
+        usage[id] = { rank: r.rank, setName: r.set.name, date: r.set.service_date || (r.set.updated_at || '').slice(0, 10) }
+      }
+    }
+  }
+  return usage
+}
+
+// Files whose most recent use was more than `n` sets ago (never-used files are left alone).
+export const archiveCandidates = (items, usage, n) =>
+  items.filter(i => usage[i.id] && usage[i.id].rank > n).sort((a, b) => usage[b.id].rank - usage[a.id].rank)
