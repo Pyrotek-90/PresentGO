@@ -201,6 +201,24 @@ export async function moveFolder(id, parentId) {
 // set is more than 10 sets in the past. Files used in an upcoming set (or in the last N sets) are never touched.
 
 export const ARCHIVE_CHOICES = [10, 20]
+export const MAX_ARCHIVE_SETS = 200
+
+// The user's own archive policy, kept on their account so it follows them between devices.
+//   keep   — number of most recent sets to keep content for (0 = off)
+//   unused — also clear files that were never used in a set
+//   auto   — clear qualifying files automatically when the library opens (otherwise they review first)
+export const DEFAULT_ARCHIVE_POLICY = { keep: 0, unused: false, auto: false }
+
+export function readArchivePolicy(user) {
+  const m = user?.user_metadata?.archive_policy || {}
+  const keep = Math.min(MAX_ARCHIVE_SETS, Math.max(0, Math.floor(Number(m.keep)) || 0))
+  return { keep, unused: !!m.unused, auto: !!m.auto && keep > 0 }
+}
+
+export async function saveArchivePolicy(policy) {
+  const { error } = await supabase.auth.updateUser({ data: { archive_policy: policy } })
+  if (error) throw new Error(error.message)
+}
 
 // Library files with the most recent set each one was used in, plus the cut-off date for a policy of `keep` sets.
 export async function loadArchiveInfo(userId, keep) {

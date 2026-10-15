@@ -1,20 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
-import { loadArchiveInfo, archiveCandidates, deleteLibraryItem, itemBytes, formatBytes, ARCHIVE_CHOICES } from '../../lib/contentLibrary'
-import { getPref, setPref } from '../../lib/prefs'
+import {
+  loadArchiveInfo, archiveCandidates, deleteLibraryItem, itemBytes, formatBytes, ARCHIVE_CHOICES, MAX_ARCHIVE_SETS,
+} from '../../lib/contentLibrary'
 import { X, Archive, Trash2, Loader2, Check } from 'lucide-react'
 
 // ─── Archive policy ───────────────────────────────────────────────────────────
-// Pick how many recent sets to keep content for. Files whose latest set is further back than that are
-// listed here, and can be deleted in one go to free up storage.
-
-export const archiveKeep = () => Number(getPref('archiveKeep', 0)) || 0
-export const archiveUnused = () => !!getPref('archiveUnused', false)
+// The user picks how many recent sets to keep content for (10, 20 or any number), and whether older
+// files are cleared automatically or reviewed first. Files whose latest set is further back than that
+// are listed here and can be deleted in one go to free up storage.
 
 const fmtDate = d => (d ? new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
 
-export default function ArchivePolicy({ user, items, setItems, onClose, onPolicyChange }) {
-  const [keep, setKeep] = useState(archiveKeep)                 // 0 = off
-  const [unused, setUnused] = useState(archiveUnused)
+export default function ArchivePolicy({ user, policy, items, setItems, onChange, onClose }) {
+  const { keep, unused, auto } = policy
+  const custom = keep > 0 && !ARCHIVE_CHOICES.includes(keep)
+  const [customOpen, setCustomOpen] = useState(custom)
+  const [customText, setCustomText] = useState(custom ? String(keep) : '')
   const [info, setInfo] = useState(null)
   const [error, setError] = useState(null)
   const [skip, setSkip] = useState(() => new Set())             // files unticked by the user
@@ -30,8 +31,13 @@ export default function ArchivePolicy({ user, items, setItems, onClose, onPolicy
     return () => { live = false }
   }, [user.id, keep])
 
-  const choose = n => { setKeep(n); setPref('archiveKeep', n); setSkip(new Set()); setConfirm(false); onPolicyChange?.() }
-  const chooseUnused = v => { setUnused(v); setPref('archiveUnused', v); setConfirm(false); onPolicyChange?.() }
+  const update = patch => { setConfirm(false); onChange({ ...policy, ...patch }) }
+  const choose = n => { setCustomOpen(false); setSkip(new Set()); update({ keep: n, ...(n ? {} : { auto: false }) }) }
+  const commitCustom = text => {
+    setCustomText(text)
+    const n = Math.floor(Number(text))
+    if (n >= 1 && n <= MAX_ARCHIVE_SETS) { setSkip(new Set()); update({ keep: n }) }
+  }
 
   const candidates = useMemo(() => (keep && info ? archiveCandidates(items, info, keep, unused) : []), [items, info, keep, unused])
   const chosen = candidates.filter(c => !skip.has(c.item.id))
@@ -53,7 +59,7 @@ export default function ArchivePolicy({ user, items, setItems, onClose, onPolicy
     setBusy(null)
   }
 
-  const opt = on => `flex-1 h-9 rounded-lg border text-sm transition-colors ${on ? 'bg-accent/20 border-accent text-accent-light font-medium' : 'border-border text-muted hover:text-[#f5f5f5]'}`
+  const opt = on => `flex-1 min-w-[4.5rem] h-9 rounded-lg border text-sm transition-colors ${on ? 'bg-accent/20 border-accent text-accent-light font-medium' : 'border-border text-muted hover:text-[#f5f5f5]'}`
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 bg-black/80" onClick={onClose}>
@@ -65,18 +71,31 @@ export default function ArchivePolicy({ user, items, setItems, onClose, onPolicy
 
         <div className="overflow-y-auto p-4 space-y-4">
           <div className="space-y-2">
-            <p className="text-sm">Keep Content Library files only while they’ve been used in one of the most recent sets. Older files can be deleted to free up storage.</p>
-            <div className="flex gap-2">
+            <p className="text-sm">Keep Content Library files only while they’ve been used in one of your most recent sets. Older files can be deleted to free up storage. Your choice is saved to your account.</p>
+            <div className="flex flex-wrap gap-2">
               <button onClick={() => choose(0)} className={opt(!keep)}>Off</button>
-              {ARCHIVE_CHOICES.map(n => <button key={n} onClick={() => choose(n)} className={opt(keep === n)}>Last {n} sets</button>)}
+              {ARCHIVE_CHOICES.map(n => <button key={n} onClick={() => choose(n)} className={opt(keep === n && !customOpen)}>Last {n}</button>)}
+              <button onClick={() => { setCustomOpen(true); if (!customText && keep) setCustomText(String(keep)) }} className={opt(customOpen)}>Custom</button>
             </div>
+            {customOpen && (
+              <label className="flex items-center gap-2 text-sm">
+                Keep the last
+                <input type="number" min={1} max={MAX_ARCHIVE_SETS} inputMode="numeric" autoFocus value={customText} onChange={e => commitCustom(e.target.value)}
+                  className="input !h-8 !py-0 w-20 text-sm" aria-label="Number of sets to keep" />
+                sets
+              </label>
+            )}
           </div>
 
           {keep > 0 && (
             <>
               <label className="flex items-start gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={unused} onChange={e => chooseUnused(e.target.checked)} className="mt-1" />
-                <span>Also include files that were never used in a set<span className="block text-[11px] text-muted">Only those added before your {keep}th most recent set.</span></span>
+                <input type="checkbox" checked={unused} onChange={e => update({ unused: e.target.checked })} className="mt-1" />
+                <span>Also include files that were never used in a set<span className="block text-[11px] text-muted">Only those added before your {keep === 1 ? 'most recent' : `${keep}th most recent`} set.</span></span>
+              </label>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={auto} onChange={e => update({ auto: e.target.checked })} className="mt-1" />
+                <span>Clear old files automatically<span className="block text-[11px] text-muted">When you open the Content Library, files outside the policy are deleted for you. Off means you review the list first.</span></span>
               </label>
 
               {!info && !error && <p className="text-xs text-muted flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Checking your sets…</p>}
@@ -84,11 +103,11 @@ export default function ArchivePolicy({ user, items, setItems, onClose, onPolicy
                 <p className="text-sm text-muted">You have {info.pastCount} past set{info.pastCount === 1 ? '' : 's'} so far — nothing is old enough to archive yet.</p>
               )}
               {info && info.pastCount >= keep && !candidates.length && (
-                <p className="text-sm text-muted">Nothing to archive. Every file was used in the last {keep} sets (or in an upcoming one).</p>
+                <p className="text-sm text-muted">Nothing to archive. Every file was used in your last {keep} set{keep === 1 ? '' : 's'} (or in an upcoming one).</p>
               )}
               {candidates.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">{candidates.length} file{candidates.length === 1 ? '' : 's'} outside the last {keep} sets</p>
+                  <p className="text-sm font-medium">{candidates.length} file{candidates.length === 1 ? '' : 's'} outside the last {keep} set{keep === 1 ? '' : 's'}</p>
                   <ul className="rounded-lg border border-border divide-y divide-border/60 max-h-64 overflow-y-auto">
                     {candidates.map(({ item, use }) => {
                       const on = !skip.has(item.id)

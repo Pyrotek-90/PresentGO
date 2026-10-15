@@ -3,10 +3,10 @@ import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import FolderSelect from '../components/FolderSelect'
 import ManageFolders from '../components/content/ManageFolders'
-import ArchivePolicy, { archiveKeep, archiveUnused } from '../components/content/ArchivePolicy'
+import ArchivePolicy from '../components/content/ArchivePolicy'
 import {
   ACCEPT, readImports, saveImport, itemSlides, createFolder, loadLibrary, folderPath, folderAndDescendants,
-  itemBytes, formatBytes, sortFiles, loadArchiveInfo, archiveCandidates,
+  itemBytes, formatBytes, sortFiles, loadArchiveInfo, archiveCandidates, readArchivePolicy, saveArchivePolicy, deleteLibraryItem,
 } from '../lib/contentLibrary'
 import {
   Upload, Image, Monitor, FileText, X, Folder, FolderInput, Check,
@@ -107,7 +107,9 @@ export default function ContentLibrary() {
   const [viewing, setViewing]   = useState(null)
   const [managing, setManaging] = useState(false)   // Manage Folders open
   const [archiving, setArchiving] = useState(false) // Archive policy open
-  const [policy, setPolicy]     = useState(() => ({ keep: archiveKeep(), unused: archiveUnused() }))
+  const [policy, setPolicy]     = useState(() => readArchivePolicy(user))
+  const [archived, setArchived] = useState(null)   // notice after an automatic clear-out: { count, bytes }
+  const autoRan = useRef(false)
   const [archiveInfo, setArchiveInfo] = useState(null)
   const fileRef = useRef(null)
 
@@ -131,6 +133,23 @@ export default function ContentLibrary() {
     () => (policy.keep && archiveInfo ? archiveCandidates(items, archiveInfo, policy.keep, policy.unused) : []),
     [items, archiveInfo, policy])
   const archivableBytes = archivable.reduce((n, c) => n + itemBytes(c.item), 0)
+
+  const changePolicy = next => {
+    setPolicy(next); autoRan.current = true   // a change made here never triggers an automatic clear-out in the same visit
+    saveArchivePolicy(next).catch(e => setError(`Couldn't save your archive policy: ${e.message}`))
+  }
+  // "Clear automatically": once per visit, delete the files outside the policy and say what was cleared.
+  useEffect(() => {
+    if (!policy.auto || autoRan.current || loading || !archivable.length) return
+    autoRan.current = true
+    const list = archivable.map(c => c.item)
+    ;(async () => {
+      const gone = new Set()
+      for (const it of list) { try { await deleteLibraryItem(it); gone.add(it.id) } catch { break } }
+      setItems(prev => prev.filter(i => !gone.has(i.id)))
+      if (gone.size) setArchived({ count: gone.size, bytes: list.filter(i => gone.has(i.id)).reduce((n, i) => n + itemBytes(i), 0) })
+    })()
+  }, [policy.auto, loading, archivable])
 
   const chooseView = v => { setView(v); try { localStorage.setItem(VIEW_KEY, v) } catch { /* ignore */ } }
   const openFolder = id => { setFolderId(id); setQuery('') }
@@ -205,7 +224,14 @@ export default function ContentLibrary() {
         {!foldersReady && !loading && (
           <p className="text-xs text-amber-300 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">Folders need a one-time database update — run the content folders SQL in Supabase, then reload.</p>
         )}
-        {archivable.length > 0 && (
+        {archived && (
+          <p className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted">
+            <Archive size={14} className="shrink-0 text-accent-light" />
+            <span className="flex-1">Archived {archived.count} file{archived.count === 1 ? '' : 's'} not used in your last {policy.keep} set{policy.keep === 1 ? '' : 's'} — freed {formatBytes(archived.bytes)}.</span>
+            <button onClick={() => setArchived(null)} className="p-0.5 hover:text-[#f5f5f5]" aria-label="Dismiss"><X size={14} /></button>
+          </p>
+        )}
+        {archivable.length > 0 && !policy.auto && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             <Archive size={14} className="shrink-0" />
             <span className="flex-1 min-w-0">{archivable.length} file{archivable.length === 1 ? '' : 's'} ({formatBytes(archivableBytes)}) {archivable.length === 1 ? "isn't" : "aren't"} in your last {policy.keep} sets and can be archived.</span>
@@ -348,7 +374,7 @@ export default function ContentLibrary() {
             {/* Footer: storage used · archive policy */}
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border bg-[#1a1a1a] text-xs text-muted">
               <button onClick={() => setArchiving(true)} className="flex items-center gap-1.5 h-7 px-2 rounded-lg border border-border hover:border-[#555] hover:text-[#f5f5f5] shrink-0">
-                <Archive size={13} /> Archive policy{policy.keep ? `: last ${policy.keep} sets` : ''}
+                <Archive size={13} /> Archive policy{policy.keep ? `: last ${policy.keep} set${policy.keep === 1 ? '' : 's'}${policy.auto ? ' · auto' : ''}` : ''}
               </button>
               <span className="flex items-center gap-2 min-w-0">
                 <HardDrive size={14} className="text-accent-light shrink-0" />
@@ -360,8 +386,7 @@ export default function ContentLibrary() {
       {viewing && <SlidesViewer item={viewing} onClose={() => setViewing(null)} />}
       {managing && <ManageFolders user={user} items={items} setItems={setItems} folders={folders} setFolders={setFolders}
         startFolder={folderId} onClose={() => setManaging(false)} />}
-      {archiving && <ArchivePolicy user={user} items={items} setItems={setItems} onClose={() => setArchiving(false)}
-        onPolicyChange={() => setPolicy({ keep: archiveKeep(), unused: archiveUnused() })} />}
+      {archiving && <ArchivePolicy user={user} policy={policy} items={items} setItems={setItems} onChange={changePolicy} onClose={() => setArchiving(false)} />}
     </Layout>
   )
 }
