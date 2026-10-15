@@ -194,3 +194,71 @@ export async function moveFolder(id, parentId) {
   const { error } = await supabase.from('media_folders').update({ parent_id: parentId || null }).eq('id', id)
   if (error) throw new Error(error.message)
 }
+
+// ─── Archive policy ───────────────────────────────────────────────────────────
+// Keep storage low by clearing files that haven't been used in a recent set.
+// "Recent" is counted in sets, not days: with a policy of 10, a file is cleared once its latest
+// set is more than 10 sets in the past. Files used in an upcoming set (or in the last N sets) are never touched.
+
+export const ARCHIVE_CHOICES = [10, 20]
+export const MAX_ARCHIVE_SETS = 200
+
+// The user's own archive policy, kept on their account so it follows them between devices.
+//   keep   — number of most recent sets to keep content for (0 = off)
+//   unused — also clear files that were never used in a set
+//   auto   — clear qualifying files automatically when the library opens (otherwise they review first)
+export const DEFAULT_ARCHIVE_POLICY = { keep: 0, unused: false, auto: false }
+
+export function readArchivePolicy(user) {
+  const m = user?.user_metadata?.archive_policy || {}
+  const keep = Math.min(MAX_ARCHIVE_SETS, Math.max(0, Math.floor(Number(m.keep)) || 0))
+  return { keep, unused: !!m.unused, auto: !!m.auto && keep > 0 }
+}
+
+export async function saveArchivePolicy(policy) {
+  const { error } = await supabase.auth.updateUser({ data: { archive_policy: policy } })
+  if (error) throw new Error(error.message)
+}
+
+// Library files with the most recent set each one was used in, plus the cut-off date for a policy of `keep` sets.
+export async function loadArchiveInfo(userId, keep) {
+  const { data: sets, error } = await supabase.from('sets').select('id, name, service_date, created_at').eq('user_id', userId)
+  if (error) throw new Error(error.message)
+  const dateOf = s => s.service_date || (s.created_at || '').slice(0, 10)
+  const today = new Date().toLocaleDateString('en-CA')
+  const ordered = (sets || []).filter(s => dateOf(s)).sort((a, b) => dateOf(b).localeCompare(dateOf(a)))
+  // Past sets (today and earlier), newest first. Upcoming ones are always protected.
+  const past = ordered.filter(s => dateOf(s) <= today)
+  const rank = new Map(past.map((s, i) => [s.id, i + 1]))      // 1 = most recent past set
+  const upcoming = new Set(ordered.filter(s => dateOf(s) > today).map(s => s.id))
+
+  const setIds = (sets || []).map(s => s.id)
+  const lastUse = {}   // media id → { rank (1 = most recent past set), upcoming, setName, date }
+  if (setIds.length) {
+    const { data: rows, error: e2 } = await supabase.from('set_items').select('set_id, content').eq('type', 'media').in('set_id', setIds)
+    if (e2) throw new Error(e2.message)
+    const byId = Object.fromEntries(sets.map(s => [s.id, s]))
+    for (const r of rows || []) {
+      const s = byId[r.set_id]
+      const up = upcoming.has(r.set_id)
+      const rk = up ? 0 : (rank.get(r.set_id) ?? Infinity)
+      for (const id of contentMediaIds(r.content)) {
+        const cur = lastUse[id]
+        if (!cur || rk < cur.rank) lastUse[id] = { rank: rk, upcoming: up, setName: s.name, date: dateOf(s) }
+      }
+    }
+  }
+  const cutoff = past[keep - 1] ? dateOf(past[keep - 1]) : null   // date of the Nth most recent past set
+  return { lastUse, cutoff, pastCount: past.length }
+}
+
+// Files that fall outside the policy. `keep` = sets to keep; unused files only count if `includeUnused`
+// and they were added before the cut-off set.
+export function archiveCandidates(items, info, keep, includeUnused = false) {
+  if (!info || info.pastCount < keep) return []   // fewer than N sets so far: nothing is old enough yet
+  return items.filter(it => {
+    const u = info.lastUse[it.id]
+    if (u) return !u.upcoming && u.rank > keep
+    return includeUnused && info.cutoff && (it.created_at || '').slice(0, 10) < info.cutoff
+  }).map(it => ({ item: it, use: info.lastUse[it.id] || null }))
+}
