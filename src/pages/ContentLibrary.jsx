@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 import FolderSelect from '../components/FolderSelect'
+import LibraryManager from '../components/LibraryManager'
 import {
-  ACCEPT, readImports, saveImport, itemSlides, deleteLibraryItem, renameLibraryItem,
-  loadLibrary, createFolder, renameFolder, deleteFolder, moveItems, moveFolder, folderPath, folderAndDescendants,
+  ACCEPT, readImports, saveImport, itemSlides, deleteLibraryItem,
+  loadLibrary, createFolder, moveItems, moveFolder, folderPath, folderAndDescendants,
   itemBytes, formatBytes, sortFiles,
 } from '../lib/contentLibrary'
 import {
-  Upload, Image, Monitor, FileText, Trash2, X, Folder, FolderOpen, FolderPlus, FolderInput, Pencil, Check,
+  Upload, Image, Monitor, FileText, Trash2, X, Folder, FolderOpen, FolderPlus, FolderInput, FolderCog, Check,
   Loader2, Search, HardDrive, List, LayoutGrid, ChevronRight, Library,
 } from 'lucide-react'
 
@@ -156,7 +157,7 @@ export default function ContentLibrary() {
   const [error, setError]       = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [viewing, setViewing]   = useState(null)
-  const [renaming, setRenaming] = useState(null)   // { id, name } — a file or a folder
+  const [managing, setManaging] = useState(false)
   const [confirmDel, setConfirmDel] = useState(null)   // id of file / folder / 'bulk' waiting for a second tap
   const [newFolder, setNewFolder]   = useState(null)   // name being typed
   const [moving, setMoving]     = useState(false)
@@ -242,27 +243,9 @@ export default function ContentLibrary() {
     try { const f = await createFolder(user.id, name, folderId); setFolders(prev => [...prev, f]) }
     catch (e) { setError(e.message) }
   }
-  const removeFolder = async f => {
-    if (!askTwice(f.id)) return
-    setConfirmDel(null)
-    try {
-      await deleteFolder(f)
-      const parent = f.parent_id || null
-      setItems(prev => prev.map(i => (i.folder_id === f.id ? { ...i, folder_id: parent } : i)))
-      setFolders(prev => prev.filter(x => x.id !== f.id).map(x => (x.parent_id === f.id ? { ...x, parent_id: parent } : x)))
-      if (folderId === f.id) setFolderId(parent)
-    } catch (e) { setError(e.message) }
-  }
 
   // ── Files ──
   const toggle = id => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const remove = async item => {
-    if (!askTwice(item.id)) return
-    await deleteLibraryItem(item)
-    setItems(prev => prev.filter(i => i.id !== item.id))
-    setSelected(prev => { const n = new Set(prev); n.delete(item.id); return n })
-    setConfirmDel(null)
-  }
   const removeSelected = async () => {
     if (!askTwice('bulk')) return
     setConfirmDel(null)
@@ -310,7 +293,7 @@ export default function ContentLibrary() {
     }
   }
   const startDrag = (e, kind, id) => {
-    if ((e.button !== undefined && e.button !== 0) || e.target.closest('[data-nodrag]') || !foldersReady || renaming) return
+    if ((e.button !== undefined && e.button !== 0) || e.target.closest('[data-nodrag]') || !foldersReady) return
     const sx = e.clientX, sy = e.clientY, touch = e.pointerType === 'touch'
     const ids = kind === 'file' ? (selected.has(id) ? [...selected] : [id]) : []
     const payload = kind === 'folder'
@@ -368,32 +351,7 @@ export default function ContentLibrary() {
     style: { WebkitTouchCallout: 'none', touchAction: 'pan-y' },
   })
 
-  const saveRename = async () => {
-    const r = renaming
-    setRenaming(null)
-    const name = r?.name.trim()
-    if (!name) return
-    const folder = folders.find(f => f.id === r.id)
-    if (folder) {
-      if (name === folder.name) return
-      setFolders(prev => prev.map(f => (f.id === folder.id ? { ...f, name } : f)))
-      try { await renameFolder(folder, name) } catch { setFolders(prev => prev.map(f => (f.id === folder.id ? folder : f))) }
-      return
-    }
-    const item = items.find(i => i.id === r.id)
-    if (!item || name === item.name) return
-    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, name } : i)))
-    try { await renameLibraryItem(item, name) } catch { setItems(prev => prev.map(i => (i.id === item.id ? item : i))) }
-  }
-
-  const renameInput = cls => (
-    <input autoFocus className={`input !h-7 !py-0 !px-2 text-xs min-w-0 ${cls}`} value={renaming.name}
-      onClick={e => e.stopPropagation()}
-      onChange={e => setRenaming(r => ({ ...r, name: e.target.value }))} onBlur={saveRename}
-      onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(null) }} />
-  )
   const iconBtn = 'p-1.5 rounded-lg text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0'
-  const delBtn = id => `p-1.5 rounded-lg shrink-0 transition-colors ${confirmDel === id ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400 hover:bg-red-500/10'}`
 
   const allShownSelected = shownFiles.length > 0 && shownFiles.every(i => selected.has(i.id))
   const empty = !shownFolders.length && !shownFiles.length
@@ -430,9 +388,7 @@ export default function ContentLibrary() {
                   {path.map((f, i) => (
                     <span key={f.id} className="flex items-center gap-1 shrink-0">
                       <ChevronRight size={14} className="text-muted" />
-                      {renaming?.id === f.id ? renameInput('w-40') : (
-                        <button data-drop={f.id} onClick={() => openFolder(f.id)} className={`text-base rounded-md px-1 ${dropCls(f.id)} ${i === path.length - 1 ? 'font-semibold' : 'text-muted hover:text-[#f5f5f5]'}`}>{f.name}</button>
-                      )}
+                      <button data-drop={f.id} onClick={() => openFolder(f.id)} className={`text-base rounded-md px-1 ${dropCls(f.id)} ${i === path.length - 1 ? 'font-semibold' : 'text-muted hover:text-[#f5f5f5]'}`}>{f.name}</button>
                     </span>
                   ))}
                 </nav>
@@ -449,6 +405,10 @@ export default function ContentLibrary() {
                   </button>
                 ))}
               </div>
+              <button onClick={() => setManaging(true)} disabled={!foldersReady} title="Manage folders" aria-label="Manage folders"
+                className="h-8 w-9 lg:w-auto lg:px-3 flex items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-medium hover:border-[#555] shrink-0 disabled:opacity-40">
+                <FolderCog size={15} /><span className="hidden lg:inline">Manage Folders</span>
+              </button>
               <button onClick={() => setNewFolder('')} disabled={!foldersReady || !!q} title="New folder" aria-label="New folder"
                 className="h-8 w-9 lg:w-auto lg:px-3 flex items-center justify-center gap-1.5 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 shrink-0 disabled:opacity-40">
                 <FolderPlus size={15} /><span className="hidden lg:inline">New Folder</span>
@@ -509,14 +469,9 @@ export default function ContentLibrary() {
                       <span className="w-6" />
                       <button onClick={guard(() => openFolder(f.id))} className="w-16 aspect-video rounded bg-[#1a1a1a] border border-border flex items-center justify-center shrink-0"><Folder size={18} className="text-accent-light" /></button>
                       <div className="flex-1 min-w-0">
-                        {renaming?.id === f.id ? renameInput('w-full') : (
-                          <button onClick={guard(() => openFolder(f.id))} className="block w-full text-left text-sm font-medium truncate">{f.name}</button>
-                        )}
+                        <button onClick={guard(() => openFolder(f.id))} className="block w-full text-left text-sm font-medium truncate">{f.name}</button>
                         <p className="text-[11px] text-muted truncate">Folder · {counts[f.id] || 0} file{counts[f.id] === 1 ? '' : 's'}{q && f.parent_id ? ` · in ${folderLabel(f.parent_id)}` : ''}</p>
-                        {confirmDel === f.id && <p className="text-[10px] text-red-300">Tap again to delete the folder. Its files move up a level.</p>}
                       </div>
-                      <button data-nodrag onClick={() => setRenaming({ id: f.id, name: f.name })} className={iconBtn} title="Rename folder" aria-label={`Rename ${f.name}`}><Pencil size={13} /></button>
-                      <button data-nodrag onClick={() => removeFolder(f)} className={delBtn(f.id)} title={confirmDel === f.id ? 'Tap again to delete' : 'Delete folder'} aria-label={`Delete ${f.name}`}><Trash2 size={13} /></button>
                     </li>
                   ))}
                   {shownFiles.map(item => {
@@ -533,16 +488,11 @@ export default function ContentLibrary() {
                             : <Image size={18} className="text-green-400" />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          {renaming?.id === item.id ? renameInput('w-full') : (
-                            <button onClick={guard(() => slides.length && setViewing(item))} className="block w-full text-left text-sm font-medium truncate" title={item.name}>{item.name}</button>
-                          )}
+                          <button onClick={guard(() => slides.length && setViewing(item))} className="block w-full text-left text-sm font-medium truncate" title={item.name}>{item.name}</button>
                           <p className="text-[11px] text-muted truncate">
                             {fileMeta(item)} · {formatDate(item.created_at)}{itemBytes(item) ? ` · ${formatBytes(itemBytes(item))}` : ''}{q ? ` · ${folderLabel(item.folder_id)}` : ''}
                           </p>
-                          {confirmDel === item.id && <p className="text-[10px] text-red-300">Tap again to delete. Sets that use it will lose these slides.</p>}
                         </div>
-                        <button data-nodrag onClick={() => setRenaming({ id: item.id, name: item.name })} className={iconBtn} title="Rename" aria-label={`Rename ${item.name}`}><Pencil size={13} /></button>
-                        <button data-nodrag onClick={() => remove(item)} className={delBtn(item.id)} title={confirmDel === item.id ? 'Tap again to delete' : 'Delete'} aria-label={`Delete ${item.name}`}><Trash2 size={13} /></button>
                       </li>
                     )
                   })}
@@ -556,16 +506,11 @@ export default function ContentLibrary() {
                         <Folder size={40} className="text-accent-light" strokeWidth={1.5} />
                       </button>
                       <div className="flex items-center gap-1 px-2 py-1.5 border-t border-border">
-                        {renaming?.id === f.id ? renameInput('flex-1') : (
-                          <button onClick={guard(() => openFolder(f.id))} className="flex-1 min-w-0 text-left">
-                            <span className="block text-sm font-medium truncate">{f.name}</span>
-                            <span className="block text-[10px] text-muted truncate">{counts[f.id] || 0} file{counts[f.id] === 1 ? '' : 's'}{q && f.parent_id ? ` · in ${folderLabel(f.parent_id)}` : ''}</span>
-                          </button>
-                        )}
-                        <button data-nodrag onClick={() => setRenaming({ id: f.id, name: f.name })} className={iconBtn} title="Rename folder" aria-label={`Rename ${f.name}`}><Pencil size={13} /></button>
-                        <button data-nodrag onClick={() => removeFolder(f)} className={delBtn(f.id)} title={confirmDel === f.id ? 'Tap again to delete' : 'Delete folder'} aria-label={`Delete ${f.name}`}><Trash2 size={13} /></button>
+                        <button onClick={guard(() => openFolder(f.id))} className="flex-1 min-w-0 text-left">
+                          <span className="block text-sm font-medium truncate">{f.name}</span>
+                          <span className="block text-[10px] text-muted truncate">{counts[f.id] || 0} file{counts[f.id] === 1 ? '' : 's'}{q && f.parent_id ? ` · in ${folderLabel(f.parent_id)}` : ''}</span>
+                        </button>
                       </div>
-                      {confirmDel === f.id && <p className="px-2 pb-1.5 text-[10px] text-red-300 leading-snug">Tap again to delete the folder. Its files move up a level.</p>}
                     </div>
                   ))}
                   {shownFiles.map(item => {
@@ -591,16 +536,11 @@ export default function ContentLibrary() {
                           <span data-nodrag className="absolute top-1.5 left-1.5"><Checkbox on={on} onClick={() => toggle(item.id)} label={`Select ${item.name}`} /></span>
                         </div>
                         <div className="flex items-center gap-1 px-2 py-1.5">
-                          {renaming?.id === item.id ? renameInput('flex-1') : (
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate" title={item.name}>{item.name}</p>
-                              <p className="text-[10px] text-muted truncate">{fileMeta(item)} · {q ? folderLabel(item.folder_id) : formatDate(item.created_at)}</p>
-                            </div>
-                          )}
-                          <button data-nodrag onClick={() => setRenaming({ id: item.id, name: item.name })} className={iconBtn} title="Rename" aria-label={`Rename ${item.name}`}><Pencil size={13} /></button>
-                          <button data-nodrag onClick={() => remove(item)} className={delBtn(item.id)} title={confirmDel === item.id ? 'Tap again to delete' : 'Delete'} aria-label={`Delete ${item.name}`}><Trash2 size={13} /></button>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate" title={item.name}>{item.name}</p>
+                            <p className="text-[10px] text-muted truncate">{fileMeta(item)} · {q ? folderLabel(item.folder_id) : formatDate(item.created_at)}</p>
+                          </div>
                         </div>
-                        {confirmDel === item.id && <p className="px-2 pb-1.5 text-[10px] text-red-300 leading-snug">Tap again to delete. Sets that use it will lose these slides.</p>}
                       </div>
                     )
                   })}
@@ -622,6 +562,8 @@ export default function ContentLibrary() {
           {canDropInto(drag, drag.over) && <span className="shrink-0 opacity-80">→ {drag.over ? folders.find(f => f.id === drag.over)?.name : 'Library'}</span>}
         </div>
       )}
+      {managing && <LibraryManager userId={user.id} folders={folders} items={items} setFolders={setFolders} setItems={setItems}
+        startFolder={folderId} onClose={() => { setManaging(false); if (folderId && !folders.some(f => f.id === folderId)) setFolderId(null) }} />}
       {viewing && <SlidesViewer item={viewing} onClose={() => setViewing(null)} />}
       {moving && <MoveDialog folders={folders} count={selected.size} from={q ? undefined : folderId}
         onMove={moveSelected} onClose={() => setMoving(false)} />}
