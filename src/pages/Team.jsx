@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, BadgeCheck } from 'lucide-react'
+import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, BadgeCheck, MessageSquare } from 'lucide-react'
 import { loadAccountStatus } from '../lib/notifications'
+import MessageTeamDialog from '../components/team/MessageTeamDialog'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
@@ -17,6 +18,7 @@ export default function Team() {
   const [members, setMembers] = useState([])
   const [positions, setPositions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [messaging, setMessaging] = useState(false)
   const [accounts, setAccounts] = useState(null)   // { memberId: has StaffList account }
   const [loadError, setLoadError] = useState(null)
   const [query, setQuery] = useState('')
@@ -140,9 +142,15 @@ export default function Team() {
               <h1 className="font-semibold">Manage Team</h1>
               <span className="text-xs text-muted">{members.length}</span>
             </div>
-            <button onClick={() => { setForm({ ...EMPTY }); setError(null) }} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-              <UserPlus size={14} /> Add Member
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setMessaging(true)} disabled={!members.length}
+                aria-label="Message Team" className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40">
+                <MessageSquare size={14} /> <span className="sm:hidden">Message</span><span className="hidden sm:inline">Message Team</span>
+              </button>
+              <button onClick={() => { setForm({ ...EMPTY }); setError(null) }} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
+                <UserPlus size={14} /> Add Member
+              </button>
+            </div>
           </div>
 
           {loadError && <p className="px-3 py-2 text-red-400 text-xs">{loadError}</p>}
@@ -310,6 +318,7 @@ export default function Team() {
           </div>
         </section>
       </div>
+      {messaging && <MessageTeamDialog userId={user.id} members={members} positions={positions} accounts={accounts} onClose={() => setMessaging(false)} />}
     </Layout>
   )
 }
