@@ -82,13 +82,13 @@ function SortableRow({ leadLabel, item, idx, ItemIcon, colorClass, title, subtit
         <span className="text-xs text-muted w-4 shrink-0 text-center">{idx + 1}</span>
         <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}><ItemIcon size={13} /></div>
         <button onClick={() => (open ? onSwipe(false) : onOptions(item))} className="flex-1 min-w-0 text-left">
-          <p className="text-sm font-medium truncate">{title}</p>
+          <p className="text-sm font-medium leading-snug line-clamp-2 sm:truncate">{title}</p>
           <p className="text-xs text-muted truncate">{subtitle}</p>
         </button>
         {leadLabel && (
           <button onClick={() => (open ? onSwipe(false) : onOptions(item))} title={`Song Leader: ${leadLabel}`}
-            className="shrink-0 max-w-[10.5rem] sm:max-w-[16rem] h-7 px-2 rounded-md border border-border text-xs text-muted hover:text-[#f5f5f5] flex items-center gap-1">
-            <span className="shrink-0">Song Leader:</span><span className="truncate font-semibold">{leadLabel}</span>
+            className="shrink-0 max-w-[4.5rem] sm:max-w-[16rem] h-7 px-2 rounded-md border border-border text-xs text-muted hover:text-[#f5f5f5] flex items-center gap-1">
+            <span className="shrink-0 hidden sm:inline">Song Leader:</span><span className="truncate font-semibold sm:hidden">{leadLabel.split(/\s+/)[0]}</span><span className="truncate font-semibold hidden sm:inline">{leadLabel}</span>
           </button>
         )}
         {keyLabel && (
