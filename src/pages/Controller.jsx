@@ -428,7 +428,7 @@ export default function Controller() {
         <span className="text-muted shrink-0">·</span>
         <span className="font-medium text-sm truncate">{setName}</span>
         <span className="ml-auto text-xs text-muted shrink-0 hidden sm:inline">Slide {current + 1} of {slides.length}</span>
-        <button onClick={handleDisconnect} className="btn-danger flex items-center gap-1.5 text-sm px-3 h-9 shrink-0">
+        <button onClick={handleDisconnect} className="btn-danger flex items-center gap-1.5 text-sm px-3 h-9 shrink-0 ml-auto sm:ml-0">
           <X size={14} /> End
         </button>
       </div>
