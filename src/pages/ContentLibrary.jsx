@@ -406,7 +406,7 @@ export default function ContentLibrary() {
                 ))}
               </div>
               <button onClick={() => setManaging(true)} disabled={!foldersReady} title="Manage folders" aria-label="Manage folders"
-                className="h-8 w-9 lg:w-auto lg:px-3 flex items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-medium hover:border-[#555] shrink-0 disabled:opacity-40">
+                className="h-8 w-9 lg:w-auto lg:px-3 flex items-center justify-center gap-1.5 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 shrink-0 disabled:opacity-40">
                 <FolderCog size={15} /><span className="hidden lg:inline">Manage Folders</span>
               </button>
               <button onClick={() => setNewFolder('')} disabled={!foldersReady || !!q} title="New folder" aria-label="New folder"
