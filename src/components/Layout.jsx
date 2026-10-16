@@ -88,7 +88,7 @@ export default function Layout({ children }) {
               <div className="w-7 h-7 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-xs font-semibold">
                 {displayName[0]?.toUpperCase()}
               </div>
-              <span className="hidden md:block text-sm text-primary max-w-[140px] truncate">{displayName}</span>
+              <span className="hidden md:block [@media(hover:none)]:!hidden text-sm text-primary max-w-[140px] truncate">{displayName}</span>
               <ChevronDown size={14} className={`text-muted transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
             </button>
 
