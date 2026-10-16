@@ -140,7 +140,7 @@ export default function Team() {
         <section className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border">
             <div className="flex items-baseline gap-2">
-              <h1 className="font-semibold">Manage Team</h1>
+              <h1 className="font-semibold whitespace-nowrap">Manage Team</h1>
               <span className="text-xs text-muted">{members.length}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -148,8 +148,8 @@ export default function Team() {
                 aria-label="Message Team" className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40">
                 <MessageSquare size={14} /> <span className="sm:hidden">Message</span><span className="hidden sm:inline">Message Team</span>
               </button>
-              <button onClick={() => { setForm({ ...EMPTY }); setError(null) }} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-                <UserPlus size={14} /> Add Member
+              <button onClick={() => { setForm({ ...EMPTY }); setError(null) }} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm whitespace-nowrap">
+                <UserPlus size={14} /> <span className="sm:hidden">Add</span><span className="hidden sm:inline">Add Member</span>
               </button>
             </div>
           </div>
@@ -292,8 +292,12 @@ export default function Team() {
                       className="hover:bg-[#1a1a1a] group">
                       <button type="button" onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: formatPhone(m.phone) || '', position_ids: m.position_ids || [] }); setError(null); setDeleting(null) }}
                         className={`w-full grid items-center gap-x-3 gap-y-1 px-2 py-2 text-left grid-cols-[1fr_1rem] ${ROW_COLS}`} aria-label={`Edit ${m.name}`}>
-                        <span className="col-start-1 min-w-0 flex flex-col gap-1 md:contents">
-                          <span className="text-sm font-medium truncate">{m.name}</span>
+                        <span className="col-start-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 md:contents">
+                          <span className="text-sm font-medium truncate max-w-full">{m.name}</span>
+                          {/* Phone: the status icon sits right after the name */}
+                          {m.email && accounts && (accounts[m.id]
+                            ? <CheckCircle2 size={16} className="md:hidden shrink-0 text-green-400" aria-label="Has a StaffList account" />
+                            : <XCircle size={16} className="md:hidden shrink-0 text-[#5f5f5f]" aria-label="No StaffList account yet" />)}
                           <span className="flex flex-wrap gap-0.5">
                             {mine.map(p => <span key={p.id} className="text-[10px] px-1.5 py-0.5 rounded-full border border-border text-muted">{posLabel(p)}</span>)}
                           </span>
@@ -305,11 +309,12 @@ export default function Team() {
                           {m.phone
                             ? <span className="flex items-center gap-1 text-muted whitespace-nowrap"><Phone size={11} className="shrink-0" />{formatPhone(m.phone)}</span>
                             : <span className="text-amber-300/80">No phone</span>}
-                          {!m.email ? <span className="text-[#5f5f5f] md:text-center" title="Add an email to match a StaffList account">—</span>
-                            : !accounts ? <span />
+                          {/* Tablet and up: its own column */}
+                          {!m.email ? <span className="hidden md:block text-center text-[#5f5f5f]" title="Add an email to match a StaffList account">—</span>
+                            : !accounts ? <span className="hidden md:block" />
                             : accounts[m.id]
-                              ? <span className="flex items-center gap-1.5 text-green-400 md:justify-center" title="Has a StaffList account. Serving requests appear in their app." aria-label="Has a StaffList account"><CheckCircle2 size={18} /><span className="md:hidden">In StaffList</span></span>
-                              : <span className="flex items-center gap-1.5 text-[#5f5f5f] md:justify-center" title="No StaffList account with this email yet. They get the email invite; once they sign up with this email, waiting requests appear in their app." aria-label="No StaffList account yet"><XCircle size={18} /><span className="md:hidden">No account yet</span></span>}
+                              ? <span className="hidden md:flex items-center justify-center text-green-400" title="Has a StaffList account. Serving requests appear in their app." aria-label="Has a StaffList account"><CheckCircle2 size={18} /></span>
+                              : <span className="hidden md:flex items-center justify-center text-[#5f5f5f]" title="No StaffList account with this email yet. They get the email invite; once they sign up with this email, waiting requests appear in their app." aria-label="No StaffList account yet"><XCircle size={18} /></span>}
                         </span>
                         <ChevronRight size={14} className="text-muted group-hover:text-[#f5f5f5] shrink-0 col-start-2 row-start-1 row-span-3 md:row-span-1 md:row-start-auto md:col-start-auto" />
                       </button>
