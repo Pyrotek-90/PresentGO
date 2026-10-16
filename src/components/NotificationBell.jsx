@@ -83,10 +83,10 @@ export default function NotificationBell({ userId, onOpen }) {
   return (
     <div className="relative" ref={box}>
       <button onClick={toggleOpen} aria-label={unread.length ? `Notifications, ${unread.length} unread` : 'Notifications'} aria-expanded={open}
-        className="btn-ghost relative w-9 h-9 !p-0 flex items-center justify-center rounded-lg">
-        <Bell size={18} className={unread.length ? 'text-[#f5f5f5]' : 'text-muted'} />
+        className={`relative w-10 h-10 md:w-9 md:h-9 flex items-center justify-center rounded-xl border transition-colors ${unread.length ? 'border-accent/60 bg-accent/15 text-accent-light' : 'border-border bg-card text-[#d4d4d4] hover:text-[#f5f5f5]'}`}>
+        <Bell size={20} />
         {unread.length > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-black text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[19px] h-[19px] px-1 ring-2 ring-surface rounded-full bg-accent text-black text-[10px] font-bold flex items-center justify-center">
             {unread.length > 9 ? '9+' : unread.length}
           </span>
         )}
