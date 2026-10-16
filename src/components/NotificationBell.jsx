@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, UserPlus, CalendarClock, CheckCircle2, XCircle, Check, X } from 'lucide-react'
+import { Bell, UserPlus, CalendarClock, CheckCircle2, XCircle, Check, X, MessageSquare } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { loadNotifications, makeReminders, markRead, respondToRequest } from '../lib/notifications'
 import { formatModified } from '../lib/sets'
@@ -73,10 +73,11 @@ export default function NotificationBell({ userId, onOpen }) {
   const go = n => {
     read([n.id])
     // Only the leader can open a set; team members just see the details here.
-    if (n.set_id && n.kind !== 'serving_request' && !/^You're serving/.test(n.body || '')) { setOpen(false); navigate(`/sets/${n.set_id}`) }
+    if (n.set_id && n.kind !== 'serving_request' && n.kind !== 'team_message' && !/^You're serving/.test(n.body || '')) { setOpen(false); navigate(`/sets/${n.set_id}`) }
   }
 
   const icon = n => n.kind === 'serving_request' ? <UserPlus size={16} className="text-accent-light" />
+    : n.kind === 'team_message' ? <MessageSquare size={16} className="text-sky-300" />
     : n.kind === 'request_answered' ? (/ declined ·/.test(n.title) ? <XCircle size={16} className="text-red-400" /> : <CheckCircle2 size={16} className="text-green-400" />)
     : <CalendarClock size={16} className="text-amber-300" />
 
@@ -114,7 +115,7 @@ export default function NotificationBell({ userId, onOpen }) {
                     <div className="flex-1 min-w-0">
                       <button onClick={() => go(n)} className="block w-full text-left">
                         <span className="block text-sm font-medium leading-snug">{n.title}</span>
-                        {n.body && <span className="block text-xs text-muted mt-0.5">{n.body}</span>}
+                        {n.body && <span className={`block text-xs text-muted mt-0.5 ${n.kind === 'team_message' ? 'whitespace-pre-wrap break-words' : ''}`}>{n.body}</span>}
                       </button>
                       <p className="text-[10px] text-muted mt-1">{formatModified(n.created_at)}</p>
                       {isReq && (
