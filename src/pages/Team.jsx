@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight } from 'lucide-react'
+import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, BadgeCheck } from 'lucide-react'
+import { loadAccountStatus } from '../lib/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
@@ -14,6 +15,7 @@ export default function Team() {
   const [members, setMembers] = useState([])
   const [positions, setPositions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [accounts, setAccounts] = useState(null)   // { memberId: has StaffList account }
   const [loadError, setLoadError] = useState(null)
   const [query, setQuery] = useState('')
   const [filterPos, setFilterPos] = useState('')
@@ -41,6 +43,7 @@ export default function Team() {
   const formRef = useRef(null)
   const formKey = form ? form.id || 'new' : null
   // Opening a member from further down the list: bring the edit form into view.
+  useEffect(() => { loadAccountStatus().then(setAccounts).catch(() => {}) }, [members])
   useEffect(() => { if (formKey) formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, [formKey])
 
   useEffect(() => {
@@ -282,6 +285,9 @@ export default function Team() {
                           </span>
                           <span className="flex items-center gap-3 text-xs text-muted">
                             {m.email && <span className="flex items-center gap-1 truncate"><Mail size={11} />{m.email}</span>}
+                            {m.email && accounts && (accounts[m.id]
+                              ? <span className="flex items-center gap-1 text-green-400" title="Has a StaffList account. Serving requests appear in their app."><BadgeCheck size={12} />In StaffList</span>
+                              : <span className="flex items-center gap-1" title="No StaffList account with this email yet. They get the email invite; once they sign up with this email, waiting requests appear in their app.">No account yet</span>)}
                             {m.phone && <span className="flex items-center gap-1"><Phone size={11} />{formatPhone(m.phone)}</span>}
                           </span>
                         </span>
