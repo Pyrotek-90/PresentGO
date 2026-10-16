@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, BadgeCheck, MessageSquare } from 'lucide-react'
+import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, CheckCircle2, XCircle, MessageSquare } from 'lucide-react'
 import { loadAccountStatus } from '../lib/notifications'
 import MessageTeamDialog from '../components/team/MessageTeamDialog'
 import { supabase } from '../lib/supabase'
@@ -12,7 +12,7 @@ import { parseVCards, saveVCard, canPickContacts, pickContact } from '../lib/vca
 // Name · positions · email · phone · account — one column each so gaps are easy to spot.
 // Phone: stacked. Tablet portrait (md): name + positions stacked in one cell, then email / phone / status.
 // Desktop and tablet landscape (lg): one column each.
-const ROW_COLS = 'md:grid-cols-[minmax(8rem,1.1fr)_minmax(10rem,1.5fr)_9rem_7.5rem_1rem] lg:grid-cols-[minmax(7rem,10rem)_minmax(6rem,1fr)_minmax(9rem,14rem)_9.5rem_8rem_1rem]'
+const ROW_COLS = 'md:grid-cols-[minmax(8rem,1.1fr)_minmax(10rem,1.5fr)_9rem_5rem_1rem] lg:grid-cols-[minmax(7rem,10rem)_minmax(6rem,1fr)_minmax(9rem,14rem)_9.5rem_5rem_1rem]'
 const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
 
 export default function Team() {
@@ -283,10 +283,10 @@ export default function Team() {
             ) : (
               <ul>
                 <li className={`hidden md:grid lg:hidden ${ROW_COLS} gap-x-3 px-2 pb-1 text-[10px] uppercase tracking-wide text-muted border-b border-border/60`} aria-hidden="true">
-                  <span>Member</span><span>Email</span><span>Phone</span><span>StaffList</span><span />
+                  <span>Member</span><span>Email</span><span>Phone</span><span className="text-center">StaffList</span><span />
                 </li>
                 <li className={`hidden lg:grid ${ROW_COLS} gap-x-3 px-2 pb-1 text-[10px] uppercase tracking-wide text-muted border-b border-border/60`} aria-hidden="true">
-                  <span>Name</span><span>Positions</span><span>Email</span><span>Phone</span><span>StaffList</span><span />
+                  <span>Name</span><span>Positions</span><span>Email</span><span>Phone</span><span className="text-center">StaffList</span><span />
                 </li>
                 {filtered.map(m => {
                   const mine = positions.filter(p => m.position_ids?.includes(p.id))
@@ -309,11 +309,11 @@ export default function Team() {
                           {m.phone
                             ? <span className="flex items-center gap-1 text-muted whitespace-nowrap"><Phone size={11} className="shrink-0" />{formatPhone(m.phone)}</span>
                             : <span className="text-amber-300/80">No phone</span>}
-                          {!m.email ? <span className="text-muted/60">—</span>
+                          {!m.email ? <span className="text-muted/60 md:text-center" title="Add an email to match a StaffList account">—</span>
                             : !accounts ? <span />
                             : accounts[m.id]
-                              ? <span className="flex items-center gap-1 text-green-400 whitespace-nowrap" title="Has a StaffList account. Serving requests appear in their app."><BadgeCheck size={12} />In StaffList</span>
-                              : <span className="text-muted whitespace-nowrap" title="No StaffList account with this email yet. They get the email invite; once they sign up with this email, waiting requests appear in their app.">No account yet</span>}
+                              ? <span className="flex items-center gap-1.5 text-green-400 md:justify-center" title="Has a StaffList account. Serving requests appear in their app." aria-label="Has a StaffList account"><CheckCircle2 size={18} /><span className="md:hidden">In StaffList</span></span>
+                              : <span className="flex items-center gap-1.5 text-muted/60 md:justify-center" title="No StaffList account with this email yet. They get the email invite; once they sign up with this email, waiting requests appear in their app." aria-label="No StaffList account yet"><XCircle size={18} /><span className="md:hidden">No account yet</span></span>}
                         </span>
                         <ChevronRight size={14} className="text-muted group-hover:text-[#f5f5f5] shrink-0 col-start-2 row-start-1 row-span-3 md:row-span-1 md:row-start-auto md:col-start-auto" />
                       </button>
