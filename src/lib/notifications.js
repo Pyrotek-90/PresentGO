@@ -11,7 +11,18 @@ export async function loadNotifications() {
   return data || []
 }
 
-export const makeReminders = () => supabase.rpc('generate_reminders', { p_today: todayISO() })
+// Runs when the app opens: delivers requests that were waiting for this person's account, then reminders.
+export async function makeReminders() {
+  try { await supabase.rpc('deliver_waiting_requests') } catch { /* not set up yet */ }
+  return supabase.rpc('generate_reminders', { p_today: todayISO() })
+}
+
+// { [teamMemberId]: true | false } — does each of my team members have a StaffList account?
+export async function loadAccountStatus() {
+  const { data, error } = await supabase.rpc('team_account_status')
+  if (error || !data) return null
+  return Object.fromEntries(data.map(r => [r.member_id, !!r.has_account]))
+}
 
 export async function markRead(ids) {
   if (!ids.length) return
