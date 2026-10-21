@@ -63,10 +63,33 @@ function chordSegments(chordLine, lyric) {
   return segs
 }
 
-function ChordPill({ children }) {
+function ChordPill({ children, floating }) {
   return (
-    <span className="text-accent-light font-extrabold rounded-sm px-[0.25em] bg-accent/15" style={{ lineHeight: 1.25 }}>{children}</span>
+    <span {...(floating !== undefined ? { 'data-chord': '' } : {})} className="inline-block text-accent-light font-extrabold rounded-sm px-[0.25em] bg-accent/15" style={{ lineHeight: 1.25 }}>{children}</span>
   )
+}
+
+// A chord that lands in the middle of a word must not widen its slot, or the word gets split
+// ("unden  iable"). Those chords overhang the next letters instead, and settleChords() nudges any
+// chord that would then collide with the one before it a little to the right. Runs after every
+// layout change (the viewer re-measures at each candidate font size).
+function settleChords(root) {
+  const lines = root.querySelectorAll('[data-chordline]')
+  if (!lines.length) return
+  const gap = (parseFloat(getComputedStyle(root).fontSize) || 16) * 0.3
+  lines.forEach(line => {
+    const pills = line.querySelectorAll('[data-chord]')
+    pills.forEach(p => { p.style.marginLeft = '' })
+    let prev = null
+    pills.forEach(p => {
+      const r = p.getBoundingClientRect()
+      if (prev && Math.abs(r.top - prev.top) < 2 && r.left < prev.right + gap) {
+        const push = prev.right + gap - r.left
+        p.style.marginLeft = `${push}px`
+        prev = { top: r.top, right: r.right + push }
+      } else prev = { top: r.top, right: r.right }
+    })
+  })
 }
 
 function ChartBlock({ block }) {
@@ -84,13 +107,21 @@ function ChartBlock({ block }) {
       )
     }
     return (
-      <div data-fit className="whitespace-nowrap" style={{ paddingLeft: INDENT, breakInside: 'avoid', lineHeight: 1.15, marginTop: '0.3em' }}>
-        {chordSegments(block.chords, block.lyric).map((seg, i) => (
-          <span key={i} style={{ display: 'inline-flex', flexDirection: 'column', verticalAlign: 'top' }}>
-            <span style={{ minHeight: '1.3em', paddingRight: seg.chord ? '0.35em' : 0 }}>{seg.chord ? <ChordPill>{seg.chord}</ChordPill> : '\u00a0'}</span>
-            <span style={{ whiteSpace: 'pre' }}>{seg.text}</span>
-          </span>
-        ))}
+      <div data-fit data-chordline className="whitespace-nowrap" style={{ paddingLeft: INDENT, breakInside: 'avoid', lineHeight: 1.15, marginTop: '0.3em' }}>
+        {chordSegments(block.chords, block.lyric).map((seg, i, all) => {
+          // mid-word: this piece ends in a letter and the next piece carries on the same word
+          const midWord = !!seg.chord && i + 1 < all.length && /\S$/.test(seg.text) && /^\S/.test(all[i + 1].text)
+          return (
+            <span key={i} style={{ display: 'inline-flex', flexDirection: 'column', verticalAlign: 'top' }}>
+              <span style={midWord
+                ? { minHeight: '1.3em', width: 0, whiteSpace: 'nowrap', overflow: 'visible' }
+                : { minHeight: '1.3em', paddingRight: seg.chord ? '0.35em' : 0 }}>
+                {seg.chord ? <ChordPill floating>{seg.chord}</ChordPill> : '\u00a0'}
+              </span>
+              <span style={{ whiteSpace: 'pre' }}>{seg.text}</span>
+            </span>
+          )
+        })}
       </div>
     )
   }
@@ -219,7 +250,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
     const minReadable = (widthOk ? MIN_READABLE : MIN_READABLE_PHONE)[mode]
     const lines = inner.querySelectorAll('[data-fit]')   // every lyric / chart line: none may wrap or overflow
     lines.forEach(el => { if (el.dataset.wrapped) { el.style.whiteSpace = el.dataset.ws; delete el.dataset.wrapped } })
-    const apply = (nc, f) => { inner.style.columnCount = String(nc); inner.style.fontSize = `${f}px` }
+    const apply = (nc, f) => { inner.style.columnCount = String(nc); inner.style.fontSize = `${f}px`; settleChords(inner) }
     const clipped = () => lines.length > 0 && Array.from(lines).some(el => el.scrollWidth > el.clientWidth + 1)
     const fitsOnePage = (nc, f) => { apply(nc, f); return inner.scrollWidth <= cw + 1 && !clipped() }
     const largestFit = (nc, lo) => { for (let f = max; f >= lo; f--) if (fitsOnePage(nc, f)) return f; return null }
@@ -255,6 +286,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
       while (f > minReadable && clipped()) { f--; apply(nc, f) }
       if (clipped()) lines.forEach(el => { if (el.scrollWidth > el.clientWidth + 1) { el.dataset.ws = el.style.whiteSpace; el.dataset.wrapped = '1'; el.style.whiteSpace = 'normal' } })
     }
+    settleChords(inner)   // lines that wrapped have moved their chords
 
     setFontSize(f)
     setEffCols(nc)
