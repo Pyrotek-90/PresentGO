@@ -24,57 +24,57 @@ const PLANS = [
     icon: Star,
     iconClass: 'text-accent-light',
     borderClass: '',
-    description: 'For personal and private use.',
+    description: 'Everything you need to keep your music book and run Sunday.',
     features: [
-      'Public domain songs',
-      'Manual lyrics entry & online search',
-      'Unlimited sets',
-      'AirPlay / screen mirroring presentation',
-      'Controller & full-screen presenter views',
+      'Unlimited songs, chord charts & transposition',
+      'Unlimited imports (ChordPro, PDF charts, bulk folder)',
+      'Sets and single-screen presentation',
+      'CCLI Report',
+      '100 MB Content Library',
     ],
     cta: 'Your current plan',
     ctaDisabled: true,
   },
   {
-    id: 'church',
-    name: 'Church',
-    price: '$9.99',
-    period: '/month',
+    id: 'pro',
+    name: 'Pro',
+    price: null,
     badge: 'Coming Soon',
     badgeClass: 'bg-purple-500/20 text-purple-300',
-    icon: Church,
+    icon: Zap,
     iconClass: 'text-purple-400',
     borderClass: 'border-purple-500/30',
-    description: 'For licensed church services with CCLI coverage.',
+    description: 'For worship teams: live presenting, AI tools and scheduling.',
     features: [
       'Everything in Free',
-      'CCLI API — import licensed lyrics directly',
-      'Automatic CCLI license verification',
-      'Motion backgrounds for slides',
-      'Multi-user / team access',
-      'Priority support',
+      '500 MB Content Library',
+      'Live presenting with controller',
+      'AI Translate (lyrics & slide translations)',
+      'AI Worship Leader Notes',
+      'AI key / BPM lookup & Smart Cleanup',
+      'Team scheduling, email invites & calendar feed',
     ],
     cta: 'Notify Me When Available',
     ctaDisabled: false,
     comingSoon: true,
   },
   {
-    id: 'pro',
-    name: 'Pro',
-    price: '$19.99',
-    period: '/month',
+    id: 'ultimate',
+    name: 'Ultimate',
+    price: null,
     badge: 'Coming Soon',
     badgeClass: 'bg-amber-500/20 text-amber-300',
-    icon: Zap,
+    icon: Church,
     iconClass: 'text-amber-400',
     borderClass: 'border-amber-500/30',
-    description: 'For venues, events, and multi-campus organisations.',
+    description: 'For whole churches with several ministries.',
     features: [
-      'Everything in Church',
-      'Custom branding & logo overlays',
-      'Multiple venues / campuses',
-      'Analytics & reporting',
-      'REST API access',
+      'Everything in Pro',
+      '5 GB Content Library',
+      '5 groups, each with multiple admins for scheduling',
+      'Custom announcements page',
+      'Registrations',
+      'Merchandise',
     ],
     cta: 'Notify Me When Available',
     ctaDisabled: false,
@@ -89,8 +89,8 @@ function PlanCard({ plan }) {
   const Icon = plan.icon
 
   const checkColor =
-    plan.id === 'church' ? 'text-purple-400' :
-    plan.id === 'pro'    ? 'text-amber-400'  : 'text-accent-light'
+    plan.id === 'pro'      ? 'text-purple-400' :
+    plan.id === 'ultimate' ? 'text-amber-400'  : 'text-accent-light'
 
   return (
     <div className={`card space-y-4 ${plan.borderClass}`}>
@@ -109,7 +109,9 @@ function PlanCard({ plan }) {
               <span className="text-xs text-muted">{plan.period}</span>
             </div>
           ) : (
-            <div className="text-xl font-bold text-primary">Free</div>
+            <div className="text-xl font-bold text-primary">
+              {plan.id === 'free' ? 'Free' : <span className="text-base text-muted font-medium">Pricing coming soon</span>}
+            </div>
           )}
           <p className="text-xs text-muted">{plan.description}</p>
         </div>
