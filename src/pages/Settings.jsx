@@ -29,7 +29,6 @@ const PLANS = [
       'Unlimited songs, chord charts & transposition',
       'Unlimited imports (ChordPro, PDF charts, bulk folder)',
       'Sets and single-screen presentation',
-      'CCLI Report',
       '100 MB Content Library',
     ],
     cta: 'Your current plan',
@@ -38,7 +37,9 @@ const PLANS = [
   {
     id: 'pro',
     name: 'Pro',
-    price: null,
+    price: '$12',
+    period: '/month',
+    yearly: 'or $100/year — save about 30%',
     badge: 'Coming Soon',
     badgeClass: 'bg-purple-500/20 text-purple-300',
     icon: Zap,
@@ -53,6 +54,7 @@ const PLANS = [
       'AI Worship Leader Notes',
       'AI key / BPM lookup & Smart Cleanup',
       'Team scheduling, email invites & calendar feed',
+      'CCLI Report',
     ],
     cta: 'Notify Me When Available',
     ctaDisabled: false,
@@ -107,6 +109,7 @@ function PlanCard({ plan }) {
             <div className="flex items-baseline gap-0.5">
               <span className="text-xl font-bold text-primary">{plan.price}</span>
               <span className="text-xs text-muted">{plan.period}</span>
+              {plan.yearly && <span className="text-xs text-muted ml-2">{plan.yearly}</span>}
             </div>
           ) : (
             <div className="text-xl font-bold text-primary">
