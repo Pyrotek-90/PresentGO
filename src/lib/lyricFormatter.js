@@ -1,5 +1,6 @@
 import { translationForSlides, slideTranslationText } from './translationLines'
 import { arrangedSlides } from './arrangement'
+import { stripRepeat } from './repeat'
 /**
  * Parses raw lyric text into structured slides.
  * - Detects section labels: [Verse 1], [Chorus], Chorus:, etc.
@@ -111,7 +112,7 @@ export function buildPresentationSlides(setItems, songs) {
           type: 'song',
           itemId: item.id,
           itemTitle: song.title,
-          lines: slide.lines,
+          lines: slide.lines.map(stripRepeat),   // "-2X" repeat marks are for the band, not the screen
           ...(subs[si]?.some(Boolean) ? { subs: subs[si] } : {}),
           label: slide.label,
           sectionLabel: slide.sectionLabel || slide.label || null,

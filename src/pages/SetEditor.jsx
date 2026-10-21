@@ -15,6 +15,7 @@ import SetSongViewer from '../components/songs/SetSongViewer'
 import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
 import { formatLyrics } from '../lib/lyricFormatter'
 import { arrangedSlides } from '../lib/arrangement'
+import { stripRepeat } from '../lib/repeat'
 import {
   Plus, MonitorPlay, Music, Star, Megaphone, Square,
   GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen, Mic,
@@ -489,7 +490,8 @@ export default function SetEditor() {
     if (item.type === 'song') {
       const song = songs[item.content?.song_id]
       if (!song) return []
-      return (song.slides?.length ? arrangedSlides(song, item.content?.arrangement) : null) || formatLyrics(song.raw_lyrics, song.lines_per_slide || 2)
+      const slides = (song.slides?.length ? arrangedSlides(song, item.content?.arrangement) : null) || formatLyrics(song.raw_lyrics, song.lines_per_slide || 2)
+      return slides.map(sl => ({ ...sl, lines: (sl.lines || []).map(stripRepeat) }))
     }
     if (item.type === 'welcome')      return [{ lines: [item.content.title, item.content.subtitle].filter(Boolean), label: 'Welcome' }]
     if (item.type === 'announcement') return (item.content.slides || [])

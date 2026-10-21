@@ -3,6 +3,7 @@ import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2, ChevronLeft, Chev
 import { transposeChart, isChordLine, isBarToken } from '../../lib/chords'
 import { reconcileChart, lyricSections } from '../../lib/chart'
 import { getPref } from '../../lib/prefs'
+import { splitRepeat } from '../../lib/repeat'
 
 const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
@@ -69,6 +70,11 @@ function ChordPill({ children, floating }) {
   )
 }
 
+// "-2X" at the end of a lyric line: shown in the chord color so the repeat stands out
+function RepeatMark({ mark }) {
+  return mark ? <span style={{ marginLeft: '0.4em' }}><ChordPill>{mark}</ChordPill></span> : null
+}
+
 // A chord that lands in the middle of a word must not widen its slot, or the word gets split
 // ("unden  iable"). Those chords overhang the next letters instead, and settleChords() nudges any
 // chord that would then collide with the one before it a little to the right. Runs after every
@@ -106,9 +112,10 @@ function ChartBlock({ block }) {
         </div>
       )
     }
+    const { text: lyricText, mark } = splitRepeat(block.lyric)
     return (
       <div data-fit data-chordline className="whitespace-nowrap" style={{ paddingLeft: INDENT, breakInside: 'avoid', lineHeight: 1.15, marginTop: '0.3em' }}>
-        {chordSegments(block.chords, block.lyric).map((seg, i, all) => {
+        {chordSegments(block.chords, lyricText).map((seg, i, all) => {
           // mid-word: this piece ends in a letter and the next piece carries on the same word
           const midWord = !!seg.chord && i + 1 < all.length && /\S$/.test(seg.text) && /^\S/.test(all[i + 1].text)
           return (
@@ -122,10 +129,17 @@ function ChartBlock({ block }) {
             </span>
           )
         })}
+        {mark && (
+          <span style={{ display: 'inline-flex', flexDirection: 'column', verticalAlign: 'top' }}>
+            <span style={{ minHeight: '1.3em' }}>{'\u00a0'}</span>
+            <RepeatMark mark={mark} />
+          </span>
+        )}
       </div>
     )
   }
-  return <div data-fit className="whitespace-pre" style={{ paddingLeft: INDENT }}>{block.text || '\u00a0'}</div>
+  const { text, mark } = splitRepeat(block.text)
+  return <div data-fit className="whitespace-pre" style={{ paddingLeft: INDENT }}>{text || (mark ? '' : '\u00a0')}<RepeatMark mark={mark} /></div>
 }
 
 // `setNav` turns this into "set mode": the songs of a set played back to back.
@@ -469,7 +483,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
             )) : sections.map((sec, i) => (
               <div key={i} style={{ breakInside: 'avoid', marginBottom: '1em' }}>
                 {sec.label && <SectionBanner text={sec.label} />}
-                {sec.lines.map((l, j) => <p key={j} data-fit style={{ paddingLeft: INDENT, whiteSpace: 'nowrap' }}>{l || '\u00a0'}</p>)}
+                {sec.lines.map((l, j) => { const { text, mark } = splitRepeat(l); return <p key={j} data-fit style={{ paddingLeft: INDENT, whiteSpace: 'nowrap' }}>{text || (mark ? '' : '\u00a0')}<RepeatMark mark={mark} /></p> })}
               </div>
             ))}
           </div>
