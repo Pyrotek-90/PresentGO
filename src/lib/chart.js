@@ -65,9 +65,66 @@ function parseChart(chart) {
   return sections
 }
 
+// ── Keeping chords when a lyric line is edited ─────────────────────────────────────────────
+// A line that no longer matches exactly (a typo fixed, spaces joined, "-2X" added) keeps its
+// chords: it is paired with the old line it most resembles, and each chord moves with the
+// letter it sat over.
+
+const letters = s => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+
+// Longest-common-subsequence table for a and b (small strings: lyric lines).
+function lcsTable(a, b) {
+  const t = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1))
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      t[i][j] = a[i] === b[j] ? t[i + 1][j + 1] + 1 : Math.max(t[i + 1][j], t[i][j + 1])
+  return t
+}
+
+// How alike two lyric lines are, 0..1, ignoring spaces, punctuation and case.
+function similarity(a, b) {
+  const x = letters(a), y = letters(b)
+  if (!x.length || !y.length) return 0
+  if (x === y) return 1
+  if (x.length * y.length > 40000) return 0
+  return (2 * lcsTable(x, y)[0][0]) / (x.length + y.length)
+}
+
+// For each character position in `from`, the matching position in `to`.
+function positionMap(from, to) {
+  const a = from.toLowerCase(), b = to.toLowerCase()
+  const map = new Array(a.length + 1).fill(-1)
+  if (a.length * b.length <= 40000) {
+    const t = lcsTable(a, b)
+    let i = 0, j = 0
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { map[i] = j; i++; j++ }
+      else if (t[i + 1][j] >= t[i][j + 1]) i++
+      else j++
+    }
+  }
+  map[a.length] = b.length
+  // unmatched characters (deleted / changed) take the position of the next matched one
+  for (let i = a.length - 1; i >= 0; i--) if (map[i] < 0) map[i] = map[i + 1]
+  return map
+}
+
+// Re-places a chord line written over `oldLyric` so it fits `newLyric`.
+function moveChords(chords, oldLyric, newLyric) {
+  const map = positionMap(oldLyric, newLyric)
+  let out = ''
+  for (const m of chords.matchAll(/\S+/g)) {
+    const at = m.index < oldLyric.length ? map[m.index] : newLyric.length + (m.index - oldLyric.length)
+    const pos = Math.max(at, out.length ? out.length + 1 : 0)
+    out += ' '.repeat(pos - out.length) + m[0]
+  }
+  return out
+}
+
 // Builds a chart from the song's raw lyrics (the single source of lyric text). Chords already
-// placed above a matching lyric line in `oldChart` are kept; sections that only exist in the
-// old chart (e.g. an Intro written with chords only) are preserved.
+// placed above a lyric line in `oldChart` are kept — on the same line, or on the line it was
+// edited into; sections that only exist in the old chart (e.g. an Intro written with chords
+// only) are preserved.
 export function reconcileChart(rawLyrics, oldChart = '') {
   const sections = lyricSections(rawLyrics)
   if (!sections.length) return oldChart
@@ -82,6 +139,7 @@ export function reconcileChart(rawLyrics, oldChart = '') {
       if (!byText.has(norm(e.lyric))) byText.set(norm(e.lyric), e.chords)
     }
   }
+  const oldLyricSecs = old.filter(sec => sec.entries.some(e => e.lyric))
 
   const used = new Set(sections.map(s => norm(s.label)))
   const lines = []
@@ -95,14 +153,33 @@ export function reconcileChart(rawLyrics, oldChart = '') {
   }
 
   lead.forEach(pushRaw)
-  for (const sec of sections) {
+  sections.forEach((sec, si) => {
     if (sec.label) lines.push(`[${sec.label}]`)
+    // the same section in the old chart: by name, else (renamed) by position
+    const oldSec = old.find(o => norm(o.label) === norm(sec.label)) || oldLyricSecs[si]
+    const oldLines = (oldSec?.entries || []).filter(e => e.lyric)
+    let next = 0   // old lines are used in order
     for (const lyric of sec.lines) {
-      const chords = byLabelAndText.get(`${norm(sec.label)}|${norm(lyric)}`) ?? byText.get(norm(lyric)) ?? ''
-      lines.push(chords, lyric)
+      let chords = byLabelAndText.get(`${norm(sec.label)}|${norm(lyric)}`) ?? null
+      const exact = oldLines.findIndex((e, k) => k >= next && norm(e.lyric) === norm(lyric))
+      if (exact >= 0) { next = exact + 1; chords ??= oldLines[exact].chords }
+      if (chords == null) chords = byText.get(norm(lyric)) ?? null
+      if (chords == null) {
+        // edited line: the most similar of the next few old lines in this section
+        let best = -1, score = 0.5
+        for (let k = next; k < Math.min(oldLines.length, next + 3); k++) {
+          const sc = similarity(oldLines[k].lyric, lyric)
+          if (sc > score) { score = sc; best = k }
+        }
+        if (best >= 0) {
+          next = best + 1
+          chords = oldLines[best].chords ? moveChords(oldLines[best].chords, oldLines[best].lyric, lyric) : ''
+        }
+      }
+      lines.push(chords ?? '', lyric)
     }
     lines.push('')
-  }
+  })
   tail.forEach(pushRaw)
   return lines.join('\n').replace(/\n+$/, '\n')
 }
