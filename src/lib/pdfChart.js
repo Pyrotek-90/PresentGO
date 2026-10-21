@@ -165,16 +165,12 @@ function xAtIdx(row, idx) {
 
 // A chord-only row standing alone well below the rest of a column is a chord-diagram
 // legend (the G / Am / D boxes printed at the bottom of many charts), not part of the song.
-// Exception: a chord row with strum slashes printed under it is the song's rhythm pattern; keep
-// it (as a "Rhythm" section) instead of dropping it.
-function dropDiagramLegend(rows, slashes = []) {
+function dropDiagramLegend(rows) {
   if (rows.length < 3) return rows
   const last = rows[rows.length - 1], prev = rows[rows.length - 2]
   const gaps = rows.slice(1).map((r, i) => rows[i].y - r.y).filter(g => g > 0)
   const lineGap = median(gaps) || last.size * 1.2
-  if (!(isChordRow(last.text) && prev.y - last.y > lineGap * 2.5)) return rows
-  const strum = slashes.some(r => r.y < last.y && last.y - r.y <= last.size * 4)
-  return strum ? [...rows.slice(0, -1), { ...last, rhythm: true }] : rows.slice(0, -1)
+  return isChordRow(last.text) && prev.y - last.y > lineGap * 2.5 ? rows.slice(0, -1) : rows
 }
 
 // One page in reading order: header lines (title, writers), then the song (left column,
@@ -182,7 +178,6 @@ function dropDiagramLegend(rows, slashes = []) {
 // Key / Tempo printed at the bottom). Footer rows are marked so they never become lyrics.
 function pageRows(items, pageNo) {
   const runs = pageRuns(items)
-  const slashes = items.filter(it => /^\/+$/.test((it.str || '').trim())).map(it => ({ y: it.transform[5] }))
   if (!runs.length) return []
   const body = median(runs.map(r => r.size))
   const bodyRuns = runs.filter(r => r.size >= body * 0.8 && r.size <= body * 1.25)
@@ -194,7 +189,7 @@ function pageRows(items, pageNo) {
   const split = findGutter(mid.filter(r => r.y <= top + 1))
   const tag = zone => rows => rows.map(r => ({ ...r, zone }))
   const footerRows = tag('footer')(runsToRows(footer, pageNo))
-  if (split == null) return [...dropDiagramLegend(runsToRows(mid, pageNo), slashes), ...footerRows]
+  if (split == null) return [...dropDiagramLegend(runsToRows(mid, pageNo)), ...footerRows]
 
   // Two columns: everything above where the right column starts is header (title, Key / Tempo).
   const colX = Math.min(...mid.filter(r => r.x >= split).map(r => r.x))
@@ -203,8 +198,8 @@ function pageRows(items, pageNo) {
   mid = mid.filter(r => r.y <= rightTop + 2)
   return [
     ...runsToRows(header, pageNo),
-    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x < split), pageNo), slashes),
-    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x >= split), pageNo), slashes),
+    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x < split), pageNo)),
+    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x >= split), pageNo)),
     ...footerRows,
   ]
 }
@@ -404,7 +399,6 @@ export function chartFromTextItems(pages) {
       continue
     }
 
-    if (rows[i].rhythm) open('Rhythm')
     if (!cur) open('')
     if (isChordRow(raw)) {
       const next = rows[i + 1]
