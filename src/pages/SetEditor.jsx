@@ -535,7 +535,11 @@ export default function SetEditor() {
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="font-semibold text-lg truncate">{set?.name || '…'}</h1>
+            <div className="flex items-center gap-1 min-w-0">
+              <h1 className="font-semibold text-lg truncate">{set?.name || '…'}</h1>
+              <button onClick={openDetails} title="Edit set name, date and venue" aria-label="Edit set name, date and venue"
+                className="p-1 rounded-md text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0"><Pencil size={13} /></button>
+            </div>
             <p className="text-xs text-muted flex items-center gap-1 min-w-0">
               {set?.series_id && set?.recurrence && <Repeat size={11} className="text-accent-light shrink-0" aria-label="Repeating set" />}
               <span className="truncate">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.series_id && set?.recurrence && freqLabel(set.recurrence.freq, set.service_date), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</span>
@@ -545,7 +549,6 @@ export default function SetEditor() {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button onClick={openDetails} title="Edit details" aria-label="Edit details" className="btn-ghost flex items-center gap-1.5 text-sm !px-2 sm:!px-2.5 !py-1.5"><Pencil size={14} /><span className="hidden sm:inline">Edit details</span></button>
             <button onClick={downloadIcs} disabled={!set?.service_date} title={set?.service_date ? 'Download an event file for Apple, Google or Outlook calendar' : 'Add a date first'}
               className="hidden sm:flex btn-ghost items-center gap-1.5 text-sm !px-2.5 !py-1.5 disabled:opacity-40"><CalendarPlus size={14} /> Add to calendar</button>
             <button onClick={deleteSet} disabled={setId === 'mock'}
