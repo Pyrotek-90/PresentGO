@@ -266,6 +266,8 @@ function SlideMatrix({ group, current, blank, onGo, fits, focus, mode = 'tiles' 
 
 // ─── Main Controller ──────────────────────────────────────────────────────────
 
+const LOOP_SECS = 6   // Loop button: seconds per slide
+
 export default function Controller() {
   const { setId } = useParams()
   const navigate = useNavigate()
@@ -277,10 +279,8 @@ export default function Controller() {
   const [selectedGroupId, setSelectedGroupId] = useState(null)
   const [gridMode, setGridMode] = useState(() => { try { return localStorage.getItem('controller-grid-mode') || 'tiles' } catch { return 'tiles' } })
   const chooseGridMode = m => { setGridMode(m); try { localStorage.setItem('controller-grid-mode', m) } catch { /* ignore */ } }
-  // Loop: advance through the current item's slides every few seconds, back to its first slide after the last
+  // Loop: advance through the current item's slides every LOOP_SECS seconds, back to its first slide after the last
   const [looping, setLooping] = useState(false)
-  const [loopSecs, setLoopSecs] = useState(() => { try { return Number(localStorage.getItem('controller-loop-secs')) || 5 } catch { return 5 } })
-  const chooseLoopSecs = n => { setLoopSecs(n); try { localStorage.setItem('controller-loop-secs', String(n)) } catch { /* ignore */ } }
   const [stripFocus, setStripFocus] = useState(null)   // { idx, n }: scroll the strip so idx comes first
   const channelRef = useRef(null)
 
@@ -397,9 +397,9 @@ export default function Controller() {
     if (!looping || blank || !currentGroup || currentGroup.slides.length < 2) return
     const list = currentGroup.slides
     const at = list.findIndex(s => s.idx === current)
-    const t = setTimeout(() => go(list[(at + 1) % list.length].idx), loopSecs * 1000)
+    const t = setTimeout(() => go(list[(at + 1) % list.length].idx), LOOP_SECS * 1000)
     return () => clearTimeout(t)
-  }, [looping, blank, current, currentGroup, loopSecs, go])
+  }, [looping, blank, current, currentGroup, go])
 
   const handleDisconnect = useCallback(() => {
     send({ type: 'EXIT' })
@@ -497,17 +497,11 @@ export default function Controller() {
         </div>
         <span className="text-sm font-semibold truncate max-w-[16rem] text-center">{groupForGrid?.itemTitle}</span>
         <div className="flex justify-end gap-1.5">
-          <div className={`flex items-center h-8 rounded-lg border overflow-hidden transition-colors ${looping ? 'border-accent bg-accent/25' : 'border-border'}`}>
-            <button onClick={() => setLooping(l => !l)} aria-pressed={looping}
-              title={looping ? 'Stop looping' : `Loop this item's slides every ${loopSecs} seconds`}
-              className={`h-full pl-2.5 pr-1.5 text-xs font-semibold flex items-center gap-1.5 transition-colors ${looping ? 'text-accent-light' : 'text-muted hover:text-[#f5f5f5]'}`}>
-              <Repeat size={14} /> Loop
-            </button>
-            <select value={loopSecs} onChange={e => chooseLoopSecs(Number(e.target.value))} aria-label="Loop interval"
-              className={`h-full bg-transparent pl-1 pr-1.5 text-xs font-semibold focus:outline-none cursor-pointer border-l ${looping ? 'border-accent/50 text-accent-light' : 'border-border text-muted'}`}>
-              {[2, 5, 10].map(n => <option key={n} value={n} className="bg-[#242424] text-[#f5f5f5]">{n}s</option>)}
-            </select>
-          </div>
+          <button onClick={() => setLooping(l => !l)} aria-pressed={looping}
+            title={looping ? 'Stop looping' : `Loop this item's slides every ${LOOP_SECS} seconds`}
+            className={`h-8 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors ${looping ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#555]'}`}>
+            <Repeat size={14} /> Loop
+          </button>
           <button onClick={toggleBlank} title="Blank the screen (B)"
             className={`h-8 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors ${blank ? 'border-white bg-white/10 text-white' : 'border-border text-muted hover:text-[#f5f5f5] hover:border-[#555]'}`}>
             <XSquare size={14} /> {blank ? 'Unblank' : 'Blank'}
