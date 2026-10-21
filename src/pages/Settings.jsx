@@ -9,8 +9,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { LANGUAGES, DEFAULT_LIBRARY_LANGUAGE } from '../lib/songTags'
-import { useState } from 'react'
+import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
+import { useEffect, useState } from 'react'
 
 // ─── Subscription plans ────────────────────────────────────────────────────────
 
@@ -166,6 +166,15 @@ export default function Settings() {
   const { user } = useAuth()
   const [libLang, setLibLang] = useState(user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE)
   const [libLangState, setLibLangState] = useState(null)   // null | 'saving' | 'saved' | 'error'
+  // Only offer languages that songs in the library are actually in.
+  const [songLangs, setSongLangs] = useState([])
+  useEffect(() => {
+    if (!user?.id) return
+    supabase.from('songs').select('metadata, raw_lyrics').eq('user_id', user.id)
+      .then(({ data }) => setSongLangs([...new Set((data || []).map(songLanguage))]))
+      .catch(() => {})
+  }, [user?.id])
+  const libLangOptions = [...new Set([...songLangs, libLang])].sort()
   const pickLibLang = async l => {
     setLibLang(l); setLibLangState('saving')
     const { error } = await supabase.auth.updateUser({ data: { library_language: l } })
@@ -240,7 +249,7 @@ export default function Settings() {
             </div>
             <select className="input !w-auto !h-9 !py-0 text-sm shrink-0" value={libLang} onChange={e => pickLibLang(e.target.value)}
               disabled={libLangState === 'saving'} aria-label="Song Library language">
-              {LANGUAGES.map(l => <option key={l}>{l}</option>)}
+              {libLangOptions.map(l => <option key={l}>{l}</option>)}
             </select>
           </div>
 
