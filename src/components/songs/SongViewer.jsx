@@ -40,13 +40,13 @@ export function abbreviateLabel(label) {
 const INDENT = '0.9em'   // lyric text and section headers sit slightly in from the edge
 
 // Section headers (Verse 1, Chorus…) use the same small caps label style as the
-// Scheduling page's group headings (Production / Singers / Musicians), in the accent teal.
-const headerStyle = { fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1.4 }
+// Scheduling page's group headings (Production / Singers / Musicians), in muted grey, slightly larger and bold.
+const headerStyle = { fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1.4 }
 
-function SectionBanner({ text, size = '0.6em' }) {
+function SectionBanner({ text, size = '0.66em' }) {
   return (
     <h3 style={{ ...headerStyle, fontSize: size, breakAfter: 'avoid', margin: '0 0 0.1em 0', paddingLeft: INDENT }}
-      className="text-accent">{text}</h3>
+      className="text-muted">{text}</h3>
   )
 }
 
