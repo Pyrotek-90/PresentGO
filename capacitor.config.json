@@ -1,0 +1,13 @@
+{
+  "appId": "app.stafflist",
+  "appName": "StaffList",
+  "webDir": "dist",
+  "server": {
+    "url": "https://present-go-five.vercel.app",
+    "cleartext": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0f0f0f"
+  }
+}

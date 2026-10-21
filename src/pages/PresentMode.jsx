@@ -5,6 +5,7 @@ import { openControlChannel } from '../lib/controlChannel'
 import TitleSlide from '../components/TitleSlide'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import { groupFit } from '../lib/slideFit'
+import { isTvScreen } from '../lib/externalDisplay'
 import { ChevronLeft, ChevronRight, Square } from 'lucide-react'
 
 export default function PresentMode() {
@@ -13,6 +14,9 @@ export default function PresentMode() {
   const [current, setCurrent] = useState(0)
   const [blank, setBlank] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  // On the TV in the iPad / iPhone app: just the slide. No controls, no indicators, nothing to
+  // tap (the TV can't be touched); the controller on the iPad / iPhone drives it.
+  const tv = useMemo(isTvScreen, [])
 
   // Controls overlay visibility (tap center to toggle)
   const [showControls, setShowControls] = useState(false)
@@ -54,6 +58,7 @@ export default function PresentMode() {
   useEffect(() => {
     const ch = openControlChannel(setId, {
       onControl: payload => {
+        if (payload.type === 'SYNC')  { setCurrent(payload.index ?? 0); setBlank(!!payload.blank) }
         if (payload.type === 'GOTO')  setCurrent(payload.index)
         if (payload.type === 'BLANK') setBlank(b => !b)
         if (payload.type === 'NEXT')  setCurrent(c => Math.min(c + 1, slides.length - 1))
@@ -65,10 +70,17 @@ export default function PresentMode() {
   }, [setId, slides.length])
 
   // ── Send status back to controller ─────────────────────────────────────────
+  // Once loaded, say HELLO: an open controller answers with SYNC (its current slide and blank
+  // state), so a screen opened mid-service starts where the controller is instead of resetting
+  // it to slide 1. After that, slide changes made here are reported back (not on the TV, which
+  // only follows the controller).
+  const helloSent = useRef(false)
   useEffect(() => {
     if (!loaded || !channelRef.current) return
+    if (!helloSent.current) { helloSent.current = true; channelRef.current.sendStatus({ type: 'HELLO' }); return }
+    if (tv) return
     channelRef.current.sendStatus({ type: 'STATUS', current, blank, total: slides.length })
-  }, [current, blank, loaded, slides.length])
+  }, [current, blank, loaded, slides.length, tv])
 
   // ── Keyboard navigation ─────────────────────────────────────────────────────
   const handleKey = useCallback((e) => {
@@ -83,9 +95,10 @@ export default function PresentMode() {
   }, [slides.length])
 
   useEffect(() => {
+    if (tv) return
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [handleKey])
+  }, [handleKey, tv])
 
   // ── Controls auto-hide ──────────────────────────────────────────────────────
   const showControlsTemporarily = useCallback(() => {
@@ -172,9 +185,9 @@ export default function PresentMode() {
     <div
       className="fixed inset-0 bg-black flex items-center justify-center select-none"
       style={{ cursor: 'none', touchAction: 'none' }}
-      onClick={handleClick}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      onClick={tv ? undefined : handleClick}
+      onTouchStart={tv ? undefined : handleTouchStart}
+      onTouchEnd={tv ? undefined : handleTouchEnd}
     >
       {/* Loading spinner */}
       {!loaded && (
@@ -216,7 +229,7 @@ export default function PresentMode() {
       {blank && <div className="fixed inset-0 bg-black" />}
 
       {/* Slide dot indicator */}
-      {loaded && !blank && slides.length > 1 && (
+      {!tv && loaded && !blank && slides.length > 1 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
           {slides.map((_, i) => (
             <div
@@ -228,7 +241,7 @@ export default function PresentMode() {
       )}
 
       {/* ── Floating controls overlay — appears on center tap, auto-hides ── */}
-      <div
+      {!tv && <div
         className={`fixed bottom-12 left-1/2 -translate-x-1/2 transition-all duration-300 ${
           showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
@@ -274,7 +287,7 @@ export default function PresentMode() {
         <p className="text-center text-white/25 text-xs mt-2">
           swipe left/right · tap edges · tap center to toggle
         </p>
-      </div>
+      </div>}
     </div>
   )
 }

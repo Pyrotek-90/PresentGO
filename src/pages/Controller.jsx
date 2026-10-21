@@ -5,6 +5,7 @@ import { openControlChannel } from '../lib/controlChannel'
 import TitleSlide from '../components/TitleSlide'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import { groupFit } from '../lib/slideFit'
+import { hasNativeDisplay, displayStatus, onDisplayChange, showOnDisplay, hideDisplay } from '../lib/externalDisplay'
 import {
   ChevronLeft, ChevronRight, XSquare, X, Tv, ArrowLeft,
   MonitorPlay, ArrowRight, Radio, Wifi,
@@ -13,90 +14,116 @@ import {
 
 // ─── Connect step — open presentation then AirPlay ───────────────────────────
 
-function ConnectStep({ setId, setName, onContinue, onBack }) {
+function Bullet({ children }) {
+  return (
+    <li className="flex items-start gap-2 text-sm text-muted">
+      <span className="shrink-0 mt-0.5 text-accent-light">•</span>
+      <span>{children}</span>
+    </li>
+  )
+}
+const W = ({ children }) => <span className="text-[#f5f5f5]">{children}</span>
+
+// The TV's state in the iPad / iPhone app: a dot and the AirPlay device's name.
+function TvStatus({ tv }) {
+  return (
+    <div className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm ${tv.connected ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-border text-muted'}`}>
+      <span className={`w-2 h-2 rounded-full shrink-0 ${tv.connected ? 'bg-green-400' : 'bg-[#555] animate-pulse'}`} />
+      {tv.connected ? <span>TV connected{tv.name ? ` — ${tv.name}` : ''}. It's showing only the slide.</span> : <span>Waiting for a TV…</span>}
+    </div>
+  )
+}
+
+function ConnectStep({ setId, setName, tv, onContinue, onBack }) {
   const [opened, setOpened] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const presentUrl = `${window.location.origin}/present/${setId}`
 
   const openPresent = () => {
-    window.open(`${window.location.origin}/present/${setId}`, '_blank')
+    window.open(presentUrl, '_blank')
     setOpened(true)
   }
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(presentUrl); setCopied(true); setTimeout(() => setCopied(false), 2500) } catch { /* ignore */ }
+  }
 
-  const steps = [
+  const wifi = {
+    title: 'Connect to the same Wi-Fi',
+    body: (
+      <ul className="space-y-2">
+        <Bullet>Your {tv.native ? 'iPad or iPhone' : 'device'} and your Apple TV (or AirPlay TV) must be on the <W>same Wi-Fi network</W>, or AirPlay won't find the TV.</Bullet>
+      </ul>
+    ),
+  }
+
+  // In the iPad / iPhone app the TV is a second screen: it shows only Now Showing.
+  const appSteps = [
+    wifi,
     {
-      n: 1,
-      title: 'Connect to the same Wi-Fi',
+      title: 'Turn on Screen Mirroring',
       body: (
         <ul className="space-y-2">
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Make sure your device and your Apple TV (or AirPlay-enabled TV) are on the <span className="text-[#f5f5f5]">same Wi-Fi network</span>.
-          </li>
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            AirPlay won't discover your display if they're on different networks.
-          </li>
+          <Bullet>Swipe down from the top-right corner to open <W>Control Center</W> → tap <W>Screen Mirroring</W> → choose your TV.</Bullet>
+          <Bullet>The TV shows <W>only the Now Showing slide</W>, full screen. Your {window.innerWidth >= 768 ? 'iPad' : 'iPhone'} keeps the controller with Up Next, the run order and all your slides.</Bullet>
         </ul>
       ),
+      extra: <TvStatus tv={tv} />,
     },
     {
-      n: 2,
-      title: 'Open the presentation screen',
-      body: (
-        <button
-          onClick={openPresent}
-          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-            opened
-              ? 'border-green-500/40 text-green-400 bg-green-500/10 cursor-default'
-              : 'btn-primary'
-          }`}
-        >
-          <MonitorPlay size={16} />
-          {opened ? '✓ Presentation screen opened' : 'Open Presentation Screen'}
-        </button>
-      ),
-      note: opened ? 'Switch to that tab now — it shows the full-screen slide display.' : null,
-    },
-    {
-      n: 3,
-      title: 'Switch to the presentation tab & AirPlay',
+      title: 'Run the service from here',
       body: (
         <ul className="space-y-2">
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Switch to the presentation tab so your iPad shows only the slide.
-          </li>
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Swipe down from the top-right → tap <span className="text-[#f5f5f5]">Screen Mirroring</span> → select your TV.
-          </li>
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Your TV will now show only the clean slide — no app chrome.
-          </li>
-        </ul>
-      ),
-    },
-    {
-      n: 4,
-      title: 'Control slides from the presentation screen',
-      body: (
-        <ul className="space-y-2">
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            <span><span className="text-[#f5f5f5]">Swipe left/right</span> or <span className="text-[#f5f5f5]">tap the left/right edges</span> to go to the previous or next slide.</span>
-          </li>
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            <span><span className="text-[#f5f5f5]">Tap the center</span> to reveal a mini control bar with Prev, Next, and Blank.</span>
-          </li>
-          <li className="flex items-start gap-2 text-sm text-muted">
-            <span className="shrink-0 mt-0.5 text-accent-light">•</span>
-            Have a second device? Open this Controller page on it — changes sync automatically.
-          </li>
+          <Bullet>Tap a slide to put it on the TV. <W>Blank</W> clears the TV; <W>Loop</W> cycles the current item.</Bullet>
+          <Bullet>Keep StaffList open on this screen while presenting. If you switch apps, iOS goes back to mirroring the whole screen.</Bullet>
         </ul>
       ),
     },
   ]
+
+  // In a web browser, Screen Mirroring copies the whole screen, so the slide needs its own screen.
+  const browserSteps = [
+    wifi,
+    {
+      title: 'Put the presentation screen on the TV',
+      body: (
+        <div className="space-y-3">
+          <p className="text-sm"><W>Best: a second device on the TV.</W></p>
+          <ul className="space-y-2">
+            <Bullet>On the device connected to the TV (a Mac or laptop by HDMI or AirPlay, or a second iPad mirroring), sign in to StaffList and open this link full screen:</Bullet>
+          </ul>
+          <div className="flex gap-2">
+            <code className="flex-1 min-w-0 truncate rounded-lg border border-border bg-[#141414] px-2.5 py-2 text-xs text-muted">{presentUrl}</code>
+            <button onClick={copyLink} className="btn-ghost text-xs !px-3 shrink-0 border border-border rounded-lg">{copied ? 'Copied' : 'Copy link'}</button>
+          </div>
+          <ul className="space-y-2">
+            <Bullet>The TV then shows <W>only the Now Showing slide</W>, and this device is the controller. They stay in step automatically.</Bullet>
+          </ul>
+          <p className="text-sm pt-1"><W>One iPad only:</W></p>
+          <ul className="space-y-2">
+            <Bullet>Open the presentation screen, then Control Center → <W>Screen Mirroring</W> → your TV. Mirroring copies whatever is on the iPad, so <W>stay on the presentation screen</W>: swipe or tap its edges to change slides, tap the center for Prev / Next / Blank.</Bullet>
+          </ul>
+          <button
+            onClick={openPresent}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+              opened ? 'border-green-500/40 text-green-400 bg-green-500/10' : 'btn-primary'}`}
+          >
+            <MonitorPlay size={16} />
+            {opened ? '✓ Presentation screen opened' : 'Open Presentation Screen on this device'}
+          </button>
+        </div>
+      ),
+    },
+    {
+      title: 'Coming soon: one iPad or iPhone',
+      body: (
+        <ul className="space-y-2">
+          <Bullet>In the <W>StaffList app</W> for iPad and iPhone, the TV will show only Now Showing while you keep this controller in your hand — no second device needed.</Bullet>
+        </ul>
+      ),
+    },
+  ]
+
+  const steps = tv.native ? appSteps : browserSteps
 
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
@@ -115,26 +142,26 @@ function ConnectStep({ setId, setName, onContinue, onBack }) {
               <Wifi size={26} className="text-accent-light" />
             </div>
             <h2 className="text-xl font-semibold">Presentation Mode</h2>
-            <p className="text-muted text-sm">Your program is ready. Follow these steps to get your TV showing the slides.</p>
+            <p className="text-muted text-sm">Your program is ready. The TV shows only the Now Showing slide.</p>
           </div>
 
-          {steps.map(({ n, title, body, note }) => (
-            <div key={n} className="card space-y-3">
+          {steps.map(({ title, body, extra }, i) => (
+            <div key={title} className="card space-y-3">
               <div className="flex items-center gap-2.5">
                 <span className="w-6 h-6 rounded-full bg-accent/20 text-accent-light text-xs flex items-center justify-center font-semibold shrink-0">
-                  {n}
+                  {i + 1}
                 </span>
                 <span className="text-sm font-medium">{title}</span>
               </div>
               {body}
-              {note && <p className="text-xs text-muted">{note}</p>}
+              {extra}
             </div>
           ))}
 
           <button onClick={onContinue} className="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base">
-            Display is ready — Start Controlling <ArrowRight size={18} />
+            {tv.native && !tv.connected ? 'Start Controlling' : 'Display is ready — Start Controlling'} <ArrowRight size={18} />
           </button>
-          <p className="text-center text-xs text-muted">No display? You can still use the controller to rehearse.</p>
+          <p className="text-center text-xs text-muted">No display? You can still use the controller to rehearse{tv.native ? ', and connect the TV at any time' : ''}.</p>
         </div>
       </div>
     </div>
@@ -283,6 +310,19 @@ export default function Controller() {
   const [looping, setLooping] = useState(false)
   const [stripFocus, setStripFocus] = useState(null)   // { idx, n }: scroll the strip so idx comes first
   const channelRef = useRef(null)
+  const currentRef = useRef(0), blankRef = useRef(false)
+  currentRef.current = current
+  blankRef.current = blank
+
+  // iPad / iPhone app: the TV is a second screen showing only the slide (see lib/externalDisplay)
+  const [tv, setTv] = useState(() => ({ native: hasNativeDisplay(), connected: false, name: '' }))
+  useEffect(() => {
+    if (!tv.native || setId === 'mock') return
+    showOnDisplay(`${window.location.origin}/present/${setId}?tv=1`)   // shown now, or when a TV connects
+    displayStatus().then(st => setTv(t => ({ ...t, ...st })))
+    const off = onDisplayChange(st => setTv(t => ({ ...t, ...st })))
+    return () => { off(); hideDisplay() }
+  }, [tv.native, setId])
 
   useEffect(() => {
     async function load() {
@@ -370,7 +410,11 @@ export default function Controller() {
   // Supabase Realtime channel — persists for the session
   useEffect(() => {
     const ch = openControlChannel(setId, {
-      onStatus: payload => { if (payload.type === 'STATUS') { setCurrent(payload.current); setBlank(payload.blank) } },
+      onStatus: payload => {
+        if (payload.type === 'STATUS') { setCurrent(payload.current); setBlank(payload.blank) }
+        // a presentation screen (or the TV) just opened: bring it to where we are
+        else if (payload.type === 'HELLO') ch.sendControl({ type: 'SYNC', index: currentRef.current, blank: blankRef.current })
+      },
     })
     channelRef.current = ch
     return () => { ch.close(); channelRef.current = null }
@@ -420,7 +464,7 @@ export default function Controller() {
 
 
   if (!connected) {
-    return <ConnectStep setId={setId} setName={setName} onContinue={() => setConnected(true)} onBack={() => navigate(`/sets/${setId}`)} />
+    return <ConnectStep setId={setId} setName={setName} tv={tv} onContinue={() => setConnected(true)} onBack={() => navigate(`/sets/${setId}`)} />
   }
 
   const curr = slides[current]
@@ -441,7 +485,13 @@ export default function Controller() {
         <span className="text-xs text-red-400 font-semibold uppercase tracking-wide shrink-0">Live</span>
         <span className="text-muted shrink-0">·</span>
         <span className="font-medium text-sm truncate">{setName}</span>
-        <span className="ml-auto text-xs text-muted shrink-0 hidden sm:inline">Slide {current + 1} of {slides.length}</span>
+        {tv.native && (
+          <span title={tv.connected ? `TV: ${tv.name || 'connected'}` : 'No TV — Control Center → Screen Mirroring'}
+            className={`ml-auto flex items-center gap-1.5 text-xs shrink-0 px-2 h-7 rounded-md border ${tv.connected ? 'border-green-500/40 text-green-400' : 'border-border text-muted'}`}>
+            <Tv size={13} /> {tv.connected ? 'TV' : 'No TV'}
+          </span>
+        )}
+        <span className={`${tv.native ? '' : 'ml-auto '}text-xs text-muted shrink-0 hidden sm:inline`}>Slide {current + 1} of {slides.length}</span>
         <button onClick={handleDisconnect} className="btn-danger flex items-center gap-1.5 text-sm px-3 h-9 shrink-0 ml-auto sm:ml-0">
           <X size={14} /> End
         </button>
