@@ -37,18 +37,18 @@ export function abbreviateLabel(label) {
   return short.toUpperCase() + num
 }
 
-const headerStyle = { fontFamily: "'Archivo', 'Inter', sans-serif", fontStretch: '125%', fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase' }
+const INDENT = '0.9em'   // lyric text and section headers sit slightly in from the edge
 
-function SectionBanner({ text, size = '1.05em' }) {
+// Section headers (Verse 1, Chorus…) use the same small caps label style as the
+// Scheduling page's group headings (Production / Singers / Musicians), in the accent teal.
+const headerStyle = { fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1.4 }
+
+function SectionBanner({ text, size = '0.6em' }) {
   return (
-    <div style={{ breakAfter: 'avoid', marginTop: 0, marginBottom: '0.3em' }}>
-      <span style={{ ...headerStyle, fontSize: size }}
-        className="inline-block px-3 py-0.5 rounded-md bg-accent text-white border-l-[0.4em] border-white/60">{text}</span>
-    </div>
+    <h3 style={{ ...headerStyle, fontSize: size, breakAfter: 'avoid', margin: '0 0 0.1em 0', paddingLeft: INDENT }}
+      className="text-accent">{text}</h3>
   )
 }
-
-const INDENT = '0.9em'   // lyric text sits slightly in from the left-aligned section headers
 
 // Splits a lyric line at each chord's column so every chord sits directly above its word,
 // whatever font is used (the chart's spaces only tell us *where* in the line each chord goes).
@@ -436,7 +436,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
               </div>
             )) : sections.map((sec, i) => (
               <div key={i} style={{ breakInside: 'avoid', marginBottom: '1em' }}>
-                {sec.label && <SectionBanner text={sec.label} size="0.7em" />}
+                {sec.label && <SectionBanner text={sec.label} />}
                 {sec.lines.map((l, j) => <p key={j} data-fit style={{ paddingLeft: INDENT, whiteSpace: 'nowrap' }}>{l || '\u00a0'}</p>)}
               </div>
             ))}
