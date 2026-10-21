@@ -23,6 +23,15 @@ const TRANSLATION_RE = /\b(translation|translated|singable|meaning|english\s+ver
 // Repeat marks at the end of a lyric line: "2X", "x2", "(2x)", "×3".
 const REPEAT_RE = /\s+\(?\s*(?:[x×]\s*\d+|\d+\s*[x×])\s*\)?\s*$/i
 const PAGE_NO_RE = /^\d{1,3}$/
+// A repeat mark ending a lyric line ("2X", "x2", "(2x)", "- 2") becomes the app's own "-2X",
+// which the Song Viewer highlights and slides leave out.
+const DASH_REPEAT_RE = /\s+[-–—]\s*(\d)\s*$/
+function repeatMark(lyric) {
+  const m = lyric.match(REPEAT_RE) || lyric.match(DASH_REPEAT_RE)
+  if (!m) return lyric
+  const n = m[0].match(/\d+/)[0]
+  return `${lyric.slice(0, m.index).replace(/\s+$/, '')} -${n}X`
+}
 
 async function loadPdfjs() {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
@@ -117,28 +126,55 @@ function runsToRows(runs, pageNo) {
     row.runs.sort((a, b) => a.x - b.x)
     let text = ''
     let prevEnd = null
+    const spans = []   // where each run landed in `text`, so chords can be matched to lyrics by position
     for (const r of row.runs) {
-      const col = Math.max(0, Math.round((r.x - left) / charW))
-      if (col > text.length) {
-        text += ' '.repeat(col - text.length)
-      } else if (text && prevEnd !== null && r.x - prevEnd > charW * 0.3 && !/\s$/.test(text) && !/^\s/.test(r.str)) {
-        text += ' '
+      const gap = prevEnd === null ? null : r.x - prevEnd
+      if (gap !== null && gap <= charW * 0.3) {
+        // touching runs are one word split by the PDF (often at a chord): join them as-is,
+        // never pad them out to the character grid ("prasanna me" → "prasanname")
+      } else {
+        const col = Math.max(0, Math.round((r.x - left) / charW))
+        if (col > text.length + (text ? 1 : 0)) text += ' '.repeat(col - text.length)
+        else if (text && !/\s$/.test(text) && !/^\s/.test(r.str)) text += ' '
       }
+      spans.push({ x: r.x, w: r.w, start: text.length, len: r.str.length })
       text += r.str
       prevEnd = r.x + r.w
     }
-    return { text: text.replace(/\s+$/, ''), size: row.size, y: row.y, page: pageNo }
+    return { text: text.replace(/\s+$/, ''), size: row.size, y: row.y, page: pageNo, spans, charW, left }
   }).filter(r => r.text.trim())
+}
+
+// Character index in a row's text that sits at horizontal position x (via the row's runs).
+function idxAtX(row, x) {
+  const spans = row.spans || []
+  for (const s of spans) {
+    if (x < s.x - 0.5) return s.start
+    if (x <= s.x + s.w) return s.start + Math.min(s.len, Math.round(((x - s.x) / (s.w || 1)) * s.len))
+  }
+  const last = spans[spans.length - 1]
+  if (!last) return Math.max(0, Math.round((x - (row.left || 0)) / (row.charW || 5)))
+  return last.start + last.len + Math.max(0, Math.round((x - (last.x + last.w)) / (row.charW || 5)))
+}
+// Horizontal position of a character index in a row's text.
+function xAtIdx(row, idx) {
+  const spans = row.spans || []
+  for (const s of spans) if (idx >= s.start && idx < s.start + s.len) return s.x + ((idx - s.start) / (s.len || 1)) * s.w
+  return (row.left || 0) + idx * (row.charW || 5)
 }
 
 // A chord-only row standing alone well below the rest of a column is a chord-diagram
 // legend (the G / Am / D boxes printed at the bottom of many charts), not part of the song.
-function dropDiagramLegend(rows) {
+// Exception: a chord row with strum slashes printed under it is the song's rhythm pattern; keep
+// it (as a "Rhythm" section) instead of dropping it.
+function dropDiagramLegend(rows, slashes = []) {
   if (rows.length < 3) return rows
   const last = rows[rows.length - 1], prev = rows[rows.length - 2]
   const gaps = rows.slice(1).map((r, i) => rows[i].y - r.y).filter(g => g > 0)
   const lineGap = median(gaps) || last.size * 1.2
-  return isChordRow(last.text) && prev.y - last.y > lineGap * 2.5 ? rows.slice(0, -1) : rows
+  if (!(isChordRow(last.text) && prev.y - last.y > lineGap * 2.5)) return rows
+  const strum = slashes.some(r => r.y < last.y && last.y - r.y <= last.size * 4)
+  return strum ? [...rows.slice(0, -1), { ...last, rhythm: true }] : rows.slice(0, -1)
 }
 
 // One page in reading order: header lines (title, writers), then the song (left column,
@@ -146,6 +182,7 @@ function dropDiagramLegend(rows) {
 // Key / Tempo printed at the bottom). Footer rows are marked so they never become lyrics.
 function pageRows(items, pageNo) {
   const runs = pageRuns(items)
+  const slashes = items.filter(it => /^\/+$/.test((it.str || '').trim())).map(it => ({ y: it.transform[5] }))
   if (!runs.length) return []
   const body = median(runs.map(r => r.size))
   const bodyRuns = runs.filter(r => r.size >= body * 0.8 && r.size <= body * 1.25)
@@ -157,7 +194,7 @@ function pageRows(items, pageNo) {
   const split = findGutter(mid.filter(r => r.y <= top + 1))
   const tag = zone => rows => rows.map(r => ({ ...r, zone }))
   const footerRows = tag('footer')(runsToRows(footer, pageNo))
-  if (split == null) return [...dropDiagramLegend(runsToRows(mid, pageNo)), ...footerRows]
+  if (split == null) return [...dropDiagramLegend(runsToRows(mid, pageNo), slashes), ...footerRows]
 
   // Two columns: everything above where the right column starts is header (title, Key / Tempo).
   const colX = Math.min(...mid.filter(r => r.x >= split).map(r => r.x))
@@ -166,8 +203,8 @@ function pageRows(items, pageNo) {
   mid = mid.filter(r => r.y <= rightTop + 2)
   return [
     ...runsToRows(header, pageNo),
-    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x < split), pageNo)),
-    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x >= split), pageNo)),
+    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x < split), pageNo), slashes),
+    ...dropDiagramLegend(runsToRows(mid.filter(r => r.x >= split), pageNo), slashes),
     ...footerRows,
   ]
 }
@@ -214,17 +251,22 @@ function cleanLyric(s) {
   return { text: trimmed, at: idx => idx <= s.length ? Math.min(map[idx] ?? trimmed.length, trimmed.length) : trimmed.length + (idx - s.length) }
 }
 
-// Places chords from a chord row over a lyric row that started `indent` columns in.
-function alignChords(chordText, lyricRaw) {
+// Places chords from a chord row over the lyric row beneath it. Each chord goes over the lyric
+// letter printed directly under it (matched by position on the page, so proportional fonts
+// line up); rows without position data fall back to character columns.
+function alignChords(chordRow, lyricRow) {
+  const lyricRaw = lyricRow.text
   const indent = lyricRaw.match(/^\s*/)[0].length
   const lyric = cleanLyric(lyricRaw.slice(indent))
+  const byPos = !!(chordRow.spans?.length && lyricRow.spans?.length)
   let chords = ''
   const re = /\S+/g
-  chordText = stripNotes(chordText)
+  const chordText = stripNotes(chordRow.text)
   let m
   while ((m = re.exec(chordText))) {
     if (BAR_TOKEN_RE.test(m[0])) continue
-    const pos = Math.max(lyric.at(Math.max(0, m.index - indent)), chords.length ? chords.length + 1 : 0)
+    const col = byPos ? idxAtX(lyricRow, xAtIdx(chordRow, m.index)) : m.index
+    const pos = Math.max(lyric.at(Math.max(0, col - indent)), chords.length ? chords.length + 1 : 0)
     chords += ' '.repeat(pos - chords.length) + m[0]
   }
   return { chords, lyric: lyric.text }
@@ -362,20 +404,21 @@ export function chartFromTextItems(pages) {
       continue
     }
 
+    if (rows[i].rhythm) open('Rhythm')
     if (!cur) open('')
     if (isChordRow(raw)) {
       const next = rows[i + 1]
       const nt = next?.text.trim() || ''
       if (next && next.page === rows[i].page && nt && !isChordRow(next.text) && !SECTION_RE.test(nt) && !SECTION_PREFIX_RE.test(nt)) {
-        const pair = alignChords(raw, next.text)
-        cur.rows.push({ ...pair, lyric: pair.lyric.replace(REPEAT_RE, '') })
+        const pair = alignChords(rows[i], next)
+        cur.rows.push({ ...pair, lyric: repeatMark(pair.lyric) })
         i++
       } else {
         cur.rows.push({ chords: chordOnlyLine(raw), lyric: '' })
       }
       continue
     }
-    cur.rows.push({ chords: '', lyric: cleanLyric(t).text.replace(REPEAT_RE, '') })
+    cur.rows.push({ chords: '', lyric: repeatMark(cleanLyric(t).text) })
   }
 
   const song = assembleSong(meta, sections)
