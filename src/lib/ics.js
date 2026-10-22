@@ -1,5 +1,7 @@
 // Builds an iCalendar (.ics) document from StaffList sets. Node- and browser-safe.
 
+import { extraTimes } from './setTimes.js'
+
 const pad = n => String(n).padStart(2, '0')
 const esc = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
 
@@ -54,17 +56,18 @@ function whenLines(date, timeStr, minutes, tz) {
   return [`DTSTART;VALUE=DATE:${fmtDate(day)}`, `DTEND;VALUE=DATE:${fmtDate(new Date(day.getTime() + 86400000))}`]
 }
 
-// The set's rehearsal, as its own event (90 minutes when it has a time).
-function rehearsalLines(set, baseUrl) {
-  if (!set.rehearsal_date) return []
-  const lines = ['BEGIN:VEVENT', `UID:rehearsal-${set.id}@presentgo`, `DTSTAMP:${fmtUtc(new Date(set.updated_at || Date.now()))}`,
-    ...whenLines(set.rehearsal_date, set.rehearsal_time, 90, set.time_zone), `SUMMARY:${esc(`Rehearsal: ${set.name}`)}`]
-  const where = [set.venue_name, set.location_address].filter(Boolean).join(', ')
-  if (where) lines.push(`LOCATION:${esc(where)}`)
-  if (baseUrl) lines.push(`DESCRIPTION:${esc(`Program: ${baseUrl}/sets/${set.id}`)}`, `URL:${baseUrl}/sets/${set.id}`)
-  if (set.updated_at) lines.push(`LAST-MODIFIED:${fmtUtc(new Date(set.updated_at))}`, `SEQUENCE:${Math.floor(new Date(set.updated_at).getTime() / 1000)}`)
-  lines.push('END:VEVENT')
-  return lines
+// Each extra time (rehearsal, practice…) as its own event, named as the leader named it.
+function extraTimeLines(set, baseUrl) {
+  return extraTimes(set).flatMap((t, i) => {
+    const lines = ['BEGIN:VEVENT', `UID:set-${set.id}-time-${i}@presentgo`, `DTSTAMP:${fmtUtc(new Date(set.updated_at || Date.now()))}`,
+      ...whenLines(t.date, t.time, t.minutes, set.time_zone), `SUMMARY:${esc(`${t.label}: ${set.name}`)}`]
+    const where = [set.venue_name, set.location_address].filter(Boolean).join(', ')
+    if (where) lines.push(`LOCATION:${esc(where)}`)
+    if (baseUrl) lines.push(`DESCRIPTION:${esc(`Program: ${baseUrl}/sets/${set.id}`)}`, `URL:${baseUrl}/sets/${set.id}`)
+    if (set.updated_at) lines.push(`LAST-MODIFIED:${fmtUtc(new Date(set.updated_at))}`, `SEQUENCE:${Math.floor(new Date(set.updated_at).getTime() / 1000)}`)
+    lines.push('END:VEVENT')
+    return lines
+  })
 }
 
 function eventLines(set, baseUrl) {
@@ -80,7 +83,7 @@ function eventLines(set, baseUrl) {
   if (baseUrl) lines.push(`URL:${baseUrl}/sets/${set.id}`)
   if (set.updated_at) lines.push(`LAST-MODIFIED:${fmtUtc(new Date(set.updated_at))}`, `SEQUENCE:${Math.floor(new Date(set.updated_at).getTime() / 1000)}`)
   lines.push('END:VEVENT')
-  return [...lines, ...rehearsalLines(set, baseUrl)]
+  return [...lines, ...extraTimeLines(set, baseUrl)]
 }
 
 // `color` (#rrggbb): suggested calendar color; Apple Calendar uses it when subscribing.

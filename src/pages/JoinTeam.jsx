@@ -4,6 +4,7 @@ import { Check, X, CalendarDays, MapPin, Music, Users, Phone, Clock3, Church } f
 import Logo from '../components/Logo'
 import { supabase } from '../lib/supabase'
 import { formatSetTime } from '../lib/sets'
+import { extraTimes, timeText } from '../lib/setTimes'
 
 const dateText = d => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '')
 
@@ -104,7 +105,7 @@ export default function JoinTeam() {
                         <p className="font-semibold">{r.set_name}</p>
                         {r.service_date && <p className="flex items-center gap-2 text-muted"><CalendarDays size={14} />{dateText(r.service_date)}{r.service_time ? ` · ${formatSetTime(r.service_time)}` : ''}</p>}
                         {(r.venue_name || r.location_address) && <p className="flex items-center gap-2 text-muted"><MapPin size={14} />{[r.venue_name, r.location_address].filter(Boolean).join(', ')}</p>}
-                        {r.rehearsal_date && <p className="flex items-center gap-2 text-muted"><Clock3 size={14} />Rehearsal {dateText(r.rehearsal_date)}{r.rehearsal_time ? ` · ${formatSetTime(r.rehearsal_time)}` : ''}</p>}
+                        {extraTimes(r).map((t, i) => <p key={i} className="flex items-center gap-2 text-muted"><Clock3 size={14} />{t.label}: {timeText(t)}</p>)}
                         {r.position && <p className="flex items-center gap-2"><Music size={14} className="text-accent-light" />{r.position}</p>}
                         {done && <p className={`text-xs font-medium ${r.status === 'accepted' ? 'text-green-400' : 'text-red-400'}`}>{r.status === 'accepted' ? "You're in. Thank you!" : 'You declined this one.'}</p>}
                         <div className="grid grid-cols-2 gap-2">

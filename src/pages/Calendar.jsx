@@ -8,6 +8,7 @@ import Layout from '../components/Layout'
 import SchedulePane from '../components/calendar/SchedulePane'
 import { sortPositions, ensureStandardPositions } from '../lib/positions'
 import { todayISO, formatSetTime, formatSetWhen } from '../lib/sets'
+import { extraTimes, timeText } from '../lib/setTimes'
 import { loadServingSets, mergeServing, setHref } from '../lib/serving'
 import { postInvites, mailJoinInvite, inviteSummary } from '../lib/invites'
 import { chipStyle, dotStyle } from '../lib/teamColors'
@@ -115,7 +116,7 @@ export default function Calendar() {
     const longDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
     const lines = [
       ['Set', set?.name], ['Date', when], ['Time', set?.service_time && formatSetTime(set.service_time)],
-      ['Rehearsal', set?.rehearsal_date && `${longDate(set.rehearsal_date)}${set.rehearsal_time ? ` at ${formatSetTime(set.rehearsal_time)}` : ''}`],
+      ...extraTimes(set).map(t => [t.label, timeText(t)]),
       ['Venue', [set?.venue_name, set?.location_address, set?.location_details].filter(Boolean).join(', ')], ['Position', p?.name],
     ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
     const body = `Hi ${m.name.split(' ')[0]},\n\nCan you serve as ${p?.name} for ${set?.name}?\n\n${lines}\n\nPlease tap to answer:\n${link}\n\nThank you!`
@@ -150,7 +151,7 @@ export default function Calendar() {
   }
 
   useEffect(() => {
-    scope.sets(supabase.from('sets').select('*'))   // all columns: the rehearsal is there once its update has been run
+    scope.sets(supabase.from('sets').select('*'))   // all columns, including extra times once that update has been run
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
     if (!legacy) loadServingSets().then(setServing)

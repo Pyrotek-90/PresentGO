@@ -17,9 +17,10 @@ import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
 import { formatLyrics } from '../lib/lyricFormatter'
 import { arrangedSlides } from '../lib/arrangement'
 import { stripRepeat } from '../lib/repeat'
+import { extraTimes, timeText, TIME_NAMES, DEFAULT_MINUTES, daysBetween, addDays } from '../lib/setTimes'
 import {
   Plus, X, MonitorPlay, Music, Star, Megaphone, Square,
-  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen, Mic,
+  GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen, Mic, Clock3,
 } from 'lucide-react'
 
 const ITEM_ICONS  = { song: Music, welcome: Star, announcement: Megaphone, blank: Square, media: FolderOpen, note: NotebookPen }
@@ -249,14 +250,14 @@ export default function SetEditor() {
   }
 
   const DURATIONS = [30, 45, 60, 75, 90, 105, 120, 150, 180, 240]
-  // Rehearsal: saved once the set-rehearsal database update has been run (sets then have the column).
-  const hasRehearsal = !set || 'rehearsal_date' in set
-  const dayMs = 86400000
-  const isoDay = s => Date.UTC(...s.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))
-  const daysBetween = (a, b) => Math.round((isoDay(b) - isoDay(a)) / dayMs)
-  const addDays = (s, n) => new Date(isoDay(s) + n * dayMs).toISOString().slice(0, 10)
-  // How many days before (or after) the set its rehearsal is, so repeating sets keep the same pattern.
-  const rehearsalOffset = d => (d.rehearsalDate && d.date ? daysBetween(d.date, d.rehearsalDate) : null)
+  // Extra times (rehearsal, practice, run-thru…): saved once the set-times database update has been
+  // run (sets then have extra_times).
+  const hasTimes = !set || 'extra_times' in set
+  const cleanTimes = d => (d.times || []).filter(t => t.date).map(t => ({
+    label: t.label.trim() || 'Rehearsal', date: t.date, ...(t.time ? { time: t.time } : {}), minutes: Number(t.minutes) || DEFAULT_MINUTES,
+  }))
+  // The times for a set on `date`: each keeps the same distance from the set as on this one.
+  const timesFor = (d, date) => cleanTimes(d).map(t => ({ ...t, date: d.date && date ? addDays(date, daysBetween(d.date, t.date)) : t.date }))
   const durationLabel = m => (m % 60 === 0 ? `${m / 60} hr` : m > 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`)
 
   const openDetailsFor = (s, overrides = {}) => {
@@ -269,9 +270,7 @@ export default function SetEditor() {
       venue: s?.venue_name || '',
       address: s?.location_address || '',
       room: s?.location_details || '',
-      rehearsalDate: s?.rehearsal_date || '',
-      rehearsalTime: s?.rehearsal_time ? s.rehearsal_time.slice(0, 5) : '',
-      showRehearsal: !!s?.rehearsal_date,   // hidden behind "Add rehearsal time" until there is one
+      times: extraTimes(s),   // added with "+ Add time"
       freq: s?.recurrence?.freq || '',
       endMode: s?.recurrence?.until ? 'until' : 'count',
       count: s?.recurrence?.count || DEFAULT_COUNT,
@@ -307,15 +306,13 @@ export default function SetEditor() {
     location_address: d.address.trim() || null,
     location_details: d.room.trim() || null,
     time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
-    ...(hasRehearsal ? { rehearsal_time: d.rehearsalDate && d.rehearsalTime ? d.rehearsalTime : null } : {}),
   })
 
   // New sets for the given dates, copying the shared fields (and optionally this set's program).
   const createSeriesSets = async (dates, fields, seriesId, rule, copyProgram) => {
     if (!dates.length) return 0
-    const off = hasRehearsal ? rehearsalOffset(details) : null
     const rows = dates.map(date => ({ user_id: user.id, church_id: set.church_id, workspace_id: set.workspace_id, ...fields, service_date: date, series_id: seriesId, recurrence: rule,
-      ...(hasRehearsal ? { rehearsal_date: off == null ? null : addDays(date, off) } : {}) }))
+      ...(hasTimes ? { extra_times: timesFor(details, date) } : {}) }))
     const { data, error } = await supabase.from('sets').insert(rows).select('id')
     if (error) throw error
     if (copyProgram && items.length && data?.length) {
@@ -344,13 +341,15 @@ export default function SetEditor() {
     const rule = ruleFrom(details)
     if (rule && !details.date) { setDetailsError('Pick a date to repeat from.'); return }
     if (rule?.until && rule.until <= details.date) { setDetailsError('The end date must be after the set date.'); return }
-    if (details.rehearsalDate && !hasRehearsal) {
-      setDetailsError('Rehearsal times need a one-time database update: run StaffList-Rehearsal-Setup.sql in Supabase → SQL Editor, reload, then save again.')
+    const missingDate = (details.times || []).find(t => !t.date && (t.label.trim() || t.time))
+    if (missingDate) { setDetailsError(`Pick a date for ${missingDate.label.trim() || 'the extra time'}, or remove it.`); return }
+    if (cleanTimes(details).length && !hasTimes) {
+      setDetailsError('Extra times need a one-time database update: run the set-times SQL in Supabase → SQL Editor, reload, then save again.')
       return
     }
     setDetailsSaving(true); setDetailsError(null)
     const shared = sharedFields(details)
-    const patch = { ...shared, service_date: details.date || null, ...(hasRehearsal ? { rehearsal_date: details.rehearsalDate || null } : {}) }
+    const patch = { ...shared, service_date: details.date || null, ...(hasTimes ? { extra_times: cleanTimes(details) } : {}) }
     const inSeries = !!set?.series_id
     const ruleChanged = !sameRule(rule, set?.recurrence)
     let msg = null
@@ -370,13 +369,12 @@ export default function SetEditor() {
           patch.recurrence = rule
           if (details.scope === 'following') {
             await supabase.from('sets').update(shared).eq('series_id', set.series_id).gt('service_date', set.service_date || '0000-01-01')
-            if (hasRehearsal) {
-              // each following set's rehearsal keeps the same distance from its own date
-              const off = rehearsalOffset(details)
+            if (hasTimes) {
+              // each following set's times keep the same distance from its own date
               const { data: next } = await supabase.from('sets').select('id, service_date')
                 .eq('series_id', set.series_id).gt('service_date', set.service_date || '0000-01-01')
               await Promise.all((next || []).map(r => supabase.from('sets')
-                .update({ rehearsal_date: off == null || !r.service_date ? null : addDays(r.service_date, off) }).eq('id', r.id)))
+                .update({ extra_times: r.service_date ? timesFor(details, r.service_date) : [] }).eq('id', r.id)))
             }
             msg = 'Updated this set and the following sets.'
           }
@@ -583,9 +581,9 @@ export default function SetEditor() {
               {set?.series_id && set?.recurrence && <Repeat size={11} className="text-accent-light shrink-0" aria-label="Repeating set" />}
               <span className="truncate">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.series_id && set?.recurrence && freqLabel(set.recurrence.freq, set.service_date), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</span>
             </p>
-            {set?.rehearsal_date && (
-              <p className="text-xs text-muted flex items-center gap-1 truncate"><Mic size={11} className="shrink-0" />Rehearsal {new Date(set.rehearsal_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}{set.rehearsal_time ? ` · ${formatSetTime(set.rehearsal_time)}` : ''}</p>
-            )}
+            {extraTimes(set).map((t, i) => (
+              <p key={i} className="text-xs text-muted flex items-center gap-1 truncate"><Clock3 size={11} className="shrink-0" />{t.label} {timeText(t, { short: true })}</p>
+            ))}
             {(set?.venue_name || set?.location_address) && (
               <p className="text-xs text-muted flex items-center gap-1 truncate"><MapPin size={11} className="shrink-0" />{[set.venue_name, set.location_address].filter(Boolean).join(', ')}{set.location_details ? ` · ${set.location_details}` : ''}</p>
             )}
@@ -623,29 +621,43 @@ export default function SetEditor() {
                   {(DURATIONS.includes(Number(details.duration)) ? DURATIONS : [...DURATIONS, Number(details.duration)].sort((a, b) => a - b)).map(m => <option key={m} value={m}>{durationLabel(m)}</option>)}
                 </select>
               </div>
-              {!details.showRehearsal ? (
-                <div className="col-span-2 sm:col-span-4">
-                  <button type="button" onClick={() => setDetails(d => ({ ...d, showRehearsal: true }))}
-                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10">
-                    <Plus size={14} /> Add rehearsal time
-                  </button>
-                </div>
-              ) : <>
-                <div className="col-span-1 sm:col-span-2">
-                  <label className="label !mb-1" htmlFor="rehearsal-date">Rehearsal date</label>
-                  <input id="rehearsal-date" type="date" className="input" value={details.rehearsalDate} max={details.date || undefined} autoFocus={!details.rehearsalDate}
-                    onChange={e => setDetails(d => ({ ...d, rehearsalDate: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="label !mb-1" htmlFor="rehearsal-time">Rehearsal time</label>
-                  <input id="rehearsal-time" type="time" className="input" value={details.rehearsalTime}
-                    onChange={e => setDetails(d => ({ ...d, rehearsalTime: e.target.value }))} />
-                </div>
-                <div className="flex items-end">
-                  <button type="button" onClick={() => setDetails(d => ({ ...d, rehearsalDate: '', rehearsalTime: '', showRehearsal: false }))}
-                    className="btn-ghost text-xs !px-2 h-10 flex items-center gap-1"><X size={13} /> Remove</button>
-                </div>
-              </>}
+              {/* Extra times: rehearsal, practice, run-thru… named by the leader */}
+              {(details.times || []).map((t, i) => {
+                const upd = patch => setDetails(d => ({ ...d, times: d.times.map((x, j) => (j === i ? { ...x, ...patch } : x)) }))
+                return (
+                  <div key={i} className="col-span-2 sm:col-span-4 grid grid-cols-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-end">
+                    <div>
+                      <label className="label !mb-1" htmlFor={`time-name-${i}`}>Name</label>
+                      <input id={`time-name-${i}`} className="input" list="extra-time-names" placeholder="Rehearsal" value={t.label} autoFocus={!t.label && !t.date}
+                        onChange={e => upd({ label: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="label !mb-1" htmlFor={`time-date-${i}`}>Date</label>
+                      <input id={`time-date-${i}`} type="date" className="input" value={t.date} onChange={e => upd({ date: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="label !mb-1" htmlFor={`time-time-${i}`}>Time</label>
+                      <input id={`time-time-${i}`} type="time" className="input" value={t.time} onChange={e => upd({ time: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="label !mb-1" htmlFor={`time-len-${i}`}>Length</label>
+                      <select id={`time-len-${i}`} className="input" value={t.minutes} onChange={e => upd({ minutes: Number(e.target.value) })}>
+                        {(DURATIONS.includes(Number(t.minutes)) ? DURATIONS : [...DURATIONS, Number(t.minutes)].sort((a, b) => a - b)).map(m => <option key={m} value={m}>{durationLabel(m)}</option>)}
+                      </select>
+                    </div>
+                    <button type="button" onClick={() => setDetails(d => ({ ...d, times: d.times.filter((_, j) => j !== i) }))}
+                      aria-label={`Remove ${t.label || 'this time'}`} title="Remove"
+                      className="h-10 w-10 rounded-lg border border-border text-muted hover:text-red-400 hover:border-red-400/50 flex items-center justify-center justify-self-start"><X size={15} /></button>
+                  </div>
+                )
+              })}
+              <datalist id="extra-time-names">{TIME_NAMES.map(n => <option key={n} value={n} />)}</datalist>
+              <div className="col-span-2 sm:col-span-4">
+                <button type="button" onClick={() => setDetails(d => ({ ...d, times: [...(d.times || []), { label: '', date: '', time: '', minutes: DEFAULT_MINUTES }] }))}
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10">
+                  <Plus size={14} /> Add time <span className="text-muted font-normal hidden sm:inline">(rehearsal, practice, run-thru…)</span>
+                </button>
+              </div>
               <div className="col-span-2">
                 <label className="label !mb-1">Venue name</label>
                 <input className="input" placeholder="First Baptist Church" value={details.venue} onChange={e => setDetails(d => ({ ...d, venue: e.target.value }))} />

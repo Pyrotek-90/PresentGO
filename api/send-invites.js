@@ -6,9 +6,11 @@
 //    they answer those on the join page once they've joined.
 //
 // Every email carries the team's details (organization, location, contact, welcome) and each
-// set's rehearsal.
+// set's extra times (rehearsal, practice… as the leader named them).
 // The caller's own Supabase login is used for every read and write, so row-level security
 // limits it to their own team. Needs RESEND_API_KEY and EMAIL_FROM in Vercel.
+
+import { extraTimes, timeText as extraTimeText } from '../src/lib/setTimes.js'
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const UUID = /^[0-9a-f-]{36}$/i
@@ -41,7 +43,6 @@ function teamInfo(team = {}, inviter) {
   }
 }
 const teamLine = t => (t.church ? `${t.name} · ${t.church}` : t.name)
-const rehearsalText = set => (set.rehearsal_date ? when(set.rehearsal_date, set.rehearsal_time?.slice(0, 5)) : '')
 const dateText = date => (date ? when(date) : '')
 function timeText(t) {
   if (!t) return ''
@@ -50,10 +51,10 @@ function timeText(t) {
 }
 // Venue name, address and room, or the team's location when the set has none.
 const venueText = (set, team) => [set.venue_name, set.location_address, set.location_details].filter(Boolean).join(', ') || team?.location || ''
-// The set's details, one per line: Set, Date, Time, Rehearsal, Venue (and Position).
+// The set's details, one per line: Set, Date, Time, each extra time (Rehearsal…), Venue, Position.
 const setRows = (set, team, position) => [
   ['Set', set.name], ['Date', dateText(set.service_date)], ['Time', timeText(set.service_time)],
-  ['Rehearsal', rehearsalText(set)], ['Venue', venueText(set, team)], ['Position', position],
+  ...extraTimes(set).map(t => [t.label, extraTimeText(t)]), ['Venue', venueText(set, team)], ['Position', position],
 ].filter(([, v]) => v)
 
 function setRequestEmail({ member, position, set, link, inviter, team }) {
@@ -149,7 +150,7 @@ export default async function handler(req, res) {
     // Set requests (with join status when the team-invites database update has been run).
     let rows = [], teamsReady = true
     if (ids.length) {
-      const setCols = '*'   // includes the rehearsal once that database update has been run
+      const setCols = '*'   // includes extra times once that database update has been run
       const full = `id,status,invite_token,set:sets(${setCols}),member:team_members(id,name,email,church_id,join_status,join_token),position:positions(name)`
       let r = await sb(`/rest/v1/set_assignments?id=in.(${ids.join(',')})&select=${encodeURIComponent(full)}`)
       if (r.status === 400) {
