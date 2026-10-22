@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { makeScope } from '../lib/scope'
 import { teamColorMap, LEAD_COLOR } from '../lib/teamColors'
+import { isPaid } from '../lib/plans'
 import { isOfflineEnabled } from '../lib/offline'
 import { downloadForOffline } from '../lib/offlineSync'
 
@@ -60,10 +61,13 @@ export function ChurchProvider({ children }) {
     const isAdmin = church?.role === 'admin'
     const isEditor = legacy || !!church?.editor
     const canLead = legacy || !!workspace?.lead
-    const scope = makeScope({ userId: user?.id, church, workspace, legacy, canLead })
+    // The team's plan. Before the churches update everything stays open (as it always was).
+    const plan = legacy ? 'pro' : church?.plan || 'free'
+    const scope = makeScope({ userId: user?.id, church, workspace, legacy, canLead, plan })
     const colors = teamColorMap(churches)
     return {
       loading, legacy, churches, church, workspace, isAdmin, isEditor, canLead, scope,
+      plan, pro: isPaid(plan),
       // Free / Pro: one "Team". Ultimate: a "Church" with several workspaces.
       unitLabel: church?.plan === 'ultimate' ? 'Church' : 'Team',
       // this person's color for each team's sets

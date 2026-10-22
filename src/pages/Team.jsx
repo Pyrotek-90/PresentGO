@@ -7,6 +7,7 @@ import { postInvites, mailJoinInvite, inviteSummary } from '../lib/invites'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
+import { useUpgrade, locked } from '../contexts/UpgradeContext'
 import Layout from '../components/Layout'
 import SwipeToDelete from '../components/common/SwipeToDelete'
 import { posLabel, sortPositions, ensureStandardPositions } from '../lib/positions'
@@ -30,6 +31,9 @@ export default function Team() {
   const { user } = useAuth()
   const { scope, legacy, church, unitLabel } = useChurch()
   const teamName = church?.name || 'the team'
+  // Free plan: the roster can be viewed but not changed; adding, inviting and messaging are Pro.
+  const { pro, requirePro } = useUpgrade()
+  const readOnly = !pro
   const [inviteNote, setInviteNote] = useState(null)   // { ok, text }
   const [inviting, setInviting] = useState(false)
   const [members, setMembers] = useState([])
@@ -92,6 +96,7 @@ export default function Team() {
       const { status, ok, out } = await postInvites({ members: list.map(m => m.id) })
       const now = new Date().toISOString()
       const mark = idList => setMembers(prev => prev.map(m => (idList.includes(m.id) && m.join_status !== 'accepted' ? { ...m, join_status: 'invited', join_invited_at: now } : m)))
+      if (status === 402) { setInviteNote({ ok: false, text: 'Inviting people is part of Pro. Upgrade your team in Settings → Subscription Plans.' }); return }
       if (status === 501) {
         const m = list[0]
         if (!m.join_token) { setInviteNote({ ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
@@ -195,18 +200,19 @@ export default function Team() {
               <span className="text-xs text-muted">{members.length}</span>
             </div>
             <div className="flex items-center gap-2">
-              {toInvite.length > 0 && (
-                <button onClick={() => sendTeamInvites(toInvite.map(m => m.id))} disabled={inviting}
-                  title={`Email an invitation to join ${teamName} to everyone not invited yet`}
-                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40">
-                  <Send size={14} /> {inviting ? 'Sending…' : <>Invite <span className="hidden sm:inline">to join</span> ({toInvite.length})</>}
+              {(toInvite.length > 0 || (readOnly && !legacy)) && (
+                <button onClick={() => requirePro('Inviting people to your team') && sendTeamInvites(toInvite.map(m => m.id))} disabled={inviting}
+                  title={readOnly ? 'Invite (Pro)' : `Email an invitation to join ${teamName} to everyone not invited yet`}
+                  className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
+                  <Send size={14} /> {inviting ? 'Sending…' : <>Invite <span className="hidden sm:inline">to join</span>{toInvite.length > 0 && ` (${toInvite.length})`}</>}
                 </button>
               )}
-              <button onClick={() => setMessaging(true)} disabled={!members.length}
-                aria-label="Message Team" className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40">
+              <button onClick={() => requirePro('Message Team') && setMessaging(true)} disabled={pro && !members.length} title={readOnly ? 'Message Team (Pro)' : undefined}
+                aria-label="Message Team" className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
                 <MessageSquare size={14} /> <span className="sm:hidden">Message</span><span className="hidden sm:inline">Message Team</span>
               </button>
-              <button onClick={() => { setForm({ ...EMPTY }); setError(null) }} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm whitespace-nowrap">
+              <button onClick={() => { if (!requirePro('Adding team members')) return; setForm({ ...EMPTY }); setError(null) }} title={readOnly ? 'Add Member (Pro)' : undefined}
+                className={`btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm whitespace-nowrap ${locked(pro)}`}>
                 <UserPlus size={14} /> <span className="sm:hidden">Add</span><span className="hidden sm:inline">Add Member</span>
               </button>
             </div>
@@ -218,7 +224,7 @@ export default function Team() {
           {form && (
             <div ref={formRef} className="px-4 py-4 border-b border-border space-y-4 bg-[#161616] scroll-mt-4">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">{form.id ? 'Edit team member' : 'Add team member'}</h2>
+                <h2 className="text-sm font-semibold">{readOnly ? 'Team member' : form.id ? 'Edit team member' : 'Add team member'}</h2>
                 <div className="flex items-center gap-1">
                   {form.id && (
                     <button type="button" onClick={() => saveVCard({ ...form, note: memberNote(form) })}
@@ -226,10 +232,10 @@ export default function Team() {
                       <Download size={13} /> Save to Contacts
                     </button>
                   )}
-                  <button type="button" onClick={importContact}
+                  {!readOnly && <button type="button" onClick={importContact}
                     className="btn-ghost flex items-center gap-1.5 !py-1 !px-2.5 text-xs" title="Fill in from a phone contact">
                     <Contact size={13} /> Import from Contacts
-                  </button>
+                  </button>}
                   <input ref={vcfInput} type="file" accept=".vcf,text/vcard,text/x-vcard" className="hidden" onChange={onVcf} />
                 </div>
               </div>
@@ -250,6 +256,7 @@ export default function Team() {
                 </div>
               )}
 
+              <fieldset disabled={readOnly} className="space-y-4 min-w-0">
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_10rem] gap-3">
                 <label className="sm:col-span-2 block">
                   <span className="label !mb-1">Name</span>
@@ -303,7 +310,9 @@ export default function Team() {
                 )}
               </div>
 
-              {!legacy && form.email.trim() && (() => {
+              </fieldset>
+
+              {!legacy && !readOnly && form.email.trim() && (() => {
                 const cur = form.id ? members.find(m => m.id === form.id) : null
                 const st = cur ? joinOf(cur) : 'not_invited'
                 const first = form.name.trim().split(/\s+/)[0] || 'them'
@@ -321,7 +330,12 @@ export default function Team() {
                 )
               })()}
               {error && <p className="text-red-400 text-xs">{error}</p>}
-              <div className="flex items-center gap-2 pt-1">
+              {readOnly ? (
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button onClick={() => setForm(null)} className="btn-ghost text-sm border border-border rounded-lg !px-4">Close</button>
+                  <button type="button" onClick={() => requirePro('Changing your team')} className="text-xs text-muted hover:text-primary underline">Editing your team is part of Pro</button>
+                </div>
+              ) : <div className="flex items-center gap-2 pt-1">
                 <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm whitespace-nowrap">{saving ? 'Saving…' : form.id ? 'Update' : 'Save'}</button>
                 <button onClick={() => { setForm(null); setImportNote(null); setContactHelp(false); setNewPos(null); setDeleting(null) }} className="btn-ghost text-sm">Cancel</button>
                 {form.id && (
@@ -334,7 +348,7 @@ export default function Team() {
                     <Trash2 size={16} />
                   </button>
                 )}
-              </div>
+              </div>}
             </div>
           )}
 
@@ -364,7 +378,7 @@ export default function Team() {
                   const mine = positions.filter(p => m.position_ids?.includes(p.id))
                   return (
                     <SwipeToDelete key={m.id} open={swipedId === m.id} onOpenChange={o => setSwipedId(o ? m.id : null)}
-                      onDelete={() => removeNow(m)} label={`Delete ${m.name}`}
+                      onDelete={() => removeNow(m)} label={`Delete ${m.name}`} disabled={readOnly}
                       className="hover:bg-[#1a1a1a] group">
                       <button type="button" onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: formatPhone(m.phone) || '', position_ids: m.position_ids || [], invite: joinOf(m) === 'not_invited' || joinOf(m) === 'declined' }); setError(null); setDeleting(null) }}
                         className={`w-full grid items-center gap-x-3 gap-y-1 px-2 py-2 text-left grid-cols-[1fr_1rem] ${ROW_COLS}`} aria-label={`Edit ${m.name}`}>

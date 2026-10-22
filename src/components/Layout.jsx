@@ -17,12 +17,13 @@ const allNavItems = [
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
-  const { isEditor } = useChurch()
+  const { isEditor, pro } = useChurch()
   // Musicians and singers (Members) need Home (their sets, songs and charts) and their Schedule.
   const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/' || i.to === '/schedule')
   const tools = isEditor ? [
     { to: '/get-started', label: 'Import Songs', icon: Upload },
-    { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },
+    // CCLI Report is Pro: it isn't listed on the Free plan
+    ...(pro ? [{ to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart }] : []),
   ] : []
   const navigate = useNavigate()
   const location = useLocation()
@@ -66,7 +67,7 @@ export default function Layout({ children }) {
           <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="StaffList home" title="Home"
             className="flex items-center gap-3 rounded-lg hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0">
             <Logo className="text-accent" size={26} />
-            <span className="hidden sm:inline text-lg font-semibold tracking-tight text-primary">StaffList</span>
+            <span className="text-lg font-semibold tracking-tight text-primary">StaffList</span>
           </Link>
           <WorkspaceSwitcher />
         </div>

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useChurch } from '../../contexts/ChurchContext'
+import { useUpgrade, locked } from '../../contexts/UpgradeContext'
+import { aiFetch } from '../../lib/ai'
 import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
 import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
@@ -352,6 +354,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { user } = useAuth()
   const { scope } = useChurch()
+  const { pro, requirePro } = useUpgrade()   // AI tools are Pro
   const isNew = !song
 
   // Core song fields
@@ -387,11 +390,11 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
   const [slideTranslation, setSlideTranslation] = useState(song?.metadata?.slide_translation || '')
   const detectTried = useRef(false)
   useEffect(() => {
-    if (language || detectTried.current || !translations.length || !rawLyrics.trim() || guessedLanguage) return
+    if (!pro || language || detectTried.current || !translations.length || !rawLyrics.trim() || guessedLanguage) return
     detectTried.current = true
-    fetch('/api/translate-lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lyrics: rawLyrics, detect: true }) })
+    aiFetch('/api/translate-lyrics', { lyrics: rawLyrics, detect: true })
       .then(r => (r.ok ? r.json() : null)).then(j => { if (j?.language) setLanguage(j.language) }).catch(() => {})
-  }, [translations.length, rawLyrics, language, guessedLanguage])
+  }, [translations.length, rawLyrics, language, guessedLanguage, pro])
 
   // Slides step
   const [showSlides, setShowSlides] = useState(!!song?.slides?.length)
@@ -542,13 +545,10 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
   }
 
   const lookupSongDetails = async (t, a) => {
+    if (!pro) return   // key / BPM lookup is a Pro AI tool
     setLookup({ status: 'loading', filled: [] })
     try {
-      const res = await fetch('/api/song-details', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: t, artist: a }),
-      })
+      const res = await aiFetch('/api/song-details', { title: t, artist: a })
       const json = await res.json()
       if (!res.ok || json.error) throw new Error(json.error)
       const filled = []
@@ -583,11 +583,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
     if (!rawLyrics.trim()) return
     setCleaningUp(true); setCleanupErr(null)
     try {
-      const res = await fetch('/api/cleanup-lyrics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyrics: rawLyrics }),
-      })
+      const res = await aiFetch('/api/cleanup-lyrics', { lyrics: rawLyrics })
       let json
       try { json = await res.json() } catch {
         throw new Error(
@@ -610,11 +606,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
     if (!rawLyrics.trim() || translating) return
     setTranslating(true); setTranslateErr(null)
     try {
-      const res = await fetch('/api/translate-lyrics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyrics: rawLyrics }),
-      })
+      const res = await aiFetch('/api/translate-lyrics', { lyrics: rawLyrics })
       let json
       try { json = await res.json() } catch {
         throw new Error(res.status === 404
@@ -882,15 +874,15 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
         <div className="flex flex-wrap items-center justify-between gap-y-1.5">
           <label className="label mb-0" title="Label sections like [Verse 1] and [Chorus], or use Insert Section">Lyrics</label>
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
-            <button onClick={handleSmartCleanup} disabled={cleaningUp || !rawLyrics.trim()} title="Smart Cleanup"
-              className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40">
+            <button onClick={() => requirePro('Smart Cleanup') && handleSmartCleanup()} disabled={cleaningUp || (pro && !rawLyrics.trim())} title={pro ? 'Smart Cleanup' : 'Smart Cleanup (Pro)'}
+              className={`flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 ${locked(pro)}`}>
               {cleaningUp ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
               {cleaningUp ? 'Cleaning…' : <span><span className="hidden sm:inline">Smart </span>Cleanup</span>}
             </button>
             {(lyricsForeign || translations.length > 0) && (
-              <button onClick={handleTranslate} disabled={translating || !rawLyrics.trim()}
-                title={translations.some(t => /english/i.test(t.title)) ? 'Translate again into English' : 'Translate into English'}
-                className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40">
+              <button onClick={() => requirePro('Translate') && handleTranslate()} disabled={translating || (pro && !rawLyrics.trim())}
+                title={!pro ? 'Translate (Pro)' : translations.some(t => /english/i.test(t.title)) ? 'Translate again into English' : 'Translate into English'}
+                className={`flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent-light border border-accent/30 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-40 ${locked(pro)}`}>
                 {translating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
                 {translating ? 'Translating…' : 'Translate'}
               </button>

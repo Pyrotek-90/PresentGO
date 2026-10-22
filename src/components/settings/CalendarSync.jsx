@@ -3,6 +3,7 @@ import { CalendarDays, Copy, Check, RefreshCw, ExternalLink } from 'lucide-react
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useChurch } from '../../contexts/ChurchContext'
+import { useUpgrade, locked } from '../../contexts/UpgradeContext'
 import { dotStyle } from '../../lib/teamColors'
 
 const newToken = () => crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
@@ -10,6 +11,7 @@ const newToken = () => crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID
 export default function CalendarSync() {
   const { user } = useAuth()
   const { legacy, churches, teamColor } = useChurch()
+  const { pro, requirePro } = useUpgrade()   // calendar sync is Pro
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -69,15 +71,17 @@ export default function CalendarSync() {
             <p className="text-xs text-muted">Show your sets (name, date, time, location) in Apple or Google Calendar.</p>
           </div>
         </div>
-        <button onClick={toggle} disabled={loading || busy} aria-label="Toggle calendar sync" aria-pressed={enabled}
-          className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 disabled:opacity-50 ${enabled ? 'bg-accent' : 'bg-stone-400'}`}>
+        <button onClick={() => (pro || enabled ? toggle() : requirePro('Calendar sync'))} disabled={loading || busy} aria-label="Toggle calendar sync" aria-pressed={enabled}
+          title={pro ? undefined : 'Calendar sync (Pro)'}
+          className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 disabled:opacity-50 ${enabled ? 'bg-accent' : 'bg-stone-400'} ${locked(pro)}`}>
           <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
         </button>
       </div>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
-      {enabled && (
+      {enabled && !pro && <p className="text-xs text-amber-300">Calendar sync is part of Pro. Your calendar stops updating while your team is on Free.</p>}
+      {enabled && pro && (
         <div className="space-y-2.5 pt-1 border-t border-border">
           <p className="text-[11px] text-muted pt-2">Your private subscription link</p>
           <div className="flex gap-2">

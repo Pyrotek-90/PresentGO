@@ -65,6 +65,8 @@ export default function MessageTeamDialog({ scope, members, positions, accounts,
         if (r && r.ok) {
           const o = await r.json().catch(() => ({}))
           out.emailed = o.sent?.length || 0; out.failed = (o.failed?.length || 0) + (o.noEmail?.length || 0)
+        } else if (r && r.status === 402) {
+          throw new Error('Message Team is part of Pro. Upgrade your team in Settings → Subscription Plans.')
         } else if (r && r.status === 501) {
           // Automatic email isn't set up: open one email to everyone left, addresses hidden in BCC.
           const bcc = members.filter(m => rest.includes(m.id) && m.email).map(m => m.email)

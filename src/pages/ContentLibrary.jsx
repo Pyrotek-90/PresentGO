@@ -228,7 +228,7 @@ export default function ContentLibrary() {
       setReview(null); setQuery('')
       if (foldersReady && dest !== folderId) openFolder(dest)
     } catch (e) {
-      setError(`${e.message || 'Upload failed'} — try again.`)
+      setError(/full \(/.test(e.message || '') ? e.message : `${e.message || 'Upload failed'} — try again.`)
     } finally { setBusy(null) }
   }
   const cancelReview = () => {

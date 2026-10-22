@@ -1,9 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { checkPaid } from './_lib/plan.js'
 
 // Worship Leader Note for one song (same shape as the Sunday Song Prep reflection page):
 // a summary, a pastoral reflection, and 2-3 Scripture verses (KJV, public domain).
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  const plan = await checkPaid(req, 'AI Worship Leader Notes')   // AI tools are Pro
+  if (!plan.ok) return res.status(plan.status).json({ error: plan.error })
 
   const { title, artist, lyrics } = req.body || {}
   if (!title?.trim()) return res.status(400).json({ error: 'title required' })

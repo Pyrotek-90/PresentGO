@@ -5,11 +5,13 @@ const REVEAL = 80   // px the row slides to show the delete button
 
 // Phone gesture: swipe a row left to reveal a red Delete button behind it, tap it to delete.
 // `open` / `onOpenChange` let the parent keep one row open at a time.
-export default function SwipeToDelete({ open, onOpenChange, onDelete, label = 'Delete', className = '', children }) {
+// `disabled`: no swipe (e.g. a Free team, whose roster can be viewed but not changed).
+export default function SwipeToDelete({ open, onOpenChange, onDelete, label = 'Delete', className = '', disabled = false, children }) {
   const [dx, setDx] = useState(null)
   const touch = useRef(null)
 
   const onTouchStart = e => {
+    if (disabled) return
     touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, base: open ? -REVEAL : 0, swiping: false }
   }
   const onTouchMove = e => {

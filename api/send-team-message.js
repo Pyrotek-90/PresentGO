@@ -1,3 +1,5 @@
+import { checkPaid } from './_lib/plan.js'
+
 // Emails a message from the worship leader to team members who don't have a StaffList account yet
 // (members with an account get it in the app). Uses Resend like send-invites.
 // The caller's own Supabase login is used for the database read, so row-level security limits it to their team.
@@ -19,6 +21,9 @@ export default async function handler(req, res) {
   const subject = String(req.body?.subject || '').trim().slice(0, 150)
   const message = String(req.body?.message || '').trim().slice(0, 2000)
   if (!ids.length || !message) return res.status(400).json({ error: 'bad_request' })
+
+  const plan = await checkPaid(req, 'Message Team')
+  if (!plan.ok) return res.status(plan.status).json({ error: plan.error })
 
   const sb = (path, init = {}) => fetch(`${url}${path}`, {
     ...init, headers: { apikey: anon, Authorization: auth, 'Content-Type': 'application/json', ...(init.headers || {}) },

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { storageLimit, PLAN_LABEL } from './plans'
 import { filesToSlideImages } from './importSlides'
 import { groupSets } from './sets'
 
@@ -37,8 +38,22 @@ async function uploadPage(userId, folder, page, i) {
 }
 
 // Save one group (from readImports) to the library. `name` overrides the folder / image name.
+// How much of the Content Library the team is using, in bytes.
+export async function storageUsed(scope) {
+  const { data } = await scope.church(supabase.from('media_items').select('file_size'))
+  return (data || []).reduce((n, r) => n + (Number(r.file_size) || 0), 0)
+}
+
 // `scope` (lib/scope.js): files are stored under the uploader, rows belong to the church.
+// Refuses when the upload would go past the plan's storage (Free 100 MB, Pro 500 MB, Ultimate 5 GB).
 export async function saveImport(scope, group, name, onProgress, folderId = null) {
+  const adding = group.pages.reduce((n, p) => n + (p.blob?.size || 0), 0)
+  const limit = storageLimit(scope.plan)
+  const used = await storageUsed(scope)
+  if (used + adding > limit) {
+    const more = scope.plan === 'free' ? ' Pro has 500 MB' : scope.plan === 'pro' ? ' Ultimate has 5 GB' : ''
+    throw new Error(`Your Content Library is full (${formatBytes(used)} of ${formatBytes(limit)} on ${PLAN_LABEL[scope.plan] || 'your plan'}). Delete or archive files to make room.${more ? `${more}.` : ''}`)
+  }
   const folder = crypto.randomUUID()
   const images = []
   for (let i = 0; i < group.pages.length; i++) {

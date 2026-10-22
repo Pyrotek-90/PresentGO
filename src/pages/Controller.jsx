@@ -5,6 +5,7 @@ import { openControlChannel } from '../lib/controlChannel'
 import TitleSlide from '../components/TitleSlide'
 import { buildPresentationSlides } from '../lib/lyricFormatter'
 import { groupFit } from '../lib/slideFit'
+import { useUpgrade } from '../contexts/UpgradeContext'
 import { hasNativeDisplay, displayStatus, onDisplayChange, showOnDisplay, hideDisplay } from '../lib/externalDisplay'
 import {
   ChevronLeft, ChevronRight, XSquare, X, Tv, ArrowLeft,
@@ -296,6 +297,31 @@ function SlideMatrix({ group, current, blank, onGo, fits, focus, mode = 'tiles' 
 const LOOP_SECS = 6   // Loop button: seconds per slide
 
 export default function Controller() {
+  const { pro } = useUpgrade()
+  const { setId } = useParams()
+  // Presenting is a Pro feature (the Present button explains it; this covers a saved link).
+  if (!pro && setId !== 'mock') return <ProOnly setId={setId} />
+  return <ControllerInner />
+}
+
+function ProOnly({ setId }) {
+  const navigate = useNavigate()
+  const { requirePro } = useUpgrade()
+  return (
+    <div className="flex h-full items-center justify-center p-6 bg-[#0a0a0a]">
+      <div className="max-w-sm text-center space-y-3">
+        <p className="font-semibold">Presenting is part of Pro</p>
+        <p className="text-sm text-muted">Your team is on the Free plan.</p>
+        <div className="flex gap-2 justify-center">
+          <button onClick={() => requirePro('Presenting')} className="btn-primary text-sm">See what Pro includes</button>
+          <button onClick={() => navigate(`/sets/${setId}`)} className="btn-ghost text-sm border border-border rounded-lg">Back to the set</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ControllerInner() {
   const { setId } = useParams()
   const navigate = useNavigate()
   const [slides, setSlides]       = useState([])

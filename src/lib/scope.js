@@ -8,10 +8,11 @@
 //   scope.owned(row)      a new song / team member / position / content row
 //   scope.ownedSet(row)   a new set (goes into the current workspace)
 
-export function makeScope({ userId, church = null, workspace = null, legacy = false, canLead = false }) {
+export function makeScope({ userId, church = null, workspace = null, legacy = false, canLead = false, plan = 'pro' }) {
   const old = legacy || !church
   return {
     userId,
+    plan,
     churchId: church?.id || null,
     workspaceId: workspace?.id || null,
     legacy: old,

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, UserPlus, X, Mail, Check, Clock, Send, ExternalLink, RotateCw } from 'lucide-react'
 import { formatSetTime } from '../../lib/sets'
+import { useUpgrade, locked } from '../../contexts/UpgradeContext'
 
 const STATUS = {
   draft:    { label: 'Not sent',  cls: 'border-border text-muted', Icon: null },
@@ -36,6 +37,7 @@ const dateLabel = s => s.service_date
 // `set` is the set shown; `onPrev` / `onNext` step through sets by date.
 export default function SchedulePane({ set, index, total, onPrev, onNext, positions, members, assignments,
   onAdd, onRemove, onSend, sending, sendResult, onRefresh, active = true, multi = false, onSelect, showPrev = true, showNext = true }) {
+  const { pro, requirePro } = useUpgrade()   // scheduling people is Pro
   const [memberId, setMemberId] = useState('')
   const [positionId, setPositionId] = useState('')
   const [addError, setAddError] = useState(null)
@@ -116,7 +118,7 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
             </div>
           )}
 
-          {members.length === 0 && (
+          {members.length === 0 && pro && (
             <p className="text-xs text-muted">Add people on the <Link to="/team" className="text-accent-light underline">Team</Link> page first.</p>
           )}
 
@@ -129,9 +131,9 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
                   <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted">{sec.label}</h3>
                   <span className="text-[11px] text-muted">{secRows.length || ''}</span>
                   <div className="flex-1 border-t border-border/60" />
-                  {members.length > 0 && sectionPositions[sec.id].length > 0 && (
-                    <button onClick={() => openAdd(sec.id)}
-                      className={`flex items-center gap-1 px-2 h-6 rounded-full border text-[11px] font-medium transition-colors ${open ? 'border-accent bg-accent/20 text-accent-light' : 'border-dashed border-accent/50 text-accent-light hover:bg-accent/10'}`}>
+                  {(members.length > 0 || !pro) && sectionPositions[sec.id].length > 0 && (
+                    <button onClick={() => requirePro('Scheduling your team') && openAdd(sec.id)} title={pro ? undefined : 'Add (Pro)'}
+                      className={`flex items-center gap-1 px-2 h-6 rounded-full border text-[11px] font-medium transition-colors ${open ? 'border-accent bg-accent/20 text-accent-light' : 'border-dashed border-accent/50 text-accent-light hover:bg-accent/10'} ${locked(pro)}`}>
                       {open ? <X size={11} /> : <UserPlus size={11} />} {open ? 'Close' : 'Add'}
                     </button>
                   )}
@@ -153,8 +155,8 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
                             {st.Icon && <st.Icon size={11} />}{st.label}
                           </span>
                           {(statusOf(a) === 'invited' || statusOf(a) === 'declined') && m.email && (
-                            <button onClick={() => onSend([a.id])} disabled={sending} title="Send the invite again" aria-label={`Resend to ${m.name}`}
-                              className="shrink-0 p-1.5 rounded-lg text-muted hover:text-primary hover:bg-[#2e2e2e] disabled:opacity-40"><Send size={13} /></button>
+                            <button onClick={() => requirePro('Email invites') && onSend([a.id])} disabled={sending} title={pro ? 'Send the invite again' : 'Resend (Pro)'} aria-label={`Resend to ${m.name}`}
+                              className={`shrink-0 p-1.5 rounded-lg text-muted hover:text-primary hover:bg-[#2e2e2e] disabled:opacity-40 ${locked(pro)}`}><Send size={13} /></button>
                           )}
                           <button onClick={() => onRemove(a)} title="Remove from this set" aria-label={`Remove ${m.name}`}
                             className="shrink-0 p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-[#2e2e2e]"><X size={14} /></button>
@@ -192,9 +194,9 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
 
           {rows.length > 0 && (
             <div className="space-y-1.5">
-              <button onClick={() => onSend(toSend.filter(a => memById[a.member_id]?.email).map(a => a.id))}
-                disabled={sending || toSend.length - noEmail.length === 0}
-                className="w-full btn-primary h-10 flex items-center justify-center gap-2 text-sm disabled:opacity-40">
+              <button onClick={() => requirePro('Email invites') && onSend(toSend.filter(a => memById[a.member_id]?.email).map(a => a.id))}
+                disabled={sending || (pro && toSend.length - noEmail.length === 0)}
+                className={`w-full btn-primary h-10 flex items-center justify-center gap-2 text-sm disabled:opacity-40 ${locked(pro)}`}>
                 <Mail size={15} />
                 {sending ? 'Sending…' : toSend.length - noEmail.length > 0 ? `Email invites (${toSend.length - noEmail.length})` : 'Everyone has been invited'}
               </button>

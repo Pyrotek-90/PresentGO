@@ -182,8 +182,12 @@ export default async function handler(req, res) {
     const churchIds = [...new Set([...rows.map(a => a.member?.church_id), ...[...joiners.values()].map(j => j.member.church_id)].filter(Boolean))]
     const teams = {}
     if (teamsReady && churchIds.length) {
-      const r = await sb(`/rest/v1/churches?id=in.(${churchIds.join(',')})&select=id,name,details`)
+      const r = await sb(`/rest/v1/churches?id=in.(${churchIds.join(',')})&select=id,name,details,plan`)
       if (r.ok) for (const c of await r.json()) teams[c.id] = c
+      // Inviting and scheduling the team is Pro.
+      if (Object.values(teams).some(c => c.plan && c.plan !== 'pro' && c.plan !== 'ultimate')) {
+        return res.status(402).json({ error: 'pro_required' })
+      }
     }
     const infoFor = churchId => teamInfo(teams[churchId], inviter)
 

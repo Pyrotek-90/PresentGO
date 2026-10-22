@@ -27,6 +27,13 @@ const longDate = d => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US',
 const csvCell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
 
 export default function CcliReport() {
+  const { pro } = useChurch()
+  // CCLI Report is a Pro feature (the menu hides it on Free; this covers a saved link).
+  if (!pro) return <Layout><div className="max-w-md mx-auto p-6 text-center space-y-2"><p className="font-semibold">CCLI Report is part of Pro</p><p className="text-sm text-muted">Your team is on the Free plan. See Settings → Subscription Plans.</p></div></Layout>
+  return <CcliReportInner />
+}
+
+function CcliReportInner() {
   const { user } = useAuth()
   const { scope } = useChurch()
   const [preset, setPreset] = useState('last6')

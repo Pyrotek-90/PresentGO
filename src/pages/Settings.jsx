@@ -31,7 +31,8 @@ const PLANS = [
     features: [
       'Unlimited songs, chord charts & transposition',
       'Unlimited imports (ChordPro, PDF charts, bulk folder)',
-      'Sets and single-screen presentation',
+      'Sets, the Song Viewer and the schedule calendar',
+      'Team Details',
       '100 MB Content Library',
     ],
     cta: 'Your current plan',
@@ -52,11 +53,12 @@ const PLANS = [
     features: [
       'Everything in Free',
       '500 MB Content Library',
-      'Live presenting with controller',
+      'Presenting: controller, Up Next, Loop, TV output',
       'AI Translate (lyrics & slide translations)',
       'AI Worship Leader Notes',
       'AI key / BPM lookup & Smart Cleanup',
-      'Team scheduling, email invites & calendar feed',
+      'Team scheduling, email invites & calendar sync',
+      'Add, invite and message team members',
       'Shared team access: musicians and singers open their sets, charts and lyrics',
       'CCLI Report',
     ],
@@ -90,7 +92,9 @@ const PLANS = [
 
 // ─── Plan card ─────────────────────────────────────────────────────────────────
 
-function PlanCard({ plan }) {
+// `current`: the team's plan. Billing isn't built yet, so other plans offer "Notify me".
+function PlanCard({ plan, current }) {
+  const isCurrent = plan.id === current
   const [notified, setNotified] = useState(false)
   const Icon = plan.icon
 
@@ -105,9 +109,11 @@ function PlanCard({ plan }) {
         <div className="space-y-0.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-primary">{plan.name}</span>
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${plan.badgeClass}`}>
-              {plan.badge}
-            </span>
+            {(isCurrent || plan.id !== 'free') && (
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isCurrent ? 'bg-accent/20 text-accent-light' : plan.badgeClass}`}>
+                {isCurrent ? 'Current Plan' : plan.badge}
+              </span>
+            )}
           </div>
           {plan.price ? (
             <div className="flex items-baseline gap-0.5">
@@ -136,7 +142,7 @@ function PlanCard({ plan }) {
       </ul>
 
       {/* CTA */}
-      {!plan.ctaDisabled && (
+      {!isCurrent && plan.id !== 'free' && (
         <button
           onClick={() => setNotified(true)}
           disabled={notified}
@@ -168,7 +174,11 @@ export default function Settings() {
   const [viewerMode, setViewerMode] = useState(() => getPref('viewerMode', 'lyrics'))
   const pickViewerMode = m => { setViewerMode(m); setPref('viewerMode', m) }
   const { user } = useAuth()
-  const { scope } = useChurch()
+  const { scope, plan: currentPlan } = useChurch()
+  // "See plans" from an upgrade prompt lands on the plans.
+  useEffect(() => {
+    if (window.location.hash === '#plans') setTimeout(() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' }), 150)
+  }, [])
   const [libLang, setLibLang] = useState(user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE)
   const [libLangState, setLibLangState] = useState(null)   // null | 'saving' | 'saved' | 'error'
   // Only offer languages that songs in the library are actually in.
@@ -326,9 +336,9 @@ export default function Settings() {
 
         {/* ── Subscription Plans ────────────────────────────────────────── */}
         <section className="space-y-3">
-          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Subscription Plans</h2>
+          <h2 id="plans" className="text-xs font-semibold text-muted uppercase tracking-wider scroll-mt-4">Subscription Plans</h2>
           <div className="space-y-4">
-            {PLANS.map(plan => <PlanCard key={plan.id} plan={plan} />)}
+            {PLANS.map(plan => <PlanCard key={plan.id} plan={plan} current={currentPlan} />)}
           </div>
         </section>
 

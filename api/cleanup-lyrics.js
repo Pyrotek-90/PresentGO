@@ -1,7 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { checkPaid } from './_lib/plan.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  const plan = await checkPaid(req, 'Smart Cleanup')   // AI tools are Pro
+  if (!plan.ok) return res.status(plan.status).json({ error: plan.error })
 
   const { lyrics } = req.body || {}
   if (!lyrics?.trim()) return res.status(400).json({ error: 'lyrics required' })

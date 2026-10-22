@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { checkPaid } from './_lib/plan.js'
 
 async function deezerBpm(title, artist) {
   try {
@@ -16,6 +17,8 @@ async function deezerBpm(title, artist) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  const plan = await checkPaid(req, 'Key and BPM lookup')   // AI tools are Pro
+  if (!plan.ok) return res.status(plan.status).json({ error: plan.error })
 
   const title = String(req.body?.title || '').trim().slice(0, 200)
   const artist = String(req.body?.artist || '').trim().slice(0, 200)

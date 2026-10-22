@@ -133,6 +133,7 @@ export default function Calendar() {
     try {
       const { status, ok, out } = await postInvites({ ids })
       if (status === 501) { await mailAppFallback(ids); return }
+      if (status === 402) { setSendResult({ setId: sendSetId, ok: false, text: 'Email invites are part of Pro. Upgrade your team in Settings → Subscription Plans.' }); return }
       if (status === 409) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
       if (!ok) { setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Please try again.' }); return }
       const now = new Date().toISOString()

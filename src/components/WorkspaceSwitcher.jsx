@@ -31,9 +31,8 @@ export default function WorkspaceSwitcher() {
   const current = workspace?.id || church.id
   const manyChurches = churches.some(c => c.plan === 'ultimate') && churches.length > 1
 
-  if (options.length < 2) {
-    return <span className="text-xs text-muted truncate max-w-[9rem] sm:max-w-[14rem] px-2" title={church.name}>{label}</span>
-  }
+  // Only shown when there's somewhere to switch to; the header otherwise just says StaffList.
+  if (options.length < 2) return null
 
   return (
     <div className="relative min-w-0" ref={ref}>

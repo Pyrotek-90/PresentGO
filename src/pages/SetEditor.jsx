@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
+import { useUpgrade, locked } from '../contexts/UpgradeContext'
 import { formatModified, formatSetTime } from '../lib/sets'
 import { buildIcs } from '../lib/ics'
 import { nextDates, freqLabel, ruleSummary, sameRule, DEFAULT_COUNT, MAX_OCCURRENCES } from '../lib/recurrence'
@@ -111,6 +112,7 @@ export default function SetEditor() {
   const { setId } = useParams()
   const { user } = useAuth()
   const { canEditSet } = useChurch()
+  const { pro, requirePro } = useUpgrade()   // presenting is Pro
   const navigate = useNavigate()
   const location = useLocation()
   const [isNew, setIsNew] = useState(!!location.state?.newSet)   // just created from Home's + New Set
@@ -778,8 +780,8 @@ export default function SetEditor() {
                 className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
                 <BookOpen size={14} /><span className="hidden sm:inline">Song Viewer</span>
               </button>
-              {editable && <button onClick={openPresent} disabled={items.length === 0} title="Present" aria-label="Present"
-                className="flex items-center justify-center gap-1.5 h-8 w-9 sm:w-auto sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
+              {editable && <button onClick={() => requirePro('Presenting') && openPresent()} disabled={pro && items.length === 0} title={pro ? 'Present' : 'Present (Pro)'} aria-label="Present"
+                className={`flex items-center justify-center gap-1.5 h-8 w-9 sm:w-auto sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent ${locked(pro)}`}>
                 <MonitorPlay size={15} /><span className="hidden sm:inline">Present</span>
               </button>}
             </div>
@@ -845,7 +847,7 @@ export default function SetEditor() {
           </div>
         </section>
 
-        {items.length > 0 && editable && (
+        {items.length > 0 && editable && pro && (
           <p className="text-xs text-muted text-center">When your program is ready, tap <strong className="text-[#f5f5f5]">Present</strong> (<MonitorPlay size={12} className="inline -mt-0.5" />) to connect a TV and run the slides.</p>
         )}
       </div>

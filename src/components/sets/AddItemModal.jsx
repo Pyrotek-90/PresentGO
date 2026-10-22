@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useChurch } from '../../contexts/ChurchContext'
+import { useUpgrade, locked } from '../../contexts/UpgradeContext'
+import { aiFetch } from '../../lib/ai'
 import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2, Filter, NotebookPen, Check } from 'lucide-react'
 import { filesToSlideImages } from '../../lib/importSlides'
 import ContentPicker from './ContentPicker'
@@ -30,6 +32,7 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
   const editing = !!item
   const { user } = useAuth()
   const { scope } = useChurch()
+  const { pro, requirePro } = useUpgrade()   // AI Worship Leader Notes are Pro
   const [type, setType] = useState(item ? (item.type === 'media' ? (item.content?.files || item.content?.media_id || item.content?.media_category !== 'presentation' ? 'content' : 'announcement') : item.type) : 'welcome')
   const [songs, setSongs] = useState([])
   const [query, setQuery] = useState('')
@@ -126,10 +129,7 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
       for (let i = 0; i < picked.length; i++) {
         const s = picked[i]
         setNoteBusy(`Writing note ${i + 1} of ${picked.length}: ${s.title}…`)
-        const res = await fetch('/api/worship-note', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: s.title, artist: s.artist, lyrics: s.song?.raw_lyrics || '' }),
-        })
+        const res = await aiFetch('/api/worship-note', { title: s.title, artist: s.artist, lyrics: s.song?.raw_lyrics || '' })
         let json
         try { json = await res.json() } catch { throw new Error(res.status === 404 ? 'Worship Leader Notes only work on the deployed app.' : `Server error (${res.status}) — try again.`) }
         if (!res.ok || json.error) throw new Error(json.error || 'Could not write the note.')
@@ -380,7 +380,7 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
                   </ul>
                 </div>
                 {noteErr && <p className="text-xs text-red-400">{noteErr}</p>}
-                <button onClick={writeNotes} disabled={!notePick.length || !!noteBusy} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50">
+                <button onClick={() => requirePro('AI Worship Leader Notes') && writeNotes()} disabled={pro && (!notePick.length || !!noteBusy)} className={`btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 ${locked(pro)}`}>
                   {noteBusy ? <><Loader2 size={15} className="animate-spin" /> <span className="truncate">{noteBusy}</span></>
                     : <><NotebookPen size={15} /> {notePick.length ? `Write ${notePick.length} Worship Leader Note${notePick.length > 1 ? 's' : ''}` : 'Pick songs above'}</>}
                 </button>
