@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useChurch } from '../../contexts/ChurchContext'
 import { parseKey, formatKey, transposeKeyOptions, hasChords } from '../../lib/chords'
 import { reconcileChart, replaceSectionInRaw } from '../../lib/chart'
 import { parseChordPro, looksLikeChordPro } from '../../lib/chordpro'
@@ -350,6 +351,7 @@ function ChordProImport({ onImport, hasExisting }) {
 export default function SongEditor({ libraryLanguages = [], song, onClose, onSaved, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { user } = useAuth()
+  const { scope } = useChurch()
   const isNew = !song
 
   // Core song fields
@@ -778,7 +780,6 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
     const tKeys = opts.keys || transposedKeys
 
     const payload = {
-      user_id: user.id,
       title: title.trim(),
       artist: artist.trim(),
       ccli_number: ccliNumber.trim(),
@@ -809,7 +810,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
     if (savedId) {
       result = await supabase.from('songs').update(payload).eq('id', savedId).select().single()
     } else {
-      result = await supabase.from('songs').insert(payload).select().single()
+      result = await supabase.from('songs').insert(scope.owned(payload)).select().single()
     }
 
     setSaving(false)

@@ -40,7 +40,8 @@ const MenuItem = ({ on, onClick, children, count }) => (
   </button>
 )
 
-export default function SongsPane({ songs, loading, sets, targetSetId, onTargetChange, onCreateSet, onAdd, onEdit, onView, onNew,
+// readOnly: musicians and singers (Members) — the songs in their sets, view only.
+export default function SongsPane({ readOnly = false, songs, loading, sets, targetSetId, onTargetChange, onCreateSet, onAdd, onEdit, onView, onNew,
   mainLanguage = DEFAULT_LIBRARY_LANGUAGE, lastUsed = {}, keepVisible = [] }) {
   const [query, setQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState([])
@@ -167,11 +168,11 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
     <section className="flex flex-col min-h-0 flex-1 rounded-xl border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border shrink-0">
         <div className="flex items-baseline gap-2 min-w-0">
-          <h2 className="font-semibold whitespace-nowrap">Song Library</h2>
+          <h2 className="font-semibold whitespace-nowrap">{readOnly ? 'Songs in My Sets' : 'Song Library'}</h2>
           <span className="text-xs text-muted">{filtered.length}</span>
         </div>
         {/* On phones the buttons show icons only so the header stays on one row. */}
-        <div className="flex items-center gap-2 shrink-0">
+        {!readOnly && <div className="flex items-center gap-2 shrink-0">
           <button onClick={toggleAddMode}
             title={addMode ? 'Done adding to set' : 'Add songs to a set'}
             aria-label={addMode ? 'Done adding to set' : 'Add songs to a set'}
@@ -190,7 +191,7 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
             className="btn-primary flex items-center justify-center gap-1.5 h-8 w-8 sm:w-auto !p-0 sm:!px-3 text-sm whitespace-nowrap">
             <Plus size={14} /> <span className="hidden sm:inline">New Song</span>
           </button>
-        </div>
+        </div>}
       </div>
 
       <div className="px-3 py-2 border-b border-border space-y-2 shrink-0">
@@ -287,9 +288,9 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 space-y-2">
             <Music size={36} className="text-muted mx-auto" />
-            <p className="text-muted text-sm">{songs.length === 0 ? 'No songs yet. Add your first song to get started.' : 'No songs match your search or filters.'}</p>
+            <p className="text-muted text-sm">{songs.length === 0 ? (readOnly ? 'Songs from the sets you serve on show up here.' : 'No songs yet. Add your first song to get started.') : 'No songs match your search or filters.'}</p>
             {songs.length > 0 && !query && hiddenCount > 0 && <p className="text-muted text-xs">{hiddenCount} occasion or other-language song{hiddenCount > 1 ? 's are' : ' is'} hidden — show them from the ⇅ menu.</p>}
-            {songs.length === 0 && (
+            {songs.length === 0 && !readOnly && (
               <Link to="/get-started" className="btn-primary text-sm inline-flex items-center gap-2 mt-2">
                 <Upload size={14} /> Import your existing charts
               </Link>
@@ -324,9 +325,9 @@ export default function SongsPane({ songs, loading, sets, targetSetId, onTargetC
                     {justAdded === song.id ? <><Check size={11} /> Added</> : <><Plus size={11} /> Add</>}
                   </button>
                 )}
-                <button onClick={() => onEdit(song)} className="p-1.5 rounded-lg text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0" title="Edit song" aria-label={`Edit ${song.title}`}>
+                {!readOnly && <button onClick={() => onEdit(song)} className="p-1.5 rounded-lg text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0" title="Edit song" aria-label={`Edit ${song.title}`}>
                   <ChevronRight size={15} />
-                </button>
+                </button>}
               </li>
             ))}
           </ul>

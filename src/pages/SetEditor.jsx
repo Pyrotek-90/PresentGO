@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import { formatModified, formatSetTime } from '../lib/sets'
 import { buildIcs } from '../lib/ics'
 import { nextDates, freqLabel, ruleSummary, sameRule, DEFAULT_COUNT, MAX_OCCURRENCES } from '../lib/recurrence'
@@ -108,6 +109,7 @@ const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
 export default function SetEditor() {
   const { setId } = useParams()
   const { user } = useAuth()
+  const { canEditSet } = useChurch()
   const navigate = useNavigate()
   const location = useLocation()
   const [isNew, setIsNew] = useState(!!location.state?.newSet)   // just created from Home's + New Set
@@ -117,7 +119,7 @@ export default function SetEditor() {
   const [team, setTeam]     = useState([])   // people assigned to this set: { id, name, positions[], status }
   const [editItem, setEditItem] = useState(null)
   const [editSong, setEditSong] = useState(null)
-  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)   // false, or true / the entry index to open at
   const [optionsItem, setOptionsItem] = useState(null)
   const [swipedId, setSwipedId] = useState(null)   // row currently swiped open to show its trash can
   const [details, setDetails] = useState(null)   // form state while editing set details
@@ -299,7 +301,7 @@ export default function SetEditor() {
   // New sets for the given dates, copying the shared fields (and optionally this set's program).
   const createSeriesSets = async (dates, fields, seriesId, rule, copyProgram) => {
     if (!dates.length) return 0
-    const rows = dates.map(date => ({ user_id: user.id, ...fields, service_date: date, series_id: seriesId, recurrence: rule }))
+    const rows = dates.map(date => ({ user_id: user.id, church_id: set.church_id, workspace_id: set.workspace_id, ...fields, service_date: date, series_id: seriesId, recurrence: rule }))
     const { data, error } = await supabase.from('sets').insert(rows).select('id')
     if (error) throw error
     if (copyProgram && items.length && data?.length) {
@@ -513,6 +515,17 @@ export default function SetEditor() {
       }
     : null).filter(Boolean)
 
+  // Musicians and singers (Members) see the set read-only: the program, keys and the Song Viewer.
+  const editable = setId === 'mock' || !set || canEditSet(set)
+  const viewerIndex = item => {
+    let n = 0
+    for (const i of items) {
+      if (i.id === item.id) return n
+      if (i.type === 'note' || (i.type === 'song' && songs[i.content?.song_id])) n++
+    }
+    return 0
+  }
+
   const openPresent = () => {
     navigate(`/sets/${setId}/control`)
   }
@@ -537,8 +550,8 @@ export default function SetEditor() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1 min-w-0">
               <h1 className="font-semibold text-lg truncate">{set?.name || '…'}</h1>
-              <button onClick={openDetails} title="Edit set name, date and venue" aria-label="Edit set name, date and venue"
-                className="p-1 rounded-md text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0"><Pencil size={13} /></button>
+              {editable && <button onClick={openDetails} title="Edit set name, date and venue" aria-label="Edit set name, date and venue"
+                className="p-1 rounded-md text-muted hover:text-[#f5f5f5] hover:bg-[#2e2e2e] shrink-0"><Pencil size={13} /></button>}
             </div>
             <p className="text-xs text-muted flex items-center gap-1 min-w-0">
               {set?.series_id && set?.recurrence && <Repeat size={11} className="text-accent-light shrink-0" aria-label="Repeating set" />}
@@ -551,11 +564,11 @@ export default function SetEditor() {
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={downloadIcs} disabled={!set?.service_date} title={set?.service_date ? 'Download an event file for Apple, Google or Outlook calendar' : 'Add a date first'}
               className="hidden sm:flex btn-ghost items-center gap-1.5 text-sm !px-2.5 !py-1.5 disabled:opacity-40"><CalendarPlus size={14} /> Add to calendar</button>
-            <button onClick={deleteSet} disabled={setId === 'mock'}
+            {editable && <button onClick={deleteSet} disabled={setId === 'mock'}
               title={confirmDeleteSet ? 'Tap again to delete this set' : 'Delete set'} aria-label={confirmDeleteSet ? 'Tap again to delete this set' : 'Delete set'}
               className={`flex items-center justify-center h-8 w-8 rounded-lg transition-colors ${confirmDeleteSet ? 'bg-red-700 text-white' : 'text-muted hover:text-red-400 hover:bg-[#2e2e2e]'}`}>
               <Trash2 size={15} />
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -692,19 +705,19 @@ export default function SetEditor() {
               <span className="text-xs text-muted whitespace-nowrap">{items.length}<span className="hidden sm:inline"> item{items.length !== 1 ? 's' : ''}</span></span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <button onClick={() => setShowAdd(true)} aria-label="Add item"
+              {editable && <button onClick={() => setShowAdd(true)} aria-label="Add item"
                 className="flex items-center gap-1 h-8 px-2.5 sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium whitespace-nowrap transition-colors hover:bg-accent/10">
                 <Plus size={14} /><span className="hidden sm:inline">Add</span> Item
-              </button>
+              </button>}
               <button onClick={() => setViewerOpen(true)} disabled={orderedSongs.length === 0}
                 title="Song Viewer: step through the songs in order" aria-label="Song Viewer"
                 className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
                 <BookOpen size={14} /><span className="hidden sm:inline">Song Viewer</span>
               </button>
-              <button onClick={openPresent} disabled={items.length === 0} title="Present" aria-label="Present"
+              {editable && <button onClick={openPresent} disabled={items.length === 0} title="Present" aria-label="Present"
                 className="flex items-center justify-center gap-1.5 h-8 w-9 sm:w-auto sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium transition-colors hover:bg-accent/10 disabled:opacity-40 disabled:hover:bg-transparent">
                 <MonitorPlay size={15} /><span className="hidden sm:inline">Present</span>
-              </button>
+              </button>}
             </div>
           </div>
 
@@ -714,11 +727,35 @@ export default function SetEditor() {
             ) : items.length === 0 ? (
               <div className="text-center py-12 space-y-3 px-4">
                 <Layers size={32} className="text-muted mx-auto" />
-                <p className="text-muted text-sm">Build your program: add songs, title slides, announcements and content in the order they'll run.</p>
-                <button onClick={() => setShowAdd(true)} className="btn-primary mx-auto flex items-center gap-1.5 text-sm">
+                <p className="text-muted text-sm">{editable ? "Build your program: add songs, title slides, announcements and content in the order they'll run." : "The leader hasn't added the program yet."}</p>
+                {editable && <button onClick={() => setShowAdd(true)} className="btn-primary mx-auto flex items-center gap-1.5 text-sm">
                   <Plus size={14} /> Add Item
-                </button>
+                </button>}
               </div>
+            ) : !editable ? (
+              <ul className="space-y-0.5">
+                {items.map((item, idx) => {
+                  const ItemIcon = ITEM_ICONS[item.type] || Square
+                  const song = songs[item.content?.song_id]
+                  const key = item.type === 'song' ? shortKey(item.content?.key || song?.metadata?.preferred_key || song?.metadata?.original_key || song?.metadata?.key || '') : ''
+                  const lead = item.type === 'song' ? item.content?.lead?.name || '' : ''
+                  const opens = item.type === 'note' || (item.type === 'song' && song)
+                  return (
+                    <li key={item.id}>
+                      <button type="button" disabled={!opens} onClick={() => setViewerOpen(viewerIndex(item))}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-[#1a1a1a] disabled:hover:bg-transparent disabled:cursor-default">
+                        <span className="text-xs text-muted w-4 shrink-0 text-center">{idx + 1}</span>
+                        <span className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${ITEM_COLORS[item.type] || ITEM_COLORS.blank}`}><ItemIcon size={13} /></span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-medium truncate">{(item.type === 'song' && !item.content?.song_title && song?.title) || itemTitle(item)}</span>
+                          <span className="block text-xs text-muted truncate">{ITEM_LABELS[item.type]}{item.type === 'song' && item.content?.song_artist ? ` · ${item.content.song_artist}` : ''}{lead ? ` · Song Leader: ${lead}` : ''}</span>
+                        </span>
+                        {key && <span className="shrink-0 min-w-[2rem] h-7 px-2 rounded-md border border-border text-xs font-semibold text-muted flex items-center justify-center" title={`Key: ${key}`}>{key}</span>}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
@@ -744,7 +781,7 @@ export default function SetEditor() {
           </div>
         </section>
 
-        {items.length > 0 && (
+        {items.length > 0 && editable && (
           <p className="text-xs text-muted text-center">When your program is ready, tap <strong className="text-[#f5f5f5]">Present</strong> (<MonitorPlay size={12} className="inline -mt-0.5" />) to connect a TV and run the slides.</p>
         )}
       </div>
@@ -766,7 +803,7 @@ export default function SetEditor() {
           onEdit={() => { const it = optionsItem; setOptionsItem(null); handleEdit(it) }}
           onRemove={() => handleDelete(optionsItem)} />
       )}
-      {viewerOpen && orderedSongs.length > 0 && <SetSongViewer entries={orderedSongs} onClose={() => setViewerOpen(false)} />}
+      {viewerOpen !== false && orderedSongs.length > 0 && <SetSongViewer entries={orderedSongs} startIndex={viewerOpen === true ? 0 : viewerOpen} onClose={() => setViewerOpen(false)} />}
       {editSong && <SongEditor song={editSong} onClose={() => setEditSong(null)} onSaved={handleSongSaved} />}
     </Layout>
   )

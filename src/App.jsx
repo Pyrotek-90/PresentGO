@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { ChurchProvider } from './contexts/ChurchContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import Respond from './pages/Respond'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -19,6 +20,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+      <ChurchProvider>
         <BrowserRouter>
           <Routes>
             {/* Public */}
@@ -47,6 +49,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
+      </ChurchProvider>
       </AuthProvider>
     </ThemeProvider>
   )

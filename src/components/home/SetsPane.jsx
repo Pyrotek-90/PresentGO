@@ -24,7 +24,8 @@ function SetRow({ set, isTarget, onOpen, className = '' }) {
   )
 }
 
-export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate }) {
+// readOnly: musicians and singers (Members) — their accepted sets, no New Set.
+export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate, readOnly = false }) {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === '1' } catch { return false }
   })
@@ -53,12 +54,14 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
       <div className="flex items-center justify-between gap-3 px-3 py-2 shrink-0">
         <button onClick={toggle} className="flex items-center gap-2 min-w-0 text-left" aria-expanded={!collapsed}>
           <ChevronDown size={16} className={`text-muted transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-          <h2 className="font-semibold">Set Lists</h2>
+          <h2 className="font-semibold">{readOnly ? 'My Sets' : 'Set Lists'}</h2>
           <span className="text-xs text-muted">{sets.length}</span>
         </button>
-        <button onClick={createNew} disabled={creating} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
-          <Plus size={14} /> {creating ? 'Creating…' : 'New Set'}
-        </button>
+        {!readOnly && (
+          <button onClick={createNew} disabled={creating} className="btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm">
+            <Plus size={14} /> {creating ? 'Creating…' : 'New Set'}
+          </button>
+        )}
       </div>
 
       {!collapsed && (
@@ -68,7 +71,7 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate 
             {loading ? (
               <div className="flex justify-center py-6"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
             ) : sets.length === 0 ? (
-              <p className="text-muted text-sm text-center py-6">No sets yet. Create your first set to get started.</p>
+              <p className="text-muted text-sm text-center py-6 px-4">{readOnly ? "No sets yet. When you accept a request to serve, the set and its charts show up here." : 'No sets yet. Create your first set to get started.'}</p>
             ) : (
               <>
                 {upcoming.length > 0 && (

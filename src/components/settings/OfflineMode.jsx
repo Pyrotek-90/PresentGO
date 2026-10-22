@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { WifiOff, RefreshCw, Trash2, Download, Loader2 } from 'lucide-react'
-import { useAuth } from '../../contexts/AuthContext'
+import { useChurch } from '../../contexts/ChurchContext'
 import { getPref } from '../../lib/prefs'
 import { enableOffline, disableOffline, clearOfflineData, getOfflineUsage, formatBytes, isOfflineEnabled } from '../../lib/offline'
 import { downloadForOffline } from '../../lib/offlineSync'
@@ -8,7 +8,7 @@ import { downloadForOffline } from '../../lib/offlineSync'
 const SEGMENTS = [['api', 'Songs, sets & team', 'bg-accent'], ['media', 'Slide images', 'bg-purple-400'], ['app', 'App files', 'bg-amber-400']]
 
 export default function OfflineMode() {
-  const { user } = useAuth()
+  const { scope } = useChurch()
   const [on, setOn] = useState(isOfflineEnabled())
   const [usage, setUsage] = useState(null)
   const [syncing, setSyncing] = useState(null)   // { done, label } while downloading
@@ -23,12 +23,12 @@ export default function OfflineMode() {
   const download = useCallback(async () => {
     setError(null); setResult(null); setSyncing({ done: 0, label: 'Starting…' })
     try {
-      const r = await downloadForOffline(user.id, p => setSyncing(p))
+      const r = await downloadForOffline(scope, p => setSyncing(p))
       setResult(r); setSyncedAt(getPref('offlineSyncedAt', null))
     } catch { setError('Download failed — check your connection and try again.') }
     setSyncing(null)
     refreshUsage()
-  }, [user.id, refreshUsage])
+  }, [scope, refreshUsage])
 
   const toggle = async () => {
     setError(null)

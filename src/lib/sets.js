@@ -42,9 +42,10 @@ export function formatSetTime(t) {
 
 export const formatSetWhen = set => [formatSetDate(set.service_date), formatSetTime(set.service_time)].filter(Boolean).join(' · ')
 
-export async function createSet(supabase, userId, { name, date, time }) {
+// `scope` (lib/scope.js) puts the set in the current church and workspace.
+export async function createSet(supabase, scope, { name, date, time }) {
   return supabase
     .from('sets')
-    .insert({ user_id: userId, name, service_date: date || todayISO(), service_time: time || null })
+    .insert(scope.ownedSet({ name, service_date: date || todayISO(), service_time: time || null }))
     .select().single()
 }

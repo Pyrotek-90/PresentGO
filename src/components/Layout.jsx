@@ -3,10 +3,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { Home, CalendarDays, Users, LogOut, FolderOpen, Settings, ChevronDown, FileBarChart, Upload } from 'lucide-react'
 import Logo from './Logo'
 import NotificationBell from './NotificationBell'
+import WorkspaceSwitcher from './WorkspaceSwitcher'
+import { useChurch } from '../contexts/ChurchContext'
 import { useState, useRef, useEffect } from 'react'
 import { WifiOff } from 'lucide-react'
 
-const navItems = [
+const allNavItems = [
   { to: '/',        label: 'Home',            icon: Home       },
   { to: '/schedule', label: 'Schedule',        icon: CalendarDays },
   { to: '/team',     label: 'Team',            icon: Users        },
@@ -15,6 +17,13 @@ const navItems = [
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
+  const { isEditor } = useChurch()
+  // Musicians and singers (Members) only need Home: their sets, songs and charts.
+  const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/')
+  const tools = isEditor ? [
+    { to: '/get-started', label: 'Import Songs', icon: Upload },
+    { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },
+  ] : []
   const navigate = useNavigate()
   const location = useLocation()
   const [online, setOnline] = useState(() => navigator.onLine)
@@ -53,11 +62,14 @@ export default function Layout({ children }) {
     <div className="flex h-full flex-col">
       {/* Top nav */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
-        <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="StaffList home" title="Home"
-          className="flex items-center gap-3 rounded-lg hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <Logo className="text-accent" size={26} />
-          <span className="text-lg font-semibold tracking-tight text-primary">StaffList</span>
-        </Link>
+        <div className="flex items-center gap-2 min-w-0">
+          <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="StaffList home" title="Home"
+            className="flex items-center gap-3 rounded-lg hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0">
+            <Logo className="text-accent" size={26} />
+            <span className="hidden sm:inline text-lg font-semibold tracking-tight text-primary">StaffList</span>
+          </Link>
+          <WorkspaceSwitcher />
+        </div>
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
@@ -95,10 +107,7 @@ export default function Layout({ children }) {
             {profileOpen && (
               <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
                 {/* Import & CCLI report */}
-                {[
-                  { to: '/get-started', label: 'Import Songs', icon: Upload },
-                  { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },
-                ].map(({ to, label, icon: Icon }) => (
+                {tools.map(({ to, label, icon: Icon }) => (
                   <Link
                     key={to}
                     to={to}
@@ -177,10 +186,7 @@ export default function Layout({ children }) {
           ))}
           {/* Mobile profile section */}
           <div className="border-t border-border mt-1 pt-1">
-            {[
-              { to: '/get-started', label: 'Import Songs', icon: Upload },
-              { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },
-            ].map(({ to, label, icon: Icon }) => (
+            {tools.map(({ to, label, icon: Icon }) => (
               <Link
                 key={to}
                 to={to}

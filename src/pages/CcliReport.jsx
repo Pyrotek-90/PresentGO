@@ -4,6 +4,7 @@ import { FileSpreadsheet, Printer, Mail, ExternalLink, Loader2, AlertTriangle, C
 import Layout from '../components/Layout'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import { getPref, setPref } from '../lib/prefs'
 import { todayISO, formatSetDate } from '../lib/sets'
 
@@ -27,6 +28,7 @@ const csvCell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${
 
 export default function CcliReport() {
   const { user } = useAuth()
+  const { scope } = useChurch()
   const [preset, setPreset] = useState('last6')
   const [[from, to], setRange] = useState(PRESETS[0].range())
   const [church, setChurch] = useState(() => getPref('ccliChurchName', ''))
@@ -45,7 +47,7 @@ export default function CcliReport() {
       setLoading(true); setError(null)
       try {
         const { data: sets, error: e1 } = await supabase.from('sets')
-          .select('id, name, service_date').eq('user_id', user.id)
+          .select('id, name, service_date').eq(scope.legacy ? 'user_id' : 'church_id', scope.legacy ? user.id : scope.churchId)
           .gte('service_date', from).lte('service_date', to)
         if (e1) throw e1
         const setIds = (sets || []).map(s => s.id)
@@ -75,7 +77,7 @@ export default function CcliReport() {
     if (from && to && from <= to) load()
     else { setLoading(false); setError('Choose a start date before the end date.') }
     return () => { live = false }
-  }, [user.id, from, to])
+  }, [user.id, scope.churchId, from, to])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // One row per song: how many services it was used in, and on which dates.
   const rows = useMemo(() => {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useChurch } from '../../contexts/ChurchContext'
 import { X, Music, Star, Megaphone, Search, Plus, FolderOpen, Monitor, Image, Folder, Upload, Loader2, Trash2, Filter, NotebookPen, Check } from 'lucide-react'
 import { filesToSlideImages } from '../../lib/importSlides'
 import ContentPicker from './ContentPicker'
@@ -28,6 +29,7 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
   const [confirmDelete, setConfirmDelete] = useState(false)
   const editing = !!item
   const { user } = useAuth()
+  const { scope } = useChurch()
   const [type, setType] = useState(item ? (item.type === 'media' ? (item.content?.files || item.content?.media_id || item.content?.media_category !== 'presentation' ? 'content' : 'announcement') : item.type) : 'welcome')
   const [songs, setSongs] = useState([])
   const [query, setQuery] = useState('')
@@ -65,13 +67,12 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
   )
 
   useEffect(() => {
-    supabase
+    scope.church(supabase
       .from('songs')
-      .select('id, title, artist, slides, raw_lyrics, lines_per_slide, metadata')
-      .eq('user_id', user?.id)
+      .select('id, title, artist, slides, raw_lyrics, lines_per_slide, metadata'))
       .order('title')
       .then(({ data }) => setSongs(data || []))
-  }, [user?.id])
+  }, [scope.churchId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const mainLanguage = user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE
   const shortKey = k => (k || '').replace(' Major', '').replace(' Minor', 'm')
@@ -512,7 +513,7 @@ export default function AddItemModal({ onClose, onAdd, onAddNotes, setSongs: set
 
           {/* Content: pick one or more Content Library files (or a whole folder) as one Program item */}
           {type === 'content' && (
-            <ContentPicker userId={user?.id} item={editing && item?.type === 'media' ? item : null}
+            <ContentPicker scope={scope} item={editing && item?.type === 'media' ? item : null}
               onAdd={content => { onAdd({ type: 'media', content }); onClose() }} />
           )}
 

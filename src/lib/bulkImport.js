@@ -148,10 +148,11 @@ export function markDuplicates(results, existingSongs) {
   return results.map(r => out.get(r.id))
 }
 
-export function songPayload(entry, userId, linesPerSlide = 2) {
+// `scope` (lib/scope.js): the song goes into the current church's library.
+export function songPayload(entry, scope, linesPerSlide = 2) {
   const s = entry.song
   return {
-    user_id: userId,
+    ...scope.owned(),
     title: s.title.trim().slice(0, 200) || 'Untitled',
     artist: (s.artist || '').trim(),
     ccli_number: (s.ccli || '').trim(),

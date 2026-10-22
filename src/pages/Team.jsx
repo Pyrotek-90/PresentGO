@@ -4,6 +4,7 @@ import { loadAccountStatus } from '../lib/notifications'
 import MessageTeamDialog from '../components/team/MessageTeamDialog'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import Layout from '../components/Layout'
 import SwipeToDelete from '../components/common/SwipeToDelete'
 import { posLabel, sortPositions, ensureStandardPositions } from '../lib/positions'
@@ -16,6 +17,7 @@ const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
 
 export default function Team() {
   const { user } = useAuth()
+  const { scope } = useChurch()
   const [members, setMembers] = useState([])
   const [positions, setPositions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,15 +55,15 @@ export default function Team() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('team_members').select('*').eq('user_id', user.id).order('name'),
-      supabase.from('positions').select('*').eq('user_id', user.id).order('created_at'),
+      scope.church(supabase.from('team_members').select('*')).order('name'),
+      scope.church(supabase.from('positions').select('*')).order('created_at'),
     ]).then(async ([m, p]) => {
       if (m.error || p.error) setLoadError('Team features are not set up yet. Run the latest Supabase migration.')
       setMembers(m.data || [])
-      const list = p.error ? [] : await ensureStandardPositions(supabase, user, p.data || [])
+      const list = p.error ? [] : await ensureStandardPositions(supabase, user, p.data || [], scope)
       setPositions(sortPositions(list))
     }).catch(() => setLoadError('Could not load team data.')).finally(() => setLoading(false))
-  }, [user.id])
+  }, [user.id, scope.churchId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
@@ -80,7 +82,7 @@ export default function Team() {
       setForm(f => (f.position_ids.includes(existing.id) ? f : { ...f, position_ids: [...f.position_ids, existing.id] }))
       setNewPos(null); return
     }
-    const { data, error } = await supabase.from('positions').insert({ user_id: user.id, name, category: 'Other', level: null }).select().single()
+    const { data, error } = await supabase.from('positions').insert(scope.owned({ name, category: 'Other', level: null })).select().single()
     if (error) { setError('Could not add that position.'); return }
     setPositions(prev => sortPositions([...prev, data]))
     setForm(f => ({ ...f, position_ids: [...f.position_ids, data.id] }))
@@ -94,10 +96,10 @@ export default function Team() {
   const save = async () => {
     if (!form.name.trim()) return
     setSaving(true); setError(null)
-    const payload = { user_id: user.id, name: form.name.trim(), email: form.email.trim() || null, phone: formatPhone(form.phone) || null, position_ids: form.position_ids }
+    const payload = { name: form.name.trim(), email: form.email.trim() || null, phone: formatPhone(form.phone) || null, position_ids: form.position_ids }
     const { data, error } = form.id
       ? await supabase.from('team_members').update(payload).eq('id', form.id).select().single()
-      : await supabase.from('team_members').insert(payload).select().single()
+      : await supabase.from('team_members').insert(scope.owned(payload)).select().single()
     setSaving(false)
     if (error) { setError('Could not save. Make sure the latest Supabase migration has been run.'); return }
     setMembers(prev => form.id ? prev.map(m => m.id === data.id ? data : m) : [...prev, data])
@@ -326,7 +328,7 @@ export default function Team() {
           </div>
         </section>
       </div>
-      {messaging && <MessageTeamDialog userId={user.id} members={members} positions={positions} accounts={accounts} onClose={() => setMessaging(false)} />}
+      {messaging && <MessageTeamDialog scope={scope} members={members} positions={positions} accounts={accounts} onClose={() => setMessaging(false)} />}
     </Layout>
   )
 }

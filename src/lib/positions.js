@@ -43,7 +43,8 @@ const isUnused = async (supabase, id) => {
 // adds standard positions it has never been offered, renames old standard names, and
 // removes retired standard positions that nobody has been given.
 let pending = null
-export function ensureStandardPositions(supabase, user, positions) {
+// `scope` (lib/scope.js): missing standard positions are added to the current church.
+export function ensureStandardPositions(supabase, user, positions, scope) {
   const md = user?.user_metadata || {}
   if (md.std_positions_v3) return Promise.resolve(positions)
   if (!pending) pending = (async () => {
@@ -65,7 +66,7 @@ export function ensureStandardPositions(supabase, user, positions) {
 
     const have = new Set(positions.map(p => norm(renamed[p.id] || p.name)))
     const missing = STANDARD_POSITIONS.filter(s => !have.has(norm(s.name)) && !offered.has(norm(s.name)))
-      .map(s => ({ user_id: user.id, name: s.name, category: s.category, level: null }))
+      .map(s => (scope ? scope.owned({ name: s.name, category: s.category, level: null }) : { user_id: user.id, name: s.name, category: s.category, level: null }))
     if (missing.length) {
       const { data, error } = await supabase.from('positions').insert(missing).select()
       if (!error) added.push(...(data || []))

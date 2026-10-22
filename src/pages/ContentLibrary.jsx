@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import Layout from '../components/Layout'
 import FolderSelect from '../components/FolderSelect'
 import LibraryManager from '../components/LibraryManager'
@@ -143,6 +144,7 @@ const Checkbox = ({ on, onClick, label, className = '' }) => (
 
 export default function ContentLibrary() {
   const { user } = useAuth()
+  const { scope } = useChurch()
   const [items, setItems]       = useState([])
   const [folders, setFolders]   = useState([])
   const [foldersReady, setFoldersReady] = useState(true)
@@ -165,12 +167,12 @@ export default function ContentLibrary() {
 
   useEffect(() => {
     let live = true
-    loadLibrary(user.id).then(r => {
+    loadLibrary(scope).then(r => {
       if (!live) return
       setItems(r.items); setFolders(r.folders); setFoldersReady(r.foldersReady); setLoading(false)
     })
     return () => { live = false }
-  }, [user.id])
+  }, [scope.churchId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const chooseView = v => { setView(v); try { localStorage.setItem(VIEW_KEY, v) } catch { /* ignore */ } }
   const openFolder = id => { setFolderId(id); setSelected(new Set()); setQuery(''); setNewFolder(null); setConfirmDel(null) }
@@ -217,7 +219,7 @@ export default function ContentLibrary() {
       const saved = []
       for (let gi = 0; gi < review.length; gi++) {
         const g = review[gi]
-        saved.push(await saveImport(user.id, g, g.name,
+        saved.push(await saveImport(scope, g, g.name,
           (i, n) => setBusy(`Uploading ${review.length > 1 ? `file ${gi + 1} of ${review.length}, ` : ''}slide ${i} of ${n}…`),
           foldersReady ? dest : null))
       }
@@ -240,7 +242,7 @@ export default function ContentLibrary() {
     setNewFolder(null)
     if (!name) return
     setError(null)
-    try { const f = await createFolder(user.id, name, folderId); setFolders(prev => [...prev, f]) }
+    try { const f = await createFolder(scope, name, folderId); setFolders(prev => [...prev, f]) }
     catch (e) { setError(e.message) }
   }
 
@@ -371,7 +373,7 @@ export default function ContentLibrary() {
         )}
         {review && <ImportReview groups={review} busy={busy} error={error} onCancel={cancelReview} onSave={saveReview}
           folderSelect={foldersReady && <FolderSelect folders={folders} value={dest} onChange={setDest} disabled={!!busy}
-            onCreate={async (name, parent) => { const f = await createFolder(user.id, name, parent); setFolders(prev => [...prev, f]); return f }} />}
+            onCreate={async (name, parent) => { const f = await createFolder(scope, name, parent); setFolders(prev => [...prev, f]); return f }} />}
           onChangeName={(gi, name) => setReview(r => r.map((g, i) => (i === gi ? { ...g, name } : g)))} />}
 
           {/* Files pane */}
@@ -562,7 +564,7 @@ export default function ContentLibrary() {
           {canDropInto(drag, drag.over) && <span className="shrink-0 opacity-80">→ {drag.over ? folders.find(f => f.id === drag.over)?.name : 'Library'}</span>}
         </div>
       )}
-      {managing && <LibraryManager userId={user.id} folders={folders} items={items} setFolders={setFolders} setItems={setItems}
+      {managing && <LibraryManager scope={scope} folders={folders} items={items} setFolders={setFolders} setItems={setItems}
         startFolder={folderId} onClose={() => { setManaging(false); if (folderId && !folders.some(f => f.id === folderId)) setFolderId(null) }} />}
       {viewing && <SlidesViewer item={viewing} onClose={() => setViewing(null)} />}
       {moving && <MoveDialog folders={folders} count={selected.size} from={q ? undefined : folderId}

@@ -13,7 +13,7 @@ const TEMPLATES = [
   ['Reminder', set => `A quick reminder about ${set || 'this week'}. Please let me know if anything has changed for you.`],
 ]
 
-export default function MessageTeamDialog({ userId, members, positions, accounts, onClose }) {
+export default function MessageTeamDialog({ scope, members, positions, accounts, onClose }) {
   const [step, setStep] = useState('who')       // who | write | done
   const [posFilter, setPosFilter] = useState(() => new Set())
   const [picked, setPicked] = useState(() => new Set())
@@ -26,9 +26,9 @@ export default function MessageTeamDialog({ userId, members, positions, accounts
   const [result, setResult] = useState(null)
 
   useEffect(() => {
-    supabase.from('sets').select('id, name, service_date').eq('user_id', userId).gte('service_date', todayISO()).order('service_date')
+    scope.sets(supabase.from('sets').select('id, name, service_date')).gte('service_date', todayISO()).order('service_date')
       .then(({ data }) => setSets(data || [])).catch(() => {})
-  }, [userId])
+  }, [scope])
 
   const shown = useMemo(() => (posFilter.size ? members.filter(m => (m.position_ids || []).some(id => posFilter.has(id))) : members), [members, posFilter])
   const reachable = m => !!m.email

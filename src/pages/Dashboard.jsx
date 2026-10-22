@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import Layout from '../components/Layout'
 import SetsPane from '../components/home/SetsPane'
 import WeeklyThought from '../components/home/WeeklyThought'
@@ -13,6 +14,8 @@ import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { scope, isEditor } = useChurch()
+  const scopeKey = `${scope.churchId}|${scope.workspaceId}`
   const navigate = useNavigate()
   const [sets, setSets] = useState([])
   const [songs, setSongs] = useState([])
@@ -24,15 +27,16 @@ export default function Dashboard() {
   const [justAdded, setJustAdded] = useState([])   // new songs stay in view even if they'd normally be hidden
 
   useEffect(() => {
-    supabase.from('sets').select('*, set_items(type, content)').eq('user_id', user.id)
+    setLoadingSets(true); setLoadingSongs(true)
+    scope.sets(supabase.from('sets').select('*, set_items(type, content)'))
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
       .finally(() => setLoadingSets(false))
-    supabase.from('songs').select('*').eq('user_id', user.id)
+    scope.church(supabase.from('songs').select('*'))
       .then(({ data }) => setSongs(data || []))
       .catch(() => {})
       .finally(() => setLoadingSongs(false))
-  }, [user.id])
+  }, [user.id, scopeKey])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Most recent set date each song was used in (for "Recently used" sorting).
   const lastUsed = useMemo(() => {
@@ -58,7 +62,7 @@ export default function Dashboard() {
 
   // "+ New Set": create the set right away and open it with Edit details showing.
   const createSet = async () => {
-    const { data, error } = await insertSet(supabase, user.id, { name: 'New Set', date: todayISO() })
+    const { data, error } = await insertSet(supabase, scope, { name: 'New Set', date: todayISO() })
     if (error) return 'Could not create set. Please try again.'
     navigate(`/sets/${data.id}`, { state: { newSet: true } })
     return null
@@ -66,7 +70,7 @@ export default function Dashboard() {
 
   // "+ New Set" from the Song Library: create the set, make it the add-to target, stay here.
   const createTargetSet = async fields => {
-    const { data, error } = await insertSet(supabase, user.id, fields)
+    const { data, error } = await insertSet(supabase, scope, fields)
     if (error) return 'Could not create set. Please try again.'
     setSets(prev => [...prev, { ...data, set_items: [] }])
     setTargetSetId(data.id)
@@ -95,9 +99,9 @@ export default function Dashboard() {
     <Layout>
       <div className="max-w-4xl mx-auto p-4 md:p-6 flex flex-col gap-3 h-[calc(100dvh-4.5rem)]">
         <WeeklyThought />
-        <SetsPane sets={sets} loading={loadingSets} targetSetId={targetSetId}
+        <SetsPane readOnly={!isEditor} sets={sets} loading={loadingSets} targetSetId={targetSetId}
           onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
-        <SongsPane songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
+        <SongsPane readOnly={!isEditor} songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
           onTargetChange={setTargetSetId} onCreateSet={createTargetSet} onAdd={addToSet} onEdit={setEditing}
           onView={setViewing} onNew={() => setEditing(true)}
           lastUsed={lastUsed} keepVisible={justAdded} mainLanguage={user.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE} />

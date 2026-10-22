@@ -37,16 +37,17 @@ async function uploadPage(userId, folder, page, i) {
 }
 
 // Save one group (from readImports) to the library. `name` overrides the folder / image name.
-export async function saveImport(userId, group, name, onProgress, folderId = null) {
+// `scope` (lib/scope.js): files are stored under the uploader, rows belong to the church.
+export async function saveImport(scope, group, name, onProgress, folderId = null) {
   const folder = crypto.randomUUID()
   const images = []
   for (let i = 0; i < group.pages.length; i++) {
     onProgress?.(i + 1, group.pages.length)
-    images.push(await uploadPage(userId, folder, group.pages[i], i))
+    images.push(await uploadPage(scope.userId, folder, group.pages[i], i))
   }
   const multi = images.length > 1
   const row = {
-    user_id: userId,
+    ...scope.owned(),
     name: (name || group.name).trim() || group.name,
     type: multi ? 'presentation' : 'image',
     storage_path: images[0].storage_path,
@@ -95,17 +96,17 @@ export const setItemContent = item => ({
 // ─── Folders ──────────────────────────────────────────────────────────────────
 
 // Files and folders for the library. Folders come back [] if the folders table isn't set up yet.
-export async function loadLibrary(userId) {
+export async function loadLibrary(scope) {
   const [it, fo] = await Promise.all([
-    supabase.from('media_items').select('*').eq('user_id', userId).in('type', ['image', 'presentation']).order('created_at', { ascending: false }),
-    supabase.from('media_folders').select('*').eq('user_id', userId).order('name'),
+    scope.church(supabase.from('media_items').select('*')).in('type', ['image', 'presentation']).order('created_at', { ascending: false }),
+    scope.church(supabase.from('media_folders').select('*')).order('name'),
   ])
   return { items: it.data || [], folders: fo.error ? [] : (fo.data || []), foldersReady: !fo.error, error: it.error?.message || null }
 }
 
-export async function createFolder(userId, name, parentId = null) {
+export async function createFolder(scope, name, parentId = null) {
   const { data, error } = await supabase.from('media_folders')
-    .insert({ user_id: userId, name: name.trim() || 'New Folder', parent_id: parentId || null }).select().single()
+    .insert(scope.owned({ name: name.trim() || 'New Folder', parent_id: parentId || null })).select().single()
   if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message)
     ? 'Folders need a one-time database update — run the content folders SQL in Supabase.' : error.message)
   return data
@@ -201,9 +202,9 @@ export async function moveFolder(id, parentId) {
 // Which sets use each library file. Returns { [mediaId]: { rank, setName, date } } where `rank` is
 // how many sets ago it was last used: 0 = in an upcoming (or today's) set, 1 = the most recent past
 // set, 2 = the one before, and so on. Files that were never put in a set are not listed.
-export async function loadMediaUsage(userId) {
+export async function loadMediaUsage(scope) {
   const [s, it] = await Promise.all([
-    supabase.from('sets').select('id, name, service_date, service_time, updated_at').eq('user_id', userId),
+    scope.church(supabase.from('sets').select('id, name, service_date, service_time, updated_at')),
     supabase.from('set_items').select('set_id, content').eq('type', 'media'),
   ])
   if (s.error) throw new Error(s.error.message)

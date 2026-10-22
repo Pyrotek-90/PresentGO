@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isOfflineEnabled, clearOfflineData } from '../lib/offline'
-import { downloadForOffline } from '../lib/offlineSync'
 
 const USER_KEY = 'presentgo.cachedUser'
 const readCachedUser = () => { try { return JSON.parse(localStorage.getItem(USER_KEY)) } catch { return null } }
@@ -29,7 +28,6 @@ export function AuthProvider({ children }) {
       const u = session?.user ?? offlineUser()
       if (session?.user) {
         cacheUser(session.user)
-        if (isOfflineEnabled() && navigator.onLine) downloadForOffline(session.user.id).catch(() => {})
       }
       setUser(u)
       setLoading(false)

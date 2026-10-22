@@ -1,6 +1,7 @@
 import Layout from '../components/Layout'
 import CalendarSync from '../components/settings/CalendarSync'
 import OfflineMode from '../components/settings/OfflineMode'
+import ChurchSettings from '../components/settings/ChurchSettings'
 import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
 import { useEffect, useState } from 'react'
 
@@ -54,6 +56,7 @@ const PLANS = [
       'AI Worship Leader Notes',
       'AI key / BPM lookup & Smart Cleanup',
       'Team scheduling, email invites & calendar feed',
+      'Shared team access: musicians and singers open their sets, charts and lyrics',
       'CCLI Report',
     ],
     cta: 'Notify Me When Available',
@@ -73,7 +76,7 @@ const PLANS = [
     features: [
       'Everything in Pro',
       '5 GB Content Library',
-      '5 groups, each with multiple admins for scheduling',
+      'Up to 5 workspaces (Main Service, Youth, Kids…), each with its own leaders',
       'Custom announcements page',
       'Registrations',
       'Merchandise',
@@ -164,16 +167,17 @@ export default function Settings() {
   const [viewerMode, setViewerMode] = useState(() => getPref('viewerMode', 'lyrics'))
   const pickViewerMode = m => { setViewerMode(m); setPref('viewerMode', m) }
   const { user } = useAuth()
+  const { scope } = useChurch()
   const [libLang, setLibLang] = useState(user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE)
   const [libLangState, setLibLangState] = useState(null)   // null | 'saving' | 'saved' | 'error'
   // Only offer languages that songs in the library are actually in.
   const [songLangs, setSongLangs] = useState([])
   useEffect(() => {
     if (!user?.id) return
-    supabase.from('songs').select('metadata, raw_lyrics').eq('user_id', user.id)
+    scope.church(supabase.from('songs').select('metadata, raw_lyrics'))
       .then(({ data }) => setSongLangs([...new Set((data || []).map(songLanguage))]))
       .catch(() => {})
-  }, [user?.id])
+  }, [user?.id, scope.churchId])   // eslint-disable-line react-hooks/exhaustive-deps
   const libLangOptions = [...new Set([...songLangs, libLang])].sort()
   const pickLibLang = async l => {
     setLibLang(l); setLibLangState('saving')
@@ -186,6 +190,8 @@ export default function Settings() {
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-10">
 
         <h1 className="text-2xl font-bold text-primary">Settings</h1>
+
+        <ChurchSettings />
 
         {/* ── Appearance ────────────────────────────────────────────────── */}
         <section className="space-y-3">

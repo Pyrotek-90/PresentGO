@@ -41,7 +41,7 @@ function TreeNode({ folders, parentId, depth, selected, onSelect, counts }) {
   })
 }
 
-export default function LibraryManager({ userId, folders, items, setFolders, setItems, startFolder, onClose }) {
+export default function LibraryManager({ scope, folders, items, setFolders, setItems, startFolder, onClose }) {
   const [tab, setTab] = useState('folders')
   const [sel, setSel] = useState(startFolder || null)     // folder being looked at (null = Library)
   const [menu, setMenu] = useState(null)                  // row id whose actions are open
@@ -72,7 +72,7 @@ export default function LibraryManager({ userId, folders, items, setFolders, set
     const name = (creating || '').trim()
     setCreating(null)
     if (!name) return
-    try { const f = await createFolder(userId, name, sel); setFolders(prev => [...prev, f]) } catch (e) { fail(e) }
+    try { const f = await createFolder(scope, name, sel); setFolders(prev => [...prev, f]) } catch (e) { fail(e) }
   }
   const doRenameFolder = async (f, name) => {
     done()
@@ -253,14 +253,14 @@ export default function LibraryManager({ userId, folders, items, setFolders, set
             </div>
           </div>
         ) : (
-          <ArchiveTab userId={userId} items={items} setItems={setItems} />
+          <ArchiveTab scope={scope} items={items} setItems={setItems} />
         )}
       </div>
     </div>
   )
 }
 
-function ArchiveTab({ userId, items, setItems }) {
+function ArchiveTab({ scope, items, setItems }) {
   const [after, setAfter] = useState(() => { try { const v = Number(localStorage.getItem(ARCHIVE_KEY)); return ARCHIVE_CHOICES.includes(v) ? v : 0 } catch { return 0 } })
   const [usage, setUsage] = useState(null)
   const [err, setErr] = useState(null)
@@ -269,11 +269,11 @@ function ArchiveTab({ userId, items, setItems }) {
   const [busy, setBusy] = useState(null)
 
   useEffect(() => {
-    if (!userId) { setUsage({}); return }
+    if (!scope) { setUsage({}); return }
     let live = true
-    loadMediaUsage(userId).then(u => live && setUsage(u)).catch(e => live && setErr(e.message))
+    loadMediaUsage(scope).then(u => live && setUsage(u)).catch(e => live && setErr(e.message))
     return () => { live = false }
-  }, [userId])
+  }, [scope])
 
   const choose = n => { setAfter(n); setSkip(new Set()); setConfirm(false); try { localStorage.setItem(ARCHIVE_KEY, String(n)) } catch { /* ignore */ } }
   const cands = useMemo(() => (usage && after ? archiveCandidates(items, usage, after) : []), [items, usage, after])

@@ -6,7 +6,8 @@ let running = null
 
 // Downloads everything the app needs to work without a connection. It issues the same queries the
 // pages use, so each response lands in the offline cache under the URL the page will ask for later.
-export function downloadForOffline(userId, onProgress) {
+// `scope` (lib/scope.js): the same church / workspace filters the pages use.
+export function downloadForOffline(scope, onProgress) {
   if (running) return running
   running = (async () => {
     const steps = []
@@ -17,20 +18,21 @@ export function downloadForOffline(userId, onProgress) {
     let sets = []
     let songs = []
     await run('Sets', async () => {
-      const { data } = await supabase.from('sets').select('*, set_items(type)').eq('user_id', userId)
+      await scope.sets(supabase.from('sets').select('*, set_items(type, content)'))
+      const { data } = await scope.sets(supabase.from('sets').select('*, set_items(type)'))
       sets = data || []
     })
     await run('Songs', async () => {
-      const { data } = await supabase.from('songs').select('*').eq('user_id', userId)
+      const { data } = await scope.church(supabase.from('songs').select('*'))
       songs = data || []
     })
     await run('Calendar', async () => {
-      await supabase.from('sets').select('id, name, service_date, service_time').eq('user_id', userId)
+      await scope.sets(supabase.from('sets').select('id, name, service_date, service_time'))
       await supabase.from('set_assignments').select('*')
     })
     await run('Team', async () => {
-      await supabase.from('positions').select('*').eq('user_id', userId).order('created_at')
-      await supabase.from('team_members').select('*').eq('user_id', userId).order('name')
+      await scope.church(supabase.from('positions').select('*')).order('created_at')
+      await scope.church(supabase.from('team_members').select('*')).order('name')
     })
 
     const imageUrls = new Set()

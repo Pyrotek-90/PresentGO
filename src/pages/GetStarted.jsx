@@ -7,6 +7,7 @@ import {
 import Layout from '../components/Layout'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import { filesFromDrop, triageFiles, readChart, markDuplicates, songPayload } from '../lib/bulkImport'
 
 const SOURCES = [
@@ -110,6 +111,7 @@ function ReviewRow({ r, checked, onToggle }) {
 
 export default function GetStarted() {
   const { user } = useAuth()
+  const { scope } = useChurch()
   const [phase, setPhase] = useState('idle')       // idle | reading | review | importing | done
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [results, setResults] = useState([])
@@ -141,7 +143,7 @@ export default function GetStarted() {
 
     let existing = []
     try {
-      const { data } = await supabase.from('songs').select('id, title, ccli_number').eq('user_id', user.id)
+      const { data } = await scope.church(supabase.from('songs').select('id, title, ccli_number'))
       existing = data || []
     } catch { /* offline: duplicates within the batch are still caught */ }
 
@@ -182,12 +184,12 @@ export default function GetStarted() {
     setProgress({ done: 0, total: chosen.length })
     const outcome = new Map()
     const insertOne = async r => {
-      const { error: err } = await supabase.from('songs').insert(songPayload(r, user.id))
+      const { error: err } = await supabase.from('songs').insert(songPayload(r, scope))
       outcome.set(r.id, err ? { status: 'failed', message: err.message } : { status: 'imported', message: '' })
     }
     for (let i = 0; i < chosen.length; i += 20) {
       const chunk = chosen.slice(i, i + 20)
-      const { error: err } = await supabase.from('songs').insert(chunk.map(r => songPayload(r, user.id)))
+      const { error: err } = await supabase.from('songs').insert(chunk.map(r => songPayload(r, scope)))
       if (err) { for (const r of chunk) await insertOne(r) }
       else chunk.forEach(r => outcome.set(r.id, { status: 'imported', message: '' }))
       setProgress({ done: Math.min(i + 20, chosen.length), total: chosen.length })

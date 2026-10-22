@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Plus, Trash2, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../contexts/AuthContext'
+import { useChurch } from '../../contexts/ChurchContext'
 import { drumAltOf } from '../../lib/positions'
 
 export const CATEGORIES = ['Band Musicians', 'Presenter', 'Audio', 'Singers', 'Other']
 
 export default function PositionsPanel({ positions, setPositions, loading, loadError }) {
-  const { user } = useAuth()
+  const { scope } = useChurch()
   const [error, setError] = useState(null)
   const [name, setName] = useState('')
   const [category, setCategory] = useState('Band Musicians')
@@ -18,7 +18,7 @@ export default function PositionsPanel({ positions, setPositions, loading, loadE
     if (!name.trim()) return
     setError(null)
     const { data, error } = await supabase.from('positions')
-      .insert({ user_id: user.id, name: name.trim(), category, level: category === 'Singers' ? level : null })
+      .insert(scope.owned({ name: name.trim(), category, level: category === 'Singers' ? level : null }))
       .select().single()
     if (error) { setError('Could not add position. Make sure the latest Supabase migration has been run.'); return }
     setPositions(prev => [...prev, data])

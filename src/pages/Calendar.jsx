@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useChurch } from '../contexts/ChurchContext'
 import Layout from '../components/Layout'
 import SchedulePane from '../components/calendar/SchedulePane'
 import { sortPositions, ensureStandardPositions } from '../lib/positions'
@@ -27,6 +28,7 @@ function usePaneCount(ref) {
 
 export default function Calendar() {
   const { user } = useAuth()
+  const { scope } = useChurch()
   const [sets, setSets] = useState([])
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const [selected, setSelected] = useState(todayISO())
@@ -45,16 +47,16 @@ export default function Calendar() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('positions').select('*').eq('user_id', user.id).order('created_at'),
-      supabase.from('team_members').select('*').eq('user_id', user.id).order('name'),
+      scope.church(supabase.from('positions').select('*')).order('created_at'),
+      scope.church(supabase.from('team_members').select('*')).order('name'),
       supabase.from('set_assignments').select('*'),
     ]).then(async ([p, m, a]) => {
       if (p.error || m.error || a.error) setTeamError('Team features are not set up yet. Run the latest Supabase migration.')
       setMembers(m.data || []); setAssignments(a.data || [])
-      const list = p.error ? [] : await ensureStandardPositions(supabase, user, p.data || [])
+      const list = p.error ? [] : await ensureStandardPositions(supabase, user, p.data || [], scope)
       setPositions(sortPositions(list))
     }).catch(() => setTeamError('Could not load team data.')).finally(() => setTeamLoading(false))
-  }, [user.id])
+  }, [user.id, scope.churchId, scope.workspaceId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const addAssignment = async (setId, positionId, memberId) => {
     const { data, error } = await supabase.from('set_assignments')
@@ -131,10 +133,10 @@ export default function Calendar() {
   }
 
   useEffect(() => {
-    supabase.from('sets').select('id, name, service_date, service_time, venue_name, location_address').eq('user_id', user.id)
+    scope.sets(supabase.from('sets').select('id, name, service_date, service_time, venue_name, location_address'))
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
-  }, [user.id])
+  }, [user.id, scope.churchId, scope.workspaceId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const setsByDate = useMemo(() => {
     const m = {}

@@ -10,7 +10,7 @@ import {
 // folder, e.g. a sermon), and add them as ONE Program item. The presenter shows every slide.
 const QUICK_NAMES = ['Announcements', 'Sermon']
 
-export default function ContentPicker({ userId, item, onAdd }) {
+export default function ContentPicker({ scope, item, onAdd }) {
   const editing = !!item
   const [items, setItems]     = useState([])
   const [folders, setFolders] = useState([])
@@ -27,7 +27,7 @@ export default function ContentPicker({ userId, item, onAdd }) {
 
   useEffect(() => {
     let live = true
-    loadLibrary(userId).then(r => {
+    loadLibrary(scope).then(r => {
       if (!live) return
       setItems(r.items); setFolders(r.folders); setReady(r.foldersReady); setLoaded(true)
       // Editing: open the folder the first file lives in.
@@ -35,7 +35,7 @@ export default function ContentPicker({ userId, item, onAdd }) {
       if (first?.folder_id) setFolderId(first.folder_id)
     })
     return () => { live = false }
-  }, [userId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scope]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const byId = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items])
   const counts = useMemo(() => Object.fromEntries(folders.map(f => {
@@ -91,7 +91,7 @@ export default function ContentPicker({ userId, item, onAdd }) {
       const saved = []
       for (let gi = 0; gi < imp.groups.length; gi++) {
         const g = imp.groups[gi]
-        saved.push(await saveImport(userId, g, g.name, (i, n) => setBusy(`Uploading ${imp.groups.length > 1 ? `file ${gi + 1}, ` : ''}slide ${i} of ${n}…`), ready ? imp.dest : null))
+        saved.push(await saveImport(scope, g, g.name, (i, n) => setBusy(`Uploading ${imp.groups.length > 1 ? `file ${gi + 1}, ` : ''}slide ${i} of ${n}…`), ready ? imp.dest : null))
       }
       imp.groups.forEach(g => g.pages.forEach(p => URL.revokeObjectURL(p.url)))
       setItems(prev => [...saved, ...prev])
@@ -120,7 +120,7 @@ export default function ContentPicker({ userId, item, onAdd }) {
       {imp && (
         <div className="rounded-xl border border-accent/40 bg-card p-2.5 space-y-2">
           {ready && <FolderSelect folders={folders} value={imp.dest} onChange={id => setImp(c => ({ ...c, dest: id }))} disabled={!!busy}
-            onCreate={async (name, parent) => { const f = await createFolder(userId, name, parent); setFolders(prev => [...prev, f]); return f }} />}
+            onCreate={async (name, parent) => { const f = await createFolder(scope, name, parent); setFolders(prev => [...prev, f]); return f }} />}
           {imp.groups.map((g, gi) => (
             <div key={gi} className="flex items-center gap-2">
               {g.pages.length > 1 ? <Monitor size={15} className="text-blue-400 shrink-0" /> : <Image size={15} className="text-green-400 shrink-0" />}
