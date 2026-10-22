@@ -249,6 +249,14 @@ export default function SetEditor() {
   }
 
   const DURATIONS = [30, 45, 60, 75, 90, 105, 120, 150, 180, 240]
+  // Rehearsal (needs the set-rehearsal database update; hidden until it's been run).
+  const hasRehearsal = !set || 'rehearsal_date' in set
+  const dayMs = 86400000
+  const isoDay = s => Date.UTC(...s.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))
+  const daysBetween = (a, b) => Math.round((isoDay(b) - isoDay(a)) / dayMs)
+  const addDays = (s, n) => new Date(isoDay(s) + n * dayMs).toISOString().slice(0, 10)
+  // How many days before (or after) the set its rehearsal is, so repeating sets keep the same pattern.
+  const rehearsalOffset = d => (d.rehearsalDate && d.date ? daysBetween(d.date, d.rehearsalDate) : null)
   const durationLabel = m => (m % 60 === 0 ? `${m / 60} hr` : m > 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`)
 
   const openDetailsFor = (s, overrides = {}) => {
@@ -261,6 +269,8 @@ export default function SetEditor() {
       venue: s?.venue_name || '',
       address: s?.location_address || '',
       room: s?.location_details || '',
+      rehearsalDate: s?.rehearsal_date || '',
+      rehearsalTime: s?.rehearsal_time ? s.rehearsal_time.slice(0, 5) : '',
       freq: s?.recurrence?.freq || '',
       endMode: s?.recurrence?.until ? 'until' : 'count',
       count: s?.recurrence?.count || DEFAULT_COUNT,
@@ -296,12 +306,15 @@ export default function SetEditor() {
     location_address: d.address.trim() || null,
     location_details: d.room.trim() || null,
     time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+    ...(hasRehearsal ? { rehearsal_time: d.rehearsalDate && d.rehearsalTime ? d.rehearsalTime : null } : {}),
   })
 
   // New sets for the given dates, copying the shared fields (and optionally this set's program).
   const createSeriesSets = async (dates, fields, seriesId, rule, copyProgram) => {
     if (!dates.length) return 0
-    const rows = dates.map(date => ({ user_id: user.id, church_id: set.church_id, workspace_id: set.workspace_id, ...fields, service_date: date, series_id: seriesId, recurrence: rule }))
+    const off = hasRehearsal ? rehearsalOffset(details) : null
+    const rows = dates.map(date => ({ user_id: user.id, church_id: set.church_id, workspace_id: set.workspace_id, ...fields, service_date: date, series_id: seriesId, recurrence: rule,
+      ...(hasRehearsal ? { rehearsal_date: off == null ? null : addDays(date, off) } : {}) }))
     const { data, error } = await supabase.from('sets').insert(rows).select('id')
     if (error) throw error
     if (copyProgram && items.length && data?.length) {
@@ -332,7 +345,7 @@ export default function SetEditor() {
     if (rule?.until && rule.until <= details.date) { setDetailsError('The end date must be after the set date.'); return }
     setDetailsSaving(true); setDetailsError(null)
     const shared = sharedFields(details)
-    const patch = { ...shared, service_date: details.date || null }
+    const patch = { ...shared, service_date: details.date || null, ...(hasRehearsal ? { rehearsal_date: details.rehearsalDate || null } : {}) }
     const inSeries = !!set?.series_id
     const ruleChanged = !sameRule(rule, set?.recurrence)
     let msg = null
@@ -352,6 +365,14 @@ export default function SetEditor() {
           patch.recurrence = rule
           if (details.scope === 'following') {
             await supabase.from('sets').update(shared).eq('series_id', set.series_id).gt('service_date', set.service_date || '0000-01-01')
+            if (hasRehearsal) {
+              // each following set's rehearsal keeps the same distance from its own date
+              const off = rehearsalOffset(details)
+              const { data: next } = await supabase.from('sets').select('id, service_date')
+                .eq('series_id', set.series_id).gt('service_date', set.service_date || '0000-01-01')
+              await Promise.all((next || []).map(r => supabase.from('sets')
+                .update({ rehearsal_date: off == null || !r.service_date ? null : addDays(r.service_date, off) }).eq('id', r.id)))
+            }
             msg = 'Updated this set and the following sets.'
           }
           if (ruleChanged) {
@@ -557,6 +578,9 @@ export default function SetEditor() {
               {set?.series_id && set?.recurrence && <Repeat size={11} className="text-accent-light shrink-0" aria-label="Repeating set" />}
               <span className="truncate">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.series_id && set?.recurrence && freqLabel(set.recurrence.freq, set.service_date), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</span>
             </p>
+            {set?.rehearsal_date && (
+              <p className="text-xs text-muted flex items-center gap-1 truncate"><Mic size={11} className="shrink-0" />Rehearsal {new Date(set.rehearsal_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}{set.rehearsal_time ? ` · ${formatSetTime(set.rehearsal_time)}` : ''}</p>
+            )}
             {(set?.venue_name || set?.location_address) && (
               <p className="text-xs text-muted flex items-center gap-1 truncate"><MapPin size={11} className="shrink-0" />{[set.venue_name, set.location_address].filter(Boolean).join(', ')}{set.location_details ? ` · ${set.location_details}` : ''}</p>
             )}
@@ -594,6 +618,23 @@ export default function SetEditor() {
                   {(DURATIONS.includes(Number(details.duration)) ? DURATIONS : [...DURATIONS, Number(details.duration)].sort((a, b) => a - b)).map(m => <option key={m} value={m}>{durationLabel(m)}</option>)}
                 </select>
               </div>
+              {hasRehearsal && <>
+                <div className="col-span-1 sm:col-span-2">
+                  <label className="label !mb-1" htmlFor="rehearsal-date">Rehearsal date</label>
+                  <input id="rehearsal-date" type="date" className="input" value={details.rehearsalDate} max={details.date || undefined}
+                    onChange={e => setDetails(d => ({ ...d, rehearsalDate: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label !mb-1" htmlFor="rehearsal-time">Rehearsal time</label>
+                  <input id="rehearsal-time" type="time" className="input" value={details.rehearsalTime} disabled={!details.rehearsalDate}
+                    onChange={e => setDetails(d => ({ ...d, rehearsalTime: e.target.value }))} />
+                </div>
+                <div className="flex items-end">
+                  {details.rehearsalDate
+                    ? <button type="button" onClick={() => setDetails(d => ({ ...d, rehearsalDate: '', rehearsalTime: '' }))} className="btn-ghost text-xs !px-2 h-10">No rehearsal</button>
+                    : <p className="text-[11px] text-muted pb-2.5 leading-tight">Optional. Shown in invites and calendars.</p>}
+                </div>
+              </>}
               <div className="col-span-2">
                 <label className="label !mb-1">Venue name</label>
                 <input className="input" placeholder="First Baptist Church" value={details.venue} onChange={e => setDetails(d => ({ ...d, venue: e.target.value }))} />

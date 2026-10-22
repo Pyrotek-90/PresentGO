@@ -5,7 +5,8 @@
 //    the team yet gets the join invitation instead, listing the sets they've been asked to serve;
 //    they answer those on the join page once they've joined.
 //
-// Every email carries the team's details (church, location, rehearsals, contact, welcome).
+// Every email carries the team's details (organization, location, contact, welcome) and each
+// set's rehearsal.
 // The caller's own Supabase login is used for every read and write, so row-level security
 // limits it to their own team. Needs RESEND_API_KEY and EMAIL_FROM in Vercel.
 
@@ -34,13 +35,13 @@ function teamInfo(team = {}, inviter) {
     name: team.name || 'the worship team',
     church: d.church_name || '',
     location: d.location || '',
-    rehearsals: d.rehearsals || '',
     welcome: d.welcome || '',
     contact,
     replyTo: d.contact_email || '',
   }
 }
 const teamLine = t => (t.church ? `${t.name} · ${t.church}` : t.name)
+const rehearsalText = set => (set.rehearsal_date ? when(set.rehearsal_date, set.rehearsal_time?.slice(0, 5)) : '')
 
 function setRequestEmail({ member, position, set, link, inviter, team }) {
   const first = (member.name || '').split(/\s+/)[0] || 'there'
@@ -52,15 +53,15 @@ function setRequestEmail({ member, position, set, link, inviter, team }) {
     <p style="margin:0 0 16px;font-size:16px">Hi ${esc(first)},</p>
     <p style="margin:0 0 16px;font-size:16px;line-height:1.5">${esc(inviter)} has asked you to serve as <b>${esc(position.name)}</b> for <b>${esc(set.name)}</b>.</p>
     <table style="margin:0 0 20px;font-size:15px;line-height:1.6">
-      ${row('When', whenText)}${row('Where', where)}${row('Position', position.name)}${row('Rehearsals', team.rehearsals)}${row('Contact', team.contact)}
+      ${row('When', whenText)}${row('Rehearsal', rehearsalText(set))}${row('Where', where)}${row('Position', position.name)}${row('Contact', team.contact)}
     </table>
     <p style="margin:0 0 8px;font-size:15px">Can you make it?</p>
     ${btn(`${link}?r=accepted`, 'Accept', '#16a34a')}${btn(`${link}?r=declined`, 'Decline', '#dc2626')}
     <p style="margin:20px 0 0;font-size:12px;color:#a1a1aa">Sent with StaffList for ${esc(team.name)}. Reply to this email to reach ${esc(inviter)}.</p>`)
   const text = [
     teamLine(team), '', `Hi ${first},`, '', `${inviter} has asked you to serve as ${position.name} for ${set.name}.`,
-    whenText ? `When: ${whenText}` : null, where ? `Where: ${where}` : null,
-    team.rehearsals ? `Rehearsals: ${team.rehearsals}` : null, team.contact ? `Contact: ${team.contact}` : null,
+    whenText ? `When: ${whenText}` : null, rehearsalText(set) ? `Rehearsal: ${rehearsalText(set)}` : null,
+    where ? `Where: ${where}` : null, team.contact ? `Contact: ${team.contact}` : null,
     '', `Accept: ${link}?r=accepted`, `Decline: ${link}?r=declined`,
   ].filter(x => x !== null).join('\n')
   return { subject, html, text }
@@ -72,14 +73,14 @@ function joinEmail({ member, link, inviter, team, requests }) {
   const reqHtml = requests.length ? `
     <p style="margin:0 0 6px;font-size:15px">${esc(inviter)} would also like you to serve:</p>
     <ul style="margin:0 0 20px;padding-left:20px;font-size:15px;line-height:1.6">
-      ${requests.map(r => `<li><b>${esc(r.set.name)}</b>${r.set.service_date ? ` · ${esc(when(r.set.service_date, r.set.service_time?.slice(0, 5)))}` : ''} · ${esc(r.position)}</li>`).join('')}
+      ${requests.map(r => `<li><b>${esc(r.set.name)}</b>${r.set.service_date ? ` · ${esc(when(r.set.service_date, r.set.service_time?.slice(0, 5)))}` : ''} · ${esc(r.position)}${rehearsalText(r.set) ? `<br><span style="color:#71717a">Rehearsal: ${esc(rehearsalText(r.set))}</span>` : ''}</li>`).join('')}
     </ul>` : ''
   const html = page(`
     <p style="margin:0 0 16px;font-size:16px">Hi ${esc(first)},</p>
     <p style="margin:0 0 16px;font-size:16px;line-height:1.5">${esc(inviter)} has invited you to join <b>${esc(team.name)}</b>${team.church ? ` at <b>${esc(team.church)}</b>` : ''} on StaffList.</p>
     ${team.welcome ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.5;padding:12px 14px;background:#f4f4f5;border-radius:8px;white-space:pre-line">${esc(team.welcome)}</p>` : ''}
     <table style="margin:0 0 20px;font-size:15px;line-height:1.6">
-      ${row('Team', team.name)}${row('Church', team.church)}${row('Location', team.location)}${row('Rehearsals', team.rehearsals)}${row('Contact', team.contact)}
+      ${row('Team', team.name)}${row('Organization', team.church)}${row('Location', team.location)}${row('Contact', team.contact)}
     </table>
     ${reqHtml}
     ${btn(`${link}?r=accepted`, 'Join the team', '#0e7490')}${btn(`${link}?r=declined`, 'No thanks', '#71717a')}
@@ -88,9 +89,9 @@ function joinEmail({ member, link, inviter, team, requests }) {
   const text = [
     `Hi ${first},`, '', `${inviter} has invited you to join ${team.name}${team.church ? ` at ${team.church}` : ''} on StaffList.`,
     team.welcome ? `\n${team.welcome}\n` : '',
-    team.church ? `Church: ${team.church}` : null, team.location ? `Location: ${team.location}` : null,
-    team.rehearsals ? `Rehearsals: ${team.rehearsals}` : null, team.contact ? `Contact: ${team.contact}` : null,
-    requests.length ? `\nYou've also been asked to serve:\n${requests.map(r => `- ${r.set.name}${r.set.service_date ? `, ${when(r.set.service_date, r.set.service_time?.slice(0, 5))}` : ''} (${r.position})`).join('\n')}` : null,
+    team.church ? `Organization: ${team.church}` : null, team.location ? `Location: ${team.location}` : null,
+    team.contact ? `Contact: ${team.contact}` : null,
+    requests.length ? `\nYou've also been asked to serve:\n${requests.map(r => `- ${r.set.name}${r.set.service_date ? `, ${when(r.set.service_date, r.set.service_time?.slice(0, 5))}` : ''} (${r.position})${rehearsalText(r.set) ? `, rehearsal ${rehearsalText(r.set)}` : ''}`).join('\n')}` : null,
     '', `Join the team: ${link}?r=accepted`, `No thanks: ${link}?r=declined`,
   ].filter(x => x !== null).join('\n')
   return { subject, html, text }
@@ -137,7 +138,7 @@ export default async function handler(req, res) {
     // Set requests (with join status when the team-invites database update has been run).
     let rows = [], teamsReady = true
     if (ids.length) {
-      const setCols = 'name,service_date,service_time,venue_name,location_address'
+      const setCols = '*'   // includes the rehearsal once that database update has been run
       const full = `id,status,invite_token,set:sets(${setCols}),member:team_members(id,name,email,church_id,join_status,join_token),position:positions(name)`
       let r = await sb(`/rest/v1/set_assignments?id=in.(${ids.join(',')})&select=${encodeURIComponent(full)}`)
       if (r.status === 400) {

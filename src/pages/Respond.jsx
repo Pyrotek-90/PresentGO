@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { Check, X, CalendarDays, MapPin, Music } from 'lucide-react'
+import { Check, X, CalendarDays, MapPin, Music, Clock3 } from 'lucide-react'
 import Logo from '../components/Logo'
 import { supabase } from '../lib/supabase'
 import { formatSetTime } from '../lib/sets'
@@ -60,6 +60,7 @@ export default function Respond() {
               <p className="font-semibold text-base">{invite.set_name}</p>
               {dateText && <p className="flex items-center gap-2 text-muted"><CalendarDays size={14} />{dateText}{invite.service_time ? ` · ${formatSetTime(invite.service_time)}` : ''}</p>}
               {(invite.venue_name || invite.location_address) && <p className="flex items-center gap-2 text-muted"><MapPin size={14} />{[invite.venue_name, invite.location_address].filter(Boolean).join(', ')}</p>}
+              {invite.rehearsal_date && <p className="flex items-center gap-2 text-muted"><Clock3 size={14} />Rehearsal {new Date(invite.rehearsal_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}{invite.rehearsal_time ? ` · ${formatSetTime(invite.rehearsal_time)}` : ''}</p>}
               <p className="flex items-center gap-2"><Music size={14} className="text-accent-light" />{invite.position_name}</p>
             </div>
 

@@ -38,27 +38,39 @@ function zonedToUtc(dateStr, timeStr, tz) {
   }
 }
 
+// DTSTART / DTEND for a date with an optional time (all-day without one).
+function whenLines(date, timeStr, minutes, tz) {
+  if (timeStr) {
+    const time = timeStr.slice(0, 5)
+    const utc = tz ? zonedToUtc(date, time, tz) : null
+    if (utc) return [`DTSTART:${fmtUtc(utc)}`, `DTEND:${fmtUtc(new Date(utc.getTime() + minutes * 60000))}`]
+    const [y, m, d] = date.split('-').map(Number)
+    const [hh, mm] = time.split(':').map(Number)
+    const start = new Date(Date.UTC(y, m - 1, d, hh, mm))
+    return [`DTSTART:${fmtFloating(start)}`, `DTEND:${fmtFloating(new Date(start.getTime() + minutes * 60000))}`]
+  }
+  const [y, m, d] = date.split('-').map(Number)
+  const day = new Date(Date.UTC(y, m - 1, d))
+  return [`DTSTART;VALUE=DATE:${fmtDate(day)}`, `DTEND;VALUE=DATE:${fmtDate(new Date(day.getTime() + 86400000))}`]
+}
+
+// The set's rehearsal, as its own event (90 minutes when it has a time).
+function rehearsalLines(set, baseUrl) {
+  if (!set.rehearsal_date) return []
+  const lines = ['BEGIN:VEVENT', `UID:rehearsal-${set.id}@presentgo`, `DTSTAMP:${fmtUtc(new Date(set.updated_at || Date.now()))}`,
+    ...whenLines(set.rehearsal_date, set.rehearsal_time, 90, set.time_zone), `SUMMARY:${esc(`Rehearsal: ${set.name}`)}`]
+  const where = [set.venue_name, set.location_address].filter(Boolean).join(', ')
+  if (where) lines.push(`LOCATION:${esc(where)}`)
+  if (baseUrl) lines.push(`DESCRIPTION:${esc(`Program: ${baseUrl}/sets/${set.id}`)}`, `URL:${baseUrl}/sets/${set.id}`)
+  if (set.updated_at) lines.push(`LAST-MODIFIED:${fmtUtc(new Date(set.updated_at))}`, `SEQUENCE:${Math.floor(new Date(set.updated_at).getTime() / 1000)}`)
+  lines.push('END:VEVENT')
+  return lines
+}
+
 function eventLines(set, baseUrl) {
   if (!set.service_date) return []
   const lines = ['BEGIN:VEVENT', `UID:set-${set.id}@presentgo`, `DTSTAMP:${fmtUtc(new Date(set.updated_at || Date.now()))}`]
-
-  if (set.service_time) {
-    const time = set.service_time.slice(0, 5)
-    const minutes = Number(set.duration_min) > 0 ? Number(set.duration_min) : 90
-    const utc = set.time_zone ? zonedToUtc(set.service_date, time, set.time_zone) : null
-    if (utc) {
-      lines.push(`DTSTART:${fmtUtc(utc)}`, `DTEND:${fmtUtc(new Date(utc.getTime() + minutes * 60000))}`)
-    } else {
-      const [y, m, d] = set.service_date.split('-').map(Number)
-      const [hh, mm] = time.split(':').map(Number)
-      const start = new Date(Date.UTC(y, m - 1, d, hh, mm))
-      lines.push(`DTSTART:${fmtFloating(start)}`, `DTEND:${fmtFloating(new Date(start.getTime() + minutes * 60000))}`)
-    }
-  } else {
-    const [y, m, d] = set.service_date.split('-').map(Number)
-    const day = new Date(Date.UTC(y, m - 1, d))
-    lines.push(`DTSTART;VALUE=DATE:${fmtDate(day)}`, `DTEND;VALUE=DATE:${fmtDate(new Date(day.getTime() + 86400000))}`)
-  }
+  lines.push(...whenLines(set.service_date, set.service_time, Number(set.duration_min) > 0 ? Number(set.duration_min) : 90, set.time_zone))
 
   lines.push(`SUMMARY:${esc(set.name)}`)
   const where = [set.venue_name, set.location_address].filter(Boolean).join(', ')
@@ -68,7 +80,7 @@ function eventLines(set, baseUrl) {
   if (baseUrl) lines.push(`URL:${baseUrl}/sets/${set.id}`)
   if (set.updated_at) lines.push(`LAST-MODIFIED:${fmtUtc(new Date(set.updated_at))}`, `SEQUENCE:${Math.floor(new Date(set.updated_at).getTime() / 1000)}`)
   lines.push('END:VEVENT')
-  return lines
+  return [...lines, ...rehearsalLines(set, baseUrl)]
 }
 
 // `color` (#rrggbb): suggested calendar color; Apple Calendar uses it when subscribing.

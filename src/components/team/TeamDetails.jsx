@@ -5,11 +5,12 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useChurch } from '../../contexts/ChurchContext'
 import { formatPhone, formatPhoneTyping } from '../../lib/phone'
 
-const FIELDS = ['church_name', 'location', 'rehearsals', 'contact_name', 'contact_email', 'contact_phone', 'welcome']
+// church_name is shown as Organization. (Rehearsals now live on each set.)
+const FIELDS = ['church_name', 'location', 'contact_name', 'contact_email', 'contact_phone', 'welcome']
 const KEY = 'stafflist.teamDetailsOpen'
 
-// Team page: the details every invitation email carries (church, location, rehearsals, contact,
-// a welcome note). Admins also rename the team here.
+// Team page: the details every invitation email carries (organization, location, contact, a
+// welcome note). Admins also rename the team here.
 export default function TeamDetails() {
   const { user } = useAuth()
   const { legacy, church, isAdmin, unitLabel, refresh } = useChurch()
@@ -45,36 +46,33 @@ export default function TeamDetails() {
     if (isAdmin && name.trim() !== saved.name) refresh()
   }
 
-  const summary = [d.church_name, d.location].filter(Boolean).join(' · ') || 'Add your church, location and contact for invitation emails'
+  const summary = [d.church_name, d.location].filter(Boolean).join(' · ') || 'Add your organization, location and contact for invitation emails'
   const label = unitLabel.toLowerCase()
 
   return (
     <section className="rounded-xl border border-border bg-card overflow-hidden">
       <button onClick={toggle} aria-expanded={open} className="w-full flex items-center gap-2 px-3 py-2 text-left">
         <ChevronDown size={16} className={`text-muted transition-transform shrink-0 ${open ? '' : '-rotate-90'}`} />
-        <span className="font-semibold whitespace-nowrap">{unitLabel} details</span>
+        <span className="font-semibold whitespace-nowrap">{unitLabel} Details</span>
         <span className="text-xs text-muted truncate">{summary}</span>
       </button>
       {open && (
         <div className="px-4 pb-4 pt-1 border-t border-border space-y-3">
           <p className="text-xs text-muted flex items-start gap-1.5 pt-2"><Info size={13} className="shrink-0 mt-0.5" /> These details go in every invitation email: the invitation to join the {label}, and each set request.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Organization · Team name · Location, then the contact, then the welcome note */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="label !mb-1">Organization</span>
+              <input className="input !h-10" value={d.church_name} onChange={set('church_name')} placeholder="Grace Community Church" />
+            </label>
             <label className="block">
               <span className="label !mb-1">{unitLabel} name</span>
               <input className="input !h-10" value={name} onChange={e => { setName(e.target.value); setState(null) }} disabled={!isAdmin}
                 placeholder="Grace Worship Team" title={isAdmin ? undefined : 'Only Admins can rename the team'} />
             </label>
             <label className="block">
-              <span className="label !mb-1">Church / ministry</span>
-              <input className="input !h-10" value={d.church_name} onChange={set('church_name')} placeholder="Grace Community Church" />
-            </label>
-            <label className="block sm:col-span-2">
               <span className="label !mb-1">Location</span>
               <input className="input !h-10" value={d.location} onChange={set('location')} placeholder="123 Main St, Schaumburg, IL" />
-            </label>
-            <label className="block sm:col-span-2">
-              <span className="label !mb-1">Rehearsals &amp; call time</span>
-              <input className="input !h-10" value={d.rehearsals} onChange={set('rehearsals')} placeholder="Thursdays 7 pm · Sundays arrive by 8:30 am" />
             </label>
             <label className="block">
               <span className="label !mb-1">Contact name</span>
@@ -86,13 +84,13 @@ export default function TeamDetails() {
                 onChange={e => { setD(x => ({ ...x, contact_phone: formatPhoneTyping(e.target.value) })); setState(null) }}
                 onBlur={() => setD(x => ({ ...x, contact_phone: formatPhone(x.contact_phone || '') }))} />
             </label>
-            <label className="block sm:col-span-2">
-              <span className="label !mb-1">Contact email (replies go here)</span>
-              <input className="input !h-10" type="email" value={d.contact_email} onChange={set('contact_email')} placeholder={user?.email || ''} />
+            <label className="block">
+              <span className="label !mb-1">Contact email</span>
+              <input className="input !h-10" type="email" value={d.contact_email} onChange={set('contact_email')} placeholder={user?.email || ''} title="Replies to invitation emails go here" />
             </label>
-            <label className="block sm:col-span-2">
+            <label className="block sm:col-span-3">
               <span className="label !mb-1">Welcome message</span>
-              <textarea className="input !h-auto py-2 min-h-[4.5rem]" rows={3} value={d.welcome} onChange={set('welcome')} maxLength={1000}
+              <textarea className="input !h-auto py-2 min-h-[3.5rem]" rows={2} value={d.welcome} onChange={set('welcome')} maxLength={1000}
                 placeholder="Glad you're joining us! We prepare with StaffList: your sets, charts and lyrics will be waiting for you." />
             </label>
           </div>

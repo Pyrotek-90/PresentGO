@@ -72,7 +72,6 @@ export default function JoinTeam() {
               <p className="font-semibold text-base flex items-center gap-2"><Users size={16} className="text-accent-light" />{invite.team}</p>
               {d.church_name && <p className="flex items-center gap-2 text-muted"><Church size={14} />{d.church_name}</p>}
               {d.location && <p className="flex items-center gap-2 text-muted"><MapPin size={14} />{d.location}</p>}
-              {d.rehearsals && <p className="flex items-center gap-2 text-muted"><Clock3 size={14} />{d.rehearsals}</p>}
               {contact && <p className="flex items-center gap-2 text-muted"><Phone size={14} />{contact}</p>}
               {d.welcome && <p className="pt-1 whitespace-pre-line">{d.welcome}</p>}
             </div>
@@ -105,6 +104,7 @@ export default function JoinTeam() {
                         <p className="font-semibold">{r.set_name}</p>
                         {r.service_date && <p className="flex items-center gap-2 text-muted"><CalendarDays size={14} />{dateText(r.service_date)}{r.service_time ? ` · ${formatSetTime(r.service_time)}` : ''}</p>}
                         {(r.venue_name || r.location_address) && <p className="flex items-center gap-2 text-muted"><MapPin size={14} />{[r.venue_name, r.location_address].filter(Boolean).join(', ')}</p>}
+                        {r.rehearsal_date && <p className="flex items-center gap-2 text-muted"><Clock3 size={14} />Rehearsal {dateText(r.rehearsal_date)}{r.rehearsal_time ? ` · ${formatSetTime(r.rehearsal_time)}` : ''}</p>}
                         {r.position && <p className="flex items-center gap-2"><Music size={14} className="text-accent-light" />{r.position}</p>}
                         {done && <p className={`text-xs font-medium ${r.status === 'accepted' ? 'text-green-400' : 'text-red-400'}`}>{r.status === 'accepted' ? "You're in. Thank you!" : 'You declined this one.'}</p>}
                         <div className="grid grid-cols-2 gap-2">
