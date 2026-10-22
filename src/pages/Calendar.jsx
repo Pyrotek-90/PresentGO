@@ -112,7 +112,13 @@ export default function Calendar() {
     const link = `${window.location.origin}/respond/${a.invite_token}`
     const when = set?.service_date ? new Date(set.service_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''
     const subject = `Can you serve as ${p?.name || 'part of the team'}${when ? ` on ${when}` : ''}?`
-    const body = `Hi ${m.name.split(' ')[0]},\n\nCan you serve as ${p?.name} for ${set?.name}${when ? ` on ${when}${set?.service_time ? ` at ${formatSetTime(set.service_time)}` : ''}` : ''}?\n\nPlease tap to answer:\n${link}\n\nThank you!`
+    const longDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    const lines = [
+      ['Set', set?.name], ['Date', when], ['Time', set?.service_time && formatSetTime(set.service_time)],
+      ['Rehearsal', set?.rehearsal_date && `${longDate(set.rehearsal_date)}${set.rehearsal_time ? ` at ${formatSetTime(set.rehearsal_time)}` : ''}`],
+      ['Venue', [set?.venue_name, set?.location_address, set?.location_details].filter(Boolean).join(', ')], ['Position', p?.name],
+    ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
+    const body = `Hi ${m.name.split(' ')[0]},\n\nCan you serve as ${p?.name} for ${set?.name}?\n\n${lines}\n\nPlease tap to answer:\n${link}\n\nThank you!`
     window.location.href = `mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     await markInvited([a.id])
     const left = ids.length - 1
@@ -144,7 +150,7 @@ export default function Calendar() {
   }
 
   useEffect(() => {
-    scope.sets(supabase.from('sets').select('id, name, service_date, service_time, venue_name, location_address'))
+    scope.sets(supabase.from('sets').select('*'))   // all columns: the rehearsal is there once its update has been run
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
     if (!legacy) loadServingSets().then(setServing)

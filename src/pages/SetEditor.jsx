@@ -18,7 +18,7 @@ import { formatLyrics } from '../lib/lyricFormatter'
 import { arrangedSlides } from '../lib/arrangement'
 import { stripRepeat } from '../lib/repeat'
 import {
-  Plus, MonitorPlay, Music, Star, Megaphone, Square,
+  Plus, X, MonitorPlay, Music, Star, Megaphone, Square,
   GripVertical, Trash2, ArrowLeft, Layers, FolderOpen, Pencil, CalendarPlus, MapPin, BookOpen, Repeat, ChevronDown, NotebookPen, Mic,
 } from 'lucide-react'
 
@@ -249,7 +249,7 @@ export default function SetEditor() {
   }
 
   const DURATIONS = [30, 45, 60, 75, 90, 105, 120, 150, 180, 240]
-  // Rehearsal (needs the set-rehearsal database update; hidden until it's been run).
+  // Rehearsal: saved once the set-rehearsal database update has been run (sets then have the column).
   const hasRehearsal = !set || 'rehearsal_date' in set
   const dayMs = 86400000
   const isoDay = s => Date.UTC(...s.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))
@@ -271,6 +271,7 @@ export default function SetEditor() {
       room: s?.location_details || '',
       rehearsalDate: s?.rehearsal_date || '',
       rehearsalTime: s?.rehearsal_time ? s.rehearsal_time.slice(0, 5) : '',
+      showRehearsal: !!s?.rehearsal_date,   // hidden behind "Add rehearsal time" until there is one
       freq: s?.recurrence?.freq || '',
       endMode: s?.recurrence?.until ? 'until' : 'count',
       count: s?.recurrence?.count || DEFAULT_COUNT,
@@ -343,6 +344,10 @@ export default function SetEditor() {
     const rule = ruleFrom(details)
     if (rule && !details.date) { setDetailsError('Pick a date to repeat from.'); return }
     if (rule?.until && rule.until <= details.date) { setDetailsError('The end date must be after the set date.'); return }
+    if (details.rehearsalDate && !hasRehearsal) {
+      setDetailsError('Rehearsal times need a one-time database update: run StaffList-Rehearsal-Setup.sql in Supabase → SQL Editor, reload, then save again.')
+      return
+    }
     setDetailsSaving(true); setDetailsError(null)
     const shared = sharedFields(details)
     const patch = { ...shared, service_date: details.date || null, ...(hasRehearsal ? { rehearsal_date: details.rehearsalDate || null } : {}) }
@@ -618,21 +623,27 @@ export default function SetEditor() {
                   {(DURATIONS.includes(Number(details.duration)) ? DURATIONS : [...DURATIONS, Number(details.duration)].sort((a, b) => a - b)).map(m => <option key={m} value={m}>{durationLabel(m)}</option>)}
                 </select>
               </div>
-              {hasRehearsal && <>
+              {!details.showRehearsal ? (
+                <div className="col-span-2 sm:col-span-4">
+                  <button type="button" onClick={() => setDetails(d => ({ ...d, showRehearsal: true }))}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-dashed border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10">
+                    <Plus size={14} /> Add rehearsal time
+                  </button>
+                </div>
+              ) : <>
                 <div className="col-span-1 sm:col-span-2">
                   <label className="label !mb-1" htmlFor="rehearsal-date">Rehearsal date</label>
-                  <input id="rehearsal-date" type="date" className="input" value={details.rehearsalDate} max={details.date || undefined}
+                  <input id="rehearsal-date" type="date" className="input" value={details.rehearsalDate} max={details.date || undefined} autoFocus={!details.rehearsalDate}
                     onChange={e => setDetails(d => ({ ...d, rehearsalDate: e.target.value }))} />
                 </div>
                 <div>
                   <label className="label !mb-1" htmlFor="rehearsal-time">Rehearsal time</label>
-                  <input id="rehearsal-time" type="time" className="input" value={details.rehearsalTime} disabled={!details.rehearsalDate}
+                  <input id="rehearsal-time" type="time" className="input" value={details.rehearsalTime}
                     onChange={e => setDetails(d => ({ ...d, rehearsalTime: e.target.value }))} />
                 </div>
                 <div className="flex items-end">
-                  {details.rehearsalDate
-                    ? <button type="button" onClick={() => setDetails(d => ({ ...d, rehearsalDate: '', rehearsalTime: '' }))} className="btn-ghost text-xs !px-2 h-10">No rehearsal</button>
-                    : <p className="text-[11px] text-muted pb-2.5 leading-tight">Optional. Shown in invites and calendars.</p>}
+                  <button type="button" onClick={() => setDetails(d => ({ ...d, rehearsalDate: '', rehearsalTime: '', showRehearsal: false }))}
+                    className="btn-ghost text-xs !px-2 h-10 flex items-center gap-1"><X size={13} /> Remove</button>
                 </div>
               </>}
               <div className="col-span-2">
