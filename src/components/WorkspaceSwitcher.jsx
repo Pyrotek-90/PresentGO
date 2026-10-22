@@ -23,12 +23,13 @@ export default function WorkspaceSwitcher() {
   const options = churches.flatMap(c => {
     const leads = (c.workspaces || []).filter(w => w.lead)
     return c.editor && leads.length
-      ? leads.map(w => ({ key: w.id, churchId: c.id, workspaceId: w.id, church: c.name, label: w.name }))
+      ? leads.map(w => ({ key: w.id, churchId: c.id, workspaceId: w.id, church: c.name, label: c.plan === 'ultimate' ? w.name : c.name }))
       : [{ key: c.id, churchId: c.id, workspaceId: null, church: c.name, label: c.name }]
   })
-  const label = workspace?.name || church.name
+  // Free / Pro: the team's name. Ultimate: the workspace (Main Service, Youth…).
+  const label = (church.plan === 'ultimate' && workspace?.name) || church.name
   const current = workspace?.id || church.id
-  const manyChurches = churches.length > 1
+  const manyChurches = churches.some(c => c.plan === 'ultimate') && churches.length > 1
 
   if (options.length < 2) {
     return <span className="text-xs text-muted truncate max-w-[9rem] sm:max-w-[14rem] px-2" title={church.name}>{label}</span>
@@ -36,7 +37,7 @@ export default function WorkspaceSwitcher() {
 
   return (
     <div className="relative min-w-0" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu" title="Switch workspace"
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="menu" title="Switch team"
         className="flex items-center gap-1 h-8 px-2.5 rounded-lg border border-border text-xs font-medium text-primary hover:bg-card max-w-[10rem] sm:max-w-[16rem]">
         <span className="truncate">{label}</span>
         <ChevronDown size={13} className={`shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />

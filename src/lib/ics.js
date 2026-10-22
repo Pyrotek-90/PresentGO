@@ -71,10 +71,12 @@ function eventLines(set, baseUrl) {
   return lines
 }
 
-export function buildIcs(sets, { baseUrl = '', calendarName = 'StaffList' } = {}) {
+// `color` (#rrggbb): suggested calendar color; Apple Calendar uses it when subscribing.
+export function buildIcs(sets, { baseUrl = '', calendarName = 'StaffList', color = null } = {}) {
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//StaffList//Sets//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     `X-WR-CALNAME:${esc(calendarName)}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
+    ...(color && /^#[0-9a-f]{6}$/i.test(color) ? [`X-APPLE-CALENDAR-COLOR:${color.toUpperCase()}`] : []),
     ...sets.flatMap(s => eventLines(s, baseUrl)),
     'END:VCALENDAR',
   ]

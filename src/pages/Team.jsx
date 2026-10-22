@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, CheckCircle2, XCircle, MessageSquare } from 'lucide-react'
+import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, CheckCircle2, XCircle, MessageSquare, Clock, Send } from 'lucide-react'
 import { loadAccountStatus } from '../lib/notifications'
 import MessageTeamDialog from '../components/team/MessageTeamDialog'
+import TeamDetails from '../components/team/TeamDetails'
+import { postInvites, mailJoinInvite, inviteSummary } from '../lib/invites'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
@@ -13,11 +15,23 @@ import { parseVCards, saveVCard, canPickContacts, pickContact } from '../lib/vca
 // Name · positions · email · phone · account — one column each so gaps are easy to spot.
 // Phone: stacked. Tablet and up: one column each (name, positions, email, phone, status).
 const ROW_COLS = 'md:grid-cols-[minmax(6.5rem,1fr)_minmax(5.5rem,1fr)_minmax(8rem,1.6fr)_8.5rem_4rem_1rem] lg:grid-cols-[minmax(7rem,10rem)_minmax(6rem,1fr)_minmax(9rem,14rem)_9.5rem_5rem_1rem]'
-const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [] }
+const EMPTY = { id: null, name: '', email: '', phone: '', position_ids: [], invite: true }
+
+// Has this person joined the team? (needs the team-invites database update)
+const JOIN = {
+  accepted:    { label: 'Joined',      cls: 'text-green-400', Icon: CheckCircle2, tip: 'Joined the team. They get set requests and see their sets in StaffList.' },
+  invited:     { label: 'Invited',     cls: 'text-amber-300', Icon: Clock,        tip: 'Invitation to join sent; waiting for their answer.' },
+  declined:    { label: 'Declined',    cls: 'text-red-400',   Icon: XCircle,      tip: 'Declined the invitation to join.' },
+  not_invited: { label: 'Not invited', cls: 'text-[#6f6f6f]', Icon: null,         tip: 'Not invited to join yet. Open them to send the invitation.' },
+}
+const joinOf = m => JOIN[m.join_status] ? m.join_status : 'not_invited'
 
 export default function Team() {
   const { user } = useAuth()
-  const { scope } = useChurch()
+  const { scope, legacy, church, unitLabel } = useChurch()
+  const teamName = church?.name || 'the team'
+  const [inviteNote, setInviteNote] = useState(null)   // { ok, text }
+  const [inviting, setInviting] = useState(false)
   const [members, setMembers] = useState([])
   const [positions, setPositions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -65,6 +79,38 @@ export default function Team() {
     }).catch(() => setLoadError('Could not load team data.')).finally(() => setLoading(false))
   }, [user.id, scope.churchId])   // eslint-disable-line react-hooks/exhaustive-deps
 
+  const joinMode = !legacy && members.some(m => 'join_status' in m)
+
+  // Invitation to join the team (email; or the mail app until automatic email is set up).
+  // `fresh`: rows just saved, which aren't in `members` yet
+  const sendTeamInvites = async (ids, fresh = []) => {
+    const pool = [...fresh, ...members.filter(m => !fresh.some(f => f.id === m.id))]
+    const list = pool.filter(m => ids.includes(m.id) && m.email)
+    if (!list.length) return
+    setInviting(true); setInviteNote(null)
+    try {
+      const { status, ok, out } = await postInvites({ members: list.map(m => m.id) })
+      const now = new Date().toISOString()
+      const mark = idList => setMembers(prev => prev.map(m => (idList.includes(m.id) && m.join_status !== 'accepted' ? { ...m, join_status: 'invited', join_invited_at: now } : m)))
+      if (status === 501) {
+        const m = list[0]
+        if (!m.join_token) { setInviteNote({ ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+        mailJoinInvite(m, teamName)
+        await supabase.from('team_members').update({ join_status: 'invited', join_invited_at: now }).eq('id', m.id).neq('join_status', 'accepted')
+        mark([m.id])
+        setInviteNote({ ok: true, text: `Opened an invitation to ${m.name} in your mail app.${list.length > 1 ? ` Tap again for the next person (${list.length - 1} left).` : ''}` })
+        return
+      }
+      if (status === 409) { setInviteNote({ ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+      if (!ok) { setInviteNote({ ok: false, text: 'Could not send the invitations. Please try again.' }); return }
+      mark(out.teamInvites || [])
+      setInviteNote({ ok: !out.failed?.length, text: inviteSummary(out) })
+    } catch {
+      setInviteNote({ ok: false, text: 'Could not send the invitations. Check your connection and try again.' })
+    } finally { setInviting(false) }
+  }
+  const toInvite = joinMode ? members.filter(m => m.email && joinOf(m) === 'not_invited') : []
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase()
     return members
@@ -103,7 +149,9 @@ export default function Team() {
     setSaving(false)
     if (error) { setError('Could not save. Make sure the latest Supabase migration has been run.'); return }
     setMembers(prev => form.id ? prev.map(m => m.id === data.id ? data : m) : [...prev, data])
+    const invite = !legacy && form.invite && data.email && data.join_status && !['accepted', 'invited'].includes(data.join_status)
     setForm(null)
+    if (invite) sendTeamInvites([data.id], [data])
   }
 
   // Fills the form from a phone contact: the contact picker where the browser has one
@@ -139,6 +187,7 @@ export default function Team() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-3">
+        <TeamDetails />
         <section className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border">
             <div className="flex items-baseline gap-2">
@@ -146,6 +195,13 @@ export default function Team() {
               <span className="text-xs text-muted">{members.length}</span>
             </div>
             <div className="flex items-center gap-2">
+              {toInvite.length > 0 && (
+                <button onClick={() => sendTeamInvites(toInvite.map(m => m.id))} disabled={inviting}
+                  title={`Email an invitation to join ${teamName} to everyone not invited yet`}
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40">
+                  <Send size={14} /> {inviting ? 'Sending…' : <>Invite <span className="hidden sm:inline">to join</span> ({toInvite.length})</>}
+                </button>
+              )}
               <button onClick={() => setMessaging(true)} disabled={!members.length}
                 aria-label="Message Team" className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40">
                 <MessageSquare size={14} /> <span className="sm:hidden">Message</span><span className="hidden sm:inline">Message Team</span>
@@ -157,6 +213,7 @@ export default function Team() {
           </div>
 
           {loadError && <p className="px-3 py-2 text-red-400 text-xs">{loadError}</p>}
+          {inviteNote && <p className={`px-3 py-2 text-xs border-b border-border ${inviteNote.ok ? 'text-green-400' : 'text-amber-300'}`}>{inviteNote.text}</p>}
 
           {form && (
             <div ref={formRef} className="px-4 py-4 border-b border-border space-y-4 bg-[#161616] scroll-mt-4">
@@ -246,6 +303,23 @@ export default function Team() {
                 )}
               </div>
 
+              {!legacy && form.email.trim() && (() => {
+                const cur = form.id ? members.find(m => m.id === form.id) : null
+                const st = cur ? joinOf(cur) : 'not_invited'
+                const first = form.name.trim().split(/\s+/)[0] || 'them'
+                if (st === 'accepted') return <p className="text-xs text-green-400 flex items-center gap-1.5"><CheckCircle2 size={14} /> {first} has joined {teamName}.</p>
+                if (st === 'invited' && cur) return (
+                  <p className="text-xs text-amber-300 flex flex-wrap items-center gap-1.5"><Clock size={14} /> Invitation to join sent{cur.join_invited_at ? ` ${new Date(cur.join_invited_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}; waiting for {first}.
+                    <button type="button" onClick={() => sendTeamInvites([cur.id])} disabled={inviting} className="text-accent-light underline disabled:opacity-40">Send again</button></p>
+                )
+                return (
+                  <label className="flex items-start gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" className="mt-0.5 accent-[#1a8aa8]" checked={form.invite} onChange={e => setForm(f => ({ ...f, invite: e.target.checked }))} />
+                    <span>Email {first} an invitation to join <b>{teamName}</b>{st === 'declined' ? ' again' : ''}
+                      <span className="block text-xs text-muted">The invitation carries your {unitLabel.toLowerCase()} details. Once they join, they get set requests and see their sets, charts and lyrics.</span></span>
+                  </label>
+                )
+              })()}
               {error && <p className="text-red-400 text-xs">{error}</p>}
               <div className="flex items-center gap-2 pt-1">
                 <button onClick={save} disabled={saving || !form.name.trim()} className="btn-primary !py-2 !px-5 text-sm whitespace-nowrap">{saving ? 'Saving…' : form.id ? 'Update' : 'Save'}</button>
@@ -284,7 +358,7 @@ export default function Team() {
             ) : (
               <ul>
                 <li className={`hidden md:grid ${ROW_COLS} gap-x-3 px-2 pb-1 text-[10px] uppercase tracking-wide text-muted border-b border-border/60`} aria-hidden="true">
-                  <span>Name</span><span>Positions</span><span>Email</span><span>Phone</span><span className="text-center">StaffList</span><span />
+                  <span>Name</span><span>Positions</span><span>Email</span><span>Phone</span><span className="text-center">{joinMode ? 'Joined' : 'StaffList'}</span><span />
                 </li>
                 {filtered.map(m => {
                   const mine = positions.filter(p => m.position_ids?.includes(p.id))
@@ -292,12 +366,13 @@ export default function Team() {
                     <SwipeToDelete key={m.id} open={swipedId === m.id} onOpenChange={o => setSwipedId(o ? m.id : null)}
                       onDelete={() => removeNow(m)} label={`Delete ${m.name}`}
                       className="hover:bg-[#1a1a1a] group">
-                      <button type="button" onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: formatPhone(m.phone) || '', position_ids: m.position_ids || [] }); setError(null); setDeleting(null) }}
+                      <button type="button" onClick={() => { setForm({ id: m.id, name: m.name, email: m.email || '', phone: formatPhone(m.phone) || '', position_ids: m.position_ids || [], invite: joinOf(m) === 'not_invited' || joinOf(m) === 'declined' }); setError(null); setDeleting(null) }}
                         className={`w-full grid items-center gap-x-3 gap-y-1 px-2 py-2 text-left grid-cols-[1fr_1rem] ${ROW_COLS}`} aria-label={`Edit ${m.name}`}>
                         <span className="col-start-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 md:contents">
                           <span className="text-sm font-medium truncate max-w-full">{m.name}</span>
                           {/* Phone: the status icon sits right after the name */}
-                          {m.email && accounts && (accounts[m.id]
+                          {joinMode && (() => { const j = JOIN[joinOf(m)]; return j.Icon && <j.Icon size={16} className={`md:hidden shrink-0 ${j.cls}`} aria-label={j.label} /> })()}
+                          {!joinMode && m.email && accounts && (accounts[m.id]
                             ? <CheckCircle2 size={16} className="md:hidden shrink-0 text-green-400" aria-label="Has a StaffList account" />
                             : <XCircle size={16} className="md:hidden shrink-0 text-[#5f5f5f]" aria-label="No StaffList account yet" />)}
                           <span className="flex flex-wrap gap-0.5">
@@ -312,7 +387,15 @@ export default function Team() {
                             ? <span className="flex items-center gap-1 text-muted whitespace-nowrap"><Phone size={11} className="shrink-0" />{formatPhone(m.phone)}</span>
                             : <span className="text-amber-300/80">No phone</span>}
                           {/* Tablet and up: its own column */}
-                          {!m.email ? <span className="hidden md:block text-center text-[#5f5f5f]" title="Add an email to match a StaffList account">—</span>
+                          {joinMode ? (() => {
+                            const j = JOIN[joinOf(m)]
+                            return !m.email && joinOf(m) !== 'accepted'
+                              ? <span className="hidden md:block text-center text-[#5f5f5f]" title="Add an email to invite them to the team">—</span>
+                              : <span className={`hidden md:flex items-center justify-center ${j.cls}`} title={`${j.tip}${accounts?.[m.id] ? ' Has a StaffList account.' : ''}`} aria-label={j.label}>
+                                  {j.Icon ? <j.Icon size={18} /> : <span className="text-[10px] leading-tight text-center">Not invited</span>}
+                                </span>
+                          })()
+                          : !m.email ? <span className="hidden md:block text-center text-[#5f5f5f]" title="Add an email to match a StaffList account">—</span>
                             : !accounts ? <span className="hidden md:block" />
                             : accounts[m.id]
                               ? <span className="hidden md:flex items-center justify-center text-green-400" title="Has a StaffList account. Serving requests appear in their app." aria-label="Has a StaffList account"><CheckCircle2 size={18} /></span>

@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
 import Layout from '../components/Layout'
 import SchedulePane from '../components/calendar/SchedulePane'
 import { sortPositions, ensureStandardPositions } from '../lib/positions'
-import { todayISO, formatSetTime } from '../lib/sets'
+import { todayISO, formatSetTime, formatSetWhen } from '../lib/sets'
+import { loadServingSets, mergeServing, setHref } from '../lib/serving'
+import { postInvites, mailJoinInvite, inviteSummary } from '../lib/invites'
+import { chipStyle, dotStyle } from '../lib/teamColors'
+import TeamColorKey from '../components/TeamColorKey'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const CAL_COLLAPSE_KEY = 'presentgo.calendarCollapsed'
@@ -28,8 +33,9 @@ function usePaneCount(ref) {
 
 export default function Calendar() {
   const { user } = useAuth()
-  const { scope } = useChurch()
+  const { scope, legacy, isEditor, canEditSet, teamColor, churches, church } = useChurch()
   const [sets, setSets] = useState([])
+  const [serving, setServing] = useState([])   // sets I serve on in teams I've joined (and requests)
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const [selected, setSelected] = useState(todayISO())
   const [schedId, setSchedId] = useState(null)   // set shown in the Team Schedule pane
@@ -46,6 +52,7 @@ export default function Calendar() {
   const [teamError, setTeamError] = useState(null)
 
   useEffect(() => {
+    if (!isEditor) { setTeamLoading(false); return }   // musicians and singers don't schedule
     Promise.all([
       scope.church(supabase.from('positions').select('*')).order('created_at'),
       scope.church(supabase.from('team_members').select('*')).order('name'),
@@ -56,7 +63,7 @@ export default function Calendar() {
       const list = p.error ? [] : await ensureStandardPositions(supabase, user, p.data || [], scope)
       setPositions(sortPositions(list))
     }).catch(() => setTeamError('Could not load team data.')).finally(() => setTeamLoading(false))
-  }, [user.id, scope.churchId, scope.workspaceId])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user.id, scope.churchId, scope.workspaceId, isEditor])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const addAssignment = async (setId, positionId, memberId) => {
     const { data, error } = await supabase.from('set_assignments')
@@ -92,6 +99,16 @@ export default function Calendar() {
     const m = members.find(x => x.id === a?.member_id), p = positions.find(x => x.id === a?.position_id)
     const set = sets.find(x => x.id === a?.set_id)
     if (!a?.invite_token || !m?.email) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+    if (m.join_token && m.join_status && m.join_status !== 'accepted') {
+      // They haven't joined the team yet: the first email is the invitation to join.
+      mailJoinInvite(m, church?.name || 'the team')
+      const now = new Date().toISOString()
+      await supabase.from('team_members').update({ join_status: 'invited', join_invited_at: now }).eq('id', m.id).neq('join_status', 'accepted')
+      setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, join_status: 'invited', join_invited_at: now } : x)))
+      await markInvited([a.id])
+      setSendResult({ setId: sendSetId, ok: true, text: `${m.name} hasn't joined the team yet, so this opened an invitation to join in your mail app. They can answer the set request after joining.` })
+      return
+    }
     const link = `${window.location.origin}/respond/${a.invite_token}`
     const when = set?.service_date ? new Date(set.service_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''
     const subject = `Can you serve as ${p?.name || 'part of the team'}${when ? ` on ${when}` : ''}?`
@@ -107,21 +124,15 @@ export default function Calendar() {
     const sendSetId = assignments.find(a => a.id === ids[0])?.set_id
     setSending(true); setSendResult(null)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const r = await fetch('/api/send-invites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ ids }),
-      })
-      const out = await r.json().catch(() => ({}))
-      if (r.status === 501) { await mailAppFallback(ids); return }
-      if (r.status === 409) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
-      if (!r.ok) { setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Please try again.' }); return }
+      const { status, ok, out } = await postInvites({ ids })
+      if (status === 501) { await mailAppFallback(ids); return }
+      if (status === 409) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
+      if (!ok) { setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Please try again.' }); return }
       const now = new Date().toISOString()
-      setAssignments(prev => prev.map(a => (out.sent.includes(a.id) && (a.status || 'draft') !== 'accepted' ? { ...a, status: 'invited', invited_at: now } : a)))
-      const parts = [`Sent ${out.sent.length} invite${out.sent.length === 1 ? '' : 's'}.`]
-      if (out.failed?.length) parts.push(`${out.failed.length} couldn't be sent.`)
-      setSendResult({ setId: sendSetId, ok: !out.failed?.length, text: parts.join(' ') })
+      const asked = [...(out.sent || []), ...(out.held || [])]
+      setAssignments(prev => prev.map(a => (asked.includes(a.id) && (a.status || 'draft') !== 'accepted' ? { ...a, status: 'invited', invited_at: now } : a)))
+      if (out.teamInvites?.length) setMembers(prev => prev.map(m => (out.teamInvites.includes(m.id) && m.join_status !== 'accepted' ? { ...m, join_status: 'invited', join_invited_at: now } : m)))
+      setSendResult({ setId: sendSetId, ok: !out.failed?.length, text: inviteSummary(out) })
     } catch {
       setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Check your connection and try again.' })
     } finally { setSending(false) }
@@ -136,14 +147,23 @@ export default function Calendar() {
     scope.sets(supabase.from('sets').select('id, name, service_date, service_time, venue_name, location_address'))
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
-  }, [user.id, scope.churchId, scope.workspaceId])   // eslint-disable-line react-hooks/exhaustive-deps
+    if (!legacy) loadServingSets().then(setServing)
+  }, [user.id, scope.churchId, scope.workspaceId, legacy])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The calendar shows my sets and, in their team's color, the sets I serve on.
+  const calSets = useMemo(() => (legacy ? sets : mergeServing(sets, serving, canEditSet)), [legacy, sets, serving, canEditSet])
+  // Sets I schedule (Admins / Leaders): the ones the Team Schedule panes manage.
+  const ownSets = useMemo(() => (isEditor ? calSets.filter(s => !s.serving) : []), [isEditor, calSets])
+  const servingUpcoming = useMemo(() => calSets.filter(s => s.serving && (!s.service_date || s.service_date >= todayISO()))
+    .sort((a, b) => (a.service_date || '9999').localeCompare(b.service_date || '9999') || (a.service_time || '').localeCompare(b.service_time || '')), [calSets])
+  const servingTeams = useMemo(() => [...new Set(calSets.filter(s => s.serving).map(s => s.serving.churchId))], [calSets])
 
   const setsByDate = useMemo(() => {
     const m = {}
-    for (const s of sets) if (s.service_date) (m[s.service_date] ||= []).push(s)
+    for (const s of calSets) if (s.service_date) (m[s.service_date] ||= []).push(s)
     for (const k in m) m[k].sort((a, b) => (a.service_time || '').localeCompare(b.service_time || ''))
     return m
-  }, [sets])
+  }, [calSets])
 
   const days = useMemo(() => {
     const first = cursor.getDay()
@@ -159,8 +179,8 @@ export default function Calendar() {
   const goToday = () => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); setSelected(todayISO()) }
 
   // Sets in date order for the Team Schedule pane; it starts on the next upcoming set.
-  const dated = useMemo(() => sets.filter(s => s.service_date)
-    .sort((a, b) => a.service_date.localeCompare(b.service_date) || (a.service_time || '').localeCompare(b.service_time || '')), [sets])
+  const dated = useMemo(() => ownSets.filter(s => s.service_date)
+    .sort((a, b) => a.service_date.localeCompare(b.service_date) || (a.service_time || '').localeCompare(b.service_time || '')), [ownSets])
   const schedIndex = useMemo(() => {
     const i = dated.findIndex(s => s.id === schedId)
     if (i >= 0) return i
@@ -184,7 +204,7 @@ export default function Calendar() {
 
   const pickDay = iso => {
     setSelected(iso)
-    const first = (setsByDate[iso] || [])[0]
+    const first = (setsByDate[iso] || []).find(s => !s.serving)
     if (first) { setSchedId(first.id); setSendResult(null) }
   }
 
@@ -218,14 +238,19 @@ export default function Calendar() {
                     } ${inMonth ? '' : 'opacity-35'}`}>
                     <span className={`text-xs w-5 h-5 flex items-center justify-center rounded-full ${iso === today ? 'bg-accent text-white font-semibold' : 'text-muted'}`}>{day}</span>
                     <div className="hidden sm:flex flex-col gap-0.5 min-w-0">
-                      {daySets.slice(0, 2).map(s => (
+                      {daySets.slice(0, 2).map(s => (s.serving ? (
+                        <span key={s.id} className={`truncate text-[10px] px-1 py-0.5 rounded ${s.serving.status === 'invited' ? 'border border-dashed border-current' : ''}`}
+                          style={chipStyle(teamColor(s.serving.churchId))} title={s.serving.status === 'invited' ? 'Waiting for your answer' : undefined}>{s.name}</span>
+                      ) : (
                         <span key={s.id} className="truncate text-[10px] px-1 py-0.5 rounded bg-accent/25 text-accent-light">{s.name}</span>
-                      ))}
+                      )))}
                       {daySets.length > 2 && <span className="text-[10px] text-muted px-1">+{daySets.length - 2} more</span>}
                     </div>
                     {daySets.length > 0 && (
                       <div className="sm:hidden flex gap-0.5 px-0.5">
-                        {daySets.slice(0, 3).map(s => <span key={s.id} className="w-1.5 h-1.5 rounded-full bg-accent-light" />)}
+                        {daySets.slice(0, 3).map(s => (s.serving
+                          ? <span key={s.id} className="w-1.5 h-1.5 rounded-full" style={dotStyle(teamColor(s.serving.churchId))} />
+                          : <span key={s.id} className="w-1.5 h-1.5 rounded-full bg-accent-light" />))}
                       </div>
                     )}
                   </button>
@@ -233,10 +258,42 @@ export default function Calendar() {
               })}
             </div>
             </>}
+            {!calCollapsed && servingTeams.length > 0 && <TeamColorKey ids={[...new Set([...(isEditor && church ? [church.id] : []), ...servingTeams])]} label="Tap a color to change it" className="px-3 py-2 border-t border-border" />}
           </section>
 
+        {servingUpcoming.length > 0 && (
+          <section className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-3 py-2 border-b border-border flex items-baseline gap-2">
+              <h2 className="font-semibold">{isEditor ? 'Sets you serve on' : 'My upcoming sets'}</h2>
+              <span className="text-xs text-muted">{servingUpcoming.length}</span>
+            </div>
+            <ul className="p-1.5">
+              {servingUpcoming.map(s => {
+                const color = teamColor(s.serving.churchId)
+                const team = churches.find(c => c.id === s.serving.churchId)?.name
+                return (
+                  <li key={s.id}>
+                    <Link to={setHref(s)} className="flex items-center gap-3 px-2.5 py-2 rounded-lg hover:bg-[#1a1a1a]">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={dotStyle(color)} aria-hidden="true" />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium truncate" style={{ color }}>{s.name}</span>
+                        <span className="block text-xs text-muted truncate">{[team, s.serving.positions.join(', ')].filter(Boolean).join(' · ')}</span>
+                      </span>
+                      {s.serving.status === 'invited' && <span className="shrink-0 px-1.5 rounded border border-amber-500/40 text-[10px] text-amber-300 leading-4">Reply</span>}
+                      <span className="text-xs text-muted shrink-0">{formatSetWhen(s)}</span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
+        {!isEditor && servingUpcoming.length === 0 && (
+          <p className="text-sm text-muted text-center py-6 flex items-center justify-center gap-2"><CalendarDays size={15} /> No upcoming sets yet. Requests to serve show up here and in your bell.</p>
+        )}
+
         {/* Who's Serving: the selected set first, then the sets that follow when there's room */}
-        <div ref={panesRef} className="grid gap-4 items-start" style={{ gridTemplateColumns: `repeat(${Math.min(paneCount, Math.max(dated.length, 1))}, minmax(0, 1fr))` }}>
+        <div ref={panesRef} className={`grid gap-4 items-start ${isEditor ? '' : 'hidden'}`} style={{ gridTemplateColumns: `repeat(${Math.min(paneCount, Math.max(dated.length, 1))}, minmax(0, 1fr))` }}>
           {paneWindow.map(i => {
             const s = dated[i]
             return (

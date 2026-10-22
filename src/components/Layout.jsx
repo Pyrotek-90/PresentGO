@@ -18,8 +18,8 @@ const allNavItems = [
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
   const { isEditor } = useChurch()
-  // Musicians and singers (Members) only need Home: their sets, songs and charts.
-  const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/')
+  // Musicians and singers (Members) need Home (their sets, songs and charts) and their Schedule.
+  const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/' || i.to === '/schedule')
   const tools = isEditor ? [
     { to: '/get-started', label: 'Import Songs', icon: Upload },
     { to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart },

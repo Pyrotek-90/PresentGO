@@ -31,7 +31,7 @@ export function formatModified(ts) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export const songCount = set => (set.set_items || []).filter(i => i.type === 'song').length
+export const songCount = set => (set.set_items ? set.set_items.filter(i => i.type === 'song').length : set.song_count || 0)
 
 export function formatSetTime(t) {
   if (!t) return ''

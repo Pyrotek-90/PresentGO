@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { makeScope } from '../lib/scope'
+import { teamColorMap, LEAD_COLOR } from '../lib/teamColors'
 import { isOfflineEnabled } from '../lib/offline'
 import { downloadForOffline } from '../lib/offlineSync'
 
@@ -60,8 +61,19 @@ export function ChurchProvider({ children }) {
     const isEditor = legacy || !!church?.editor
     const canLead = legacy || !!workspace?.lead
     const scope = makeScope({ userId: user?.id, church, workspace, legacy, canLead })
+    const colors = teamColorMap(churches)
     return {
       loading, legacy, churches, church, workspace, isAdmin, isEditor, canLead, scope,
+      // Free / Pro: one "Team". Ultimate: a "Church" with several workspaces.
+      unitLabel: church?.plan === 'ultimate' ? 'Church' : 'Team',
+      // this person's color for each team's sets
+      colors,
+      teamColor: churchId => colors[churchId] || LEAD_COLOR,
+      setTeamColor: async (churchId, color) => {
+        setState(st => ({ ...st, churches: st.churches.map(c => (c.id === churchId ? { ...c, color } : c)) }))
+        const { error } = await supabase.rpc('set_my_team_color', { p_church: churchId, p_color: color })
+        if (error) load()
+      },
       // can this person change a set (by its church / workspace)?
       canEditSet: set => legacy || !set || (set.church_id
         ? (churches.find(c => c.id === set.church_id)?.role === 'admin'

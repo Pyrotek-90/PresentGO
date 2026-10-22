@@ -11,10 +11,12 @@ import SongEditor from '../components/songs/SongEditor'
 import SongViewer from '../components/songs/SongViewer'
 import { groupSets, createSet as insertSet, todayISO } from '../lib/sets'
 import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
+import { loadServingSets, mergeServing, setHref } from '../lib/serving'
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const { scope, isEditor } = useChurch()
+  const { scope, isEditor, canEditSet, legacy } = useChurch()
+  const [serving, setServing] = useState([])   // sets I serve on in other teams (and requests)
   const scopeKey = `${scope.churchId}|${scope.workspaceId}`
   const navigate = useNavigate()
   const [sets, setSets] = useState([])
@@ -32,6 +34,7 @@ export default function Dashboard() {
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
       .finally(() => setLoadingSets(false))
+    if (!legacy) loadServingSets().then(setServing)
     scope.church(supabase.from('songs').select('*'))
       .then(({ data }) => setSongs(data || []))
       .catch(() => {})
@@ -99,8 +102,8 @@ export default function Dashboard() {
     <Layout>
       <div className="max-w-4xl mx-auto p-4 md:p-6 flex flex-col gap-3 h-[calc(100dvh-4.5rem)]">
         <WeeklyThought />
-        <SetsPane readOnly={!isEditor} sets={sets} loading={loadingSets} targetSetId={targetSetId}
-          onOpen={id => navigate(`/sets/${id}`)} onCreate={createSet} />
+        <SetsPane readOnly={!isEditor} sets={legacy ? sets : mergeServing(sets, serving, canEditSet)} loading={loadingSets} targetSetId={targetSetId}
+          onOpen={(id, set) => navigate(set ? setHref(set) : `/sets/${id}`)} onCreate={createSet} />
         <SongsPane readOnly={!isEditor} songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
           onTargetChange={setTargetSetId} onCreateSet={createTargetSet} onAdd={addToSet} onEdit={setEditing}
           onView={setViewing} onNew={() => setEditing(true)}

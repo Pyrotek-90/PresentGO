@@ -29,6 +29,13 @@ export async function markRead(ids) {
   await supabase.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids)
 }
 
+// Join (or not) a team I've been invited to.
+export async function respondToTeam(memberId, response) {
+  const { data, error } = await supabase.rpc('respond_team_member', { p_member: memberId, p_response: response })
+  if (error || !data) throw new Error('Could not save your answer. Please try again.')
+  return data
+}
+
 export async function respondToRequest(assignmentId, response) {
   const { data, error } = await supabase.rpc('respond_assignment', { p_assignment: assignmentId, p_response: response })
   if (error || !data) throw new Error('Could not save your answer. Please try again.')

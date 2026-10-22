@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, UserPlus, CalendarClock, CheckCircle2, XCircle, Check, X, MessageSquare } from 'lucide-react'
+import { Bell, UserPlus, CalendarClock, CheckCircle2, XCircle, Check, X, MessageSquare, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { loadNotifications, makeReminders, markRead, respondToRequest } from '../lib/notifications'
+import { loadNotifications, makeReminders, markRead, respondToRequest, respondToTeam } from '../lib/notifications'
+import { useChurch } from '../contexts/ChurchContext'
 import { formatModified } from '../lib/sets'
 
 // Bell in the header. Serving requests can be accepted or declined right here; the leader gets
 // the answer, and everyone gets reminders as a set gets close.
 export default function NotificationBell({ userId, onOpen }) {
   const navigate = useNavigate()
+  const church = useChurch()
   const [items, setItems] = useState(null)   // null = not set up yet (bell hidden)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(null)
@@ -64,6 +66,15 @@ export default function NotificationBell({ userId, onOpen }) {
   const toggleOpen = () => { setOpen(o => !o); setError(null); if (!open) onOpen?.() }
   const answer = async (n, response) => {
     setBusy(n.id); setError(null)
+    if (n.kind === 'team_invite') {
+      try {
+        const status = await respondToTeam(n.member_id, response)
+        setItems(prev => prev.map(x => (x.member_id === n.member_id ? { ...x, join_status: status, read_at: x.read_at || new Date().toISOString() } : x)))
+        setChanging(prev => { const s = new Set(prev); s.delete(n.id); return s })
+        if (status === 'accepted') { church?.refresh?.(); refresh() }   // the new team, and set requests that were waiting
+      } catch (e) { setError(e.message) } finally { setBusy(null) }
+      return
+    }
     try {
       const status = await respondToRequest(n.assignment_id, response)
       setItems(prev => prev.map(x => (x.assignment_id === n.assignment_id ? { ...x, assignment_status: status, read_at: x.read_at || new Date().toISOString() } : x)))
@@ -72,11 +83,12 @@ export default function NotificationBell({ userId, onOpen }) {
   }
   const go = n => {
     read([n.id])
-    // Only the leader can open a set; team members just see the details here.
-    if (n.set_id && n.kind !== 'serving_request' && n.kind !== 'team_message' && !/^You're serving/.test(n.body || '')) { setOpen(false); navigate(`/sets/${n.set_id}`) }
+    // Sets open for the leader, and for team members once they've accepted.
+    if (n.set_id && n.kind !== 'team_message' && !(n.kind === 'serving_request' && n.assignment_status !== 'accepted')) { setOpen(false); navigate(`/sets/${n.set_id}`) }
   }
 
-  const icon = n => n.kind === 'serving_request' ? <UserPlus size={16} className="text-accent-light" />
+  const icon = n => n.kind === 'team_invite' ? <Users size={16} className="text-accent-light" />
+    : n.kind === 'serving_request' ? <UserPlus size={16} className="text-accent-light" />
     : n.kind === 'team_message' ? <MessageSquare size={16} className="text-sky-300" />
     : n.kind === 'request_answered' ? (/ declined ·/.test(n.title) ? <XCircle size={16} className="text-red-400" /> : <CheckCircle2 size={16} className="text-green-400" />)
     : <CalendarClock size={16} className="text-amber-300" />
@@ -104,8 +116,9 @@ export default function NotificationBell({ userId, onOpen }) {
           <ul className="overflow-y-auto divide-y divide-border/60">
             {!items.length && <li className="px-4 py-8 text-center text-sm text-muted">You’re all caught up.<br /><span className="text-xs">Serving requests and set reminders will show up here.</span></li>}
             {items.map(n => {
-              const isReq = n.kind === 'serving_request'
-              const st = n.assignment_status
+              const isTeam = n.kind === 'team_invite'
+              const isReq = n.kind === 'serving_request' || isTeam
+              const st = isTeam ? n.join_status : n.assignment_status
               const answered = isReq && (st === 'accepted' || st === 'declined')
               const showButtons = isReq && (!answered || changing.has(n.id))
               return (
@@ -122,16 +135,16 @@ export default function NotificationBell({ userId, onOpen }) {
                         <div className="mt-2">
                           {answered && !showButtons && (
                             <p className={`flex items-center gap-2 text-xs font-medium ${st === 'accepted' ? 'text-green-400' : 'text-red-400'}`}>
-                              {st === 'accepted' ? <Check size={14} /> : <X size={14} />} You {st === 'accepted' ? 'accepted' : 'declined'}
+                              {st === 'accepted' ? <Check size={14} /> : <X size={14} />} You {isTeam ? (st === 'accepted' ? 'joined' : 'declined to join') : st === 'accepted' ? 'accepted' : 'declined'}
                               <button onClick={() => setChanging(prev => new Set(prev).add(n.id))} className="ml-1 text-muted hover:text-[#f5f5f5] underline font-normal">Change</button>
                             </p>
                           )}
                           {showButtons && (
                             <div className="flex gap-2">
                               <button onClick={() => answer(n, 'accepted')} disabled={busy === n.id || st === 'accepted'}
-                                className="flex-1 h-9 rounded-lg bg-green-600 text-white text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40"><Check size={14} /> Accept</button>
+                                className="flex-1 h-9 rounded-lg bg-green-600 text-white text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40"><Check size={14} /> {isTeam ? 'Join' : 'Accept'}</button>
                               <button onClick={() => answer(n, 'declined')} disabled={busy === n.id || st === 'declined'}
-                                className="flex-1 h-9 rounded-lg border border-red-500/60 text-red-400 text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-red-500/10 disabled:opacity-40"><X size={14} /> Decline</button>
+                                className="flex-1 h-9 rounded-lg border border-red-500/60 text-red-400 text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-red-500/10 disabled:opacity-40"><X size={14} /> {isTeam ? 'No thanks' : 'Decline'}</button>
                             </div>
                           )}
                         </div>

@@ -11,31 +11,32 @@ const workspaceLimit = plan => (plan === 'ultimate' ? 5 : 1)
 // and decide who is an Admin, who leads which workspace, and who is a Member.
 export default function ChurchSettings() {
   const { user } = useAuth()
-  const { legacy, church, isAdmin, refresh } = useChurch()
+  const { legacy, church, isAdmin, refresh, unitLabel } = useChurch()
   if (legacy || !church) return null
 
   if (!isAdmin) {
     const leads = (church.workspaces || []).filter(w => w.lead).map(w => w.name)
     return (
       <section className="space-y-3">
-        <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Church</h2>
+        <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">{unitLabel}</h2>
         <div className="card flex items-start gap-3">
           <Church size={18} className="text-accent-light shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="font-medium">{church.name}</p>
             <p className="text-muted">
               {leads.length ? `You lead ${leads.join(', ')}.` : 'You see the sets you’ve accepted, with their songs and charts.'}
-              {' '}Your church's admins manage workspaces and roles.
+              {' '}Your {unitLabel.toLowerCase()}'s admins manage {church.plan === 'ultimate' ? 'workspaces and ' : ''}roles.
             </p>
           </div>
         </div>
       </section>
     )
   }
-  return <AdminChurch church={church} meId={user.id} refresh={refresh} />
+  return <AdminChurch church={church} meId={user.id} refresh={refresh} unit={unitLabel} />
 }
 
-function AdminChurch({ church, meId, refresh }) {
+// Free / Pro: one Team (its single workspace stays out of sight). Ultimate: a Church with workspaces.
+function AdminChurch({ church, meId, refresh, unit }) {
   const [name, setName] = useState(church.name)
   const [nameState, setNameState] = useState(null)
   const [people, setPeople] = useState(null)
@@ -49,6 +50,8 @@ function AdminChurch({ church, meId, refresh }) {
 
   const workspaces = church.workspaces || []
   const limit = workspaceLimit(church.plan)
+  const multi = church.plan === 'ultimate'
+  const u = unit.toLowerCase()
 
   const loadPeople = useCallback(async () => {
     const { data, error: err } = await supabase.rpc('church_people', { p_church: church.id })
@@ -87,27 +90,27 @@ function AdminChurch({ church, meId, refresh }) {
     const { data, error: err } = await supabase.rpc('add_church_person', { p_church: church.id, p_email: email.trim() })
     if (err) { setAddMsg({ bad: true, text: 'Could not add them. Please try again.' }); return }
     if (data === 'no_account') setAddMsg({ bad: true, text: "No StaffList account uses that email yet. Add them on the Team page with this email — they'll join your church when they sign up." })
-    else { setAddMsg({ text: data === 'already' ? 'Already in your church.' : 'Added as a Member.' }); setEmail(''); loadPeople() }
+    else { setAddMsg({ text: data === 'already' ? `Already in your ${u}.` : 'Added as a Member.' }); setEmail(''); loadPeople() }
   }
 
   return (
     <section className="space-y-3">
-      <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Church</h2>
+      <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">{unit}</h2>
 
       <div className="card space-y-4">
         <div className="flex items-end gap-2">
           <div className="flex-1 min-w-0">
-            <label className="label !mb-1" htmlFor="church-name-setting">Church name</label>
+            <label className="label !mb-1" htmlFor="church-name-setting">{unit} name</label>
             <input id="church-name-setting" className="input" value={name}
               onChange={e => { setName(e.target.value); setNameState(null) }}
               onBlur={saveName} onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()} />
           </div>
           <span className="text-xs text-muted pb-2.5 shrink-0 w-12">{nameState === 'saving' ? 'Saving…' : nameState === 'saved' ? 'Saved' : nameState === 'error' ? 'Error' : ''}</span>
         </div>
-        <p className="text-xs text-muted">Plan: <span className="text-primary font-medium">{PLAN_LABEL[church.plan] || church.plan}</span> · {limit === 1 ? '1 workspace' : `up to ${limit} workspaces`}</p>
+        <p className="text-xs text-muted">Plan: <span className="text-primary font-medium">{PLAN_LABEL[church.plan] || church.plan}</span> · {multi ? `up to ${limit} workspaces` : 'one team. Ultimate turns it into a church with up to 5 teams (Youth, Kids, Women\u2019s Fellowship…), each with its own leaders.'}</p>
 
-        {/* Workspaces */}
-        <div className="space-y-2">
+        {/* Workspaces (Ultimate) */}
+        {multi && <div className="space-y-2">
           <p className="text-sm font-medium">Workspaces</p>
           <p className="text-xs text-muted">Each ministry gets its own sets and schedule, with its own leaders. Songs, team and content are shared across the church.</p>
           <ul className="divide-y divide-border rounded-lg border border-border">
@@ -144,19 +147,19 @@ function AdminChurch({ church, meId, refresh }) {
               <button type="submit" disabled={!newWs.trim() || busy} className="btn-primary !h-9 !py-0 text-sm flex items-center gap-1"><Plus size={14} /> Add</button>
             </form>
           ) : (
-            <p className="text-xs text-muted">{church.plan === 'ultimate' ? `You're using all ${limit} workspaces.` : 'Ultimate adds up to 5 workspaces, e.g. Youth, Kids and Women’s Fellowship, each with its own leaders.'}</p>
+            <p className="text-xs text-muted">You're using all {limit} workspaces.</p>
           )}
-        </div>
+        </div>}
 
         {/* People and roles */}
         <div className="space-y-2">
           <p className="text-sm font-medium">People and roles</p>
           <ul className="text-xs text-muted space-y-0.5">
-            <li><span className="text-primary font-medium">Admin</span> — the whole church: every workspace, songs, team and these settings.</li>
-            <li><span className="text-primary font-medium">Leader</span> — tick the workspaces they lead: they build those sets, schedule the team and edit songs.</li>
+            <li><span className="text-primary font-medium">Admin</span> — the whole {u}: {multi ? 'every workspace, ' : 'sets, '}songs, people and these settings.</li>
+            <li><span className="text-primary font-medium">Leader</span> — {multi ? 'tick the workspaces they lead: they build those sets' : 'they build sets'}, schedule the team and edit songs.</li>
             <li><span className="text-primary font-medium">Member</span> — musicians and singers: they see the sets they've accepted, with charts and lyrics.</li>
           </ul>
-          <p className="text-xs text-muted">People you add on the Team page join as Members when they sign in with that email.</p>
+          <p className="text-xs text-muted">People you invite on the Team page join as Members once they accept the invitation.</p>
 
           {people === null ? (
             <div className="flex justify-center py-4"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
@@ -175,22 +178,22 @@ function AdminChurch({ church, meId, refresh }) {
                       <option value="member">{p.leads.length ? 'Leader' : 'Member'}</option>
                     </select>
                     {p.user_id !== meId && (
-                      <button className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-surface" aria-label={`Remove ${p.name}`} title="Remove from church" disabled={busy}
+                      <button className="p-1.5 rounded-lg text-muted hover:text-red-400 hover:bg-surface" aria-label={`Remove ${p.name}`} title={`Remove from ${u}`} disabled={busy}
                         onClick={() => run(() => supabase.rpc('remove_church_person', { p_church: church.id, p_user: p.user_id }))}><X size={14} /></button>
                     )}
                   </div>
                   {p.role === 'admin' ? (
-                    <p className="text-xs text-muted flex items-center gap-1"><ShieldCheck size={12} className="text-accent-light" /> Leads every workspace</p>
+                    <p className="text-xs text-muted flex items-center gap-1"><ShieldCheck size={12} className="text-accent-light" /> {multi ? 'Leads every workspace' : 'Runs the team'}</p>
                   ) : (
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-muted">Leads:</span>
+                      <span className="text-xs text-muted">{multi ? 'Leads:' : 'Leader:'}</span>
                       {workspaces.map(w => {
                         const on = p.leads.includes(w.id)
                         return (
                           <button key={w.id} disabled={busy} aria-pressed={on}
                             onClick={() => run(() => supabase.rpc('set_workspace_leader', { p_workspace: w.id, p_user: p.user_id, p_on: !on }))}
                             className={`h-7 px-2.5 rounded-full border text-xs font-medium transition-colors ${on ? 'border-accent bg-accent/20 text-accent-light' : 'border-border text-muted hover:text-primary'}`}>
-                            {on && <Check size={11} className="inline -mt-0.5 mr-1" />}{w.name}
+                            {on && <Check size={11} className="inline -mt-0.5 mr-1" />}{multi ? w.name : on ? 'Leads the team' : 'Make leader'}
                           </button>
                         )
                       })}

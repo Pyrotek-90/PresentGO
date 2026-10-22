@@ -2,20 +2,34 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, ChevronRight, ChevronDown, CalendarDays, Repeat } from 'lucide-react'
 import { groupSets, formatSetWhen, songCount } from '../../lib/sets'
+import { useChurch } from '../../contexts/ChurchContext'
+import TeamColorKey from '../TeamColorKey'
+import { dotStyle } from '../../lib/teamColors'
 
 // Home shows a short list so the Song Library gets the room; the Schedule page has every set.
 const UPCOMING_SHOWN = 4   // phones show 3
 const PAST_SHOWN = 2
 const COLLAPSE_KEY = 'presentgo.setsCollapsed'
 
+// Sets from teams I serve on show in that team's color, with my position; a request waiting
+// for my answer says so.
 function SetRow({ set, isTarget, onOpen, className = '' }) {
+  const { teamColor, churches } = useChurch()
   const n = songCount(set)
+  const sv = set.serving
+  const color = sv ? teamColor(sv.churchId) : null
+  const team = sv ? churches.find(c => c.id === sv.churchId)?.name : ''
   return (
-    <button onClick={() => onOpen(set.id)}
+    <button onClick={() => onOpen(set.id, set)} title={sv ? `${team}${sv.positions.length ? ` · ${sv.positions.join(', ')}` : ''}` : undefined}
       className={`${className} w-full flex items-center gap-3 px-3 py-1.5 rounded-lg border text-left transition-colors group ${
         isTarget ? 'border-accent/50 bg-accent/5' : 'border-transparent hover:bg-[#1a1a1a] hover:border-border'
       }`}>
-      <span className="flex-1 min-w-0 text-sm font-medium truncate">{set.name}</span>
+      {sv && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={dotStyle(color)} aria-hidden="true" />}
+      <span className="flex-1 min-w-0 text-sm font-medium truncate" style={sv ? { color } : undefined}>
+        {set.name}
+        {sv?.positions.length > 0 && <span className="text-xs font-normal text-muted"> · {sv.positions.join(', ')}</span>}
+      </span>
+      {sv?.status === 'invited' && <span className="shrink-0 px-1.5 rounded border border-amber-500/40 text-[10px] text-amber-300 leading-4">Reply</span>}
       {set.series_id && set.recurrence && <Repeat size={11} className="text-muted shrink-0" aria-label="Repeating" />}
       <span className="text-xs text-muted shrink-0">{formatSetWhen(set)}</span>
       <span className="text-xs text-muted shrink-0 w-14 text-right">{n} song{n !== 1 ? 's' : ''}</span>
@@ -88,6 +102,10 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate,
                     {shownPast.map(s => <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} />)}
                   </div>
                 )}
+                {(() => {
+                  const ids = [...new Set(sets.filter(s => s.serving).map(s => s.serving.churchId))]
+                  return ids.length > 0 && <TeamColorKey ids={ids} label="Teams you serve on" className="px-3 pt-1.5" />
+                })()}
                 {more && (
                   <Link to="/schedule"
                     className="w-full flex items-center justify-center gap-1.5 pt-1.5 pb-0.5 text-xs text-muted hover:text-accent-light transition-colors">

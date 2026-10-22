@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { CalendarDays, Copy, Check, RefreshCw, ExternalLink } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useChurch } from '../../contexts/ChurchContext'
+import { dotStyle } from '../../lib/teamColors'
 
 const newToken = () => crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
 
 export default function CalendarSync() {
   const { user } = useAuth()
+  const { legacy, churches, teamColor } = useChurch()
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -95,6 +98,25 @@ export default function CalendarSync() {
               <RefreshCw size={12} /> {confirmReset ? 'Click again — old link will stop working' : 'Reset link'}
             </button>
           </div>
+          {!legacy && churches.length > 1 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[11px] text-muted">Or one calendar per team, so each shows in its own color (Apple Calendar uses your StaffList color when you subscribe; in Google Calendar, pick the color next to the calendar's name):</p>
+              <ul className="space-y-1">
+                {churches.map(c => {
+                  const teamUrl = `${httpsUrl}?team=${c.id}`
+                  const teamWebcal = teamUrl.replace(/^https?:\/\//, 'webcal://')
+                  return (
+                    <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={dotStyle(teamColor(c.id))} aria-hidden="true" />
+                      <span className="min-w-0 truncate font-medium">{c.name}</span>
+                      <a href={teamWebcal} className="text-xs text-accent-light hover:underline">Apple</a>
+                      <a href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(teamWebcal)}`} target="_blank" rel="noreferrer" className="text-xs text-accent-light hover:underline">Google</a>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
           <ul className="text-[11px] text-muted space-y-1 list-disc pl-4">
             <li>Anyone with this link can see your set names, times and locations, so keep it private. Reset it any time to cut off old copies.</li>
             <li>It's read-only. Changes you make in StaffList appear in your calendar after it next refreshes (Apple: within the hour; Google: can take several hours).</li>

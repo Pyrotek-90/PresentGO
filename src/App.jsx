@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { ChurchProvider } from './contexts/ChurchContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import Respond from './pages/Respond'
+import JoinTeam from './pages/JoinTeam'
 import ProtectedRoute from './components/ProtectedRoute'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
@@ -30,6 +31,7 @@ export default function App() {
                 (opened programmatically, token passed via sessionStorage) */}
             <Route path="/present/:setId" element={<PresentMode />} />
             <Route path="/respond/:token" element={<Respond />} />
+            <Route path="/join/:token" element={<JoinTeam />} />
 
             {/* Protected app routes */}
             <Route element={<ProtectedRoute />}>
