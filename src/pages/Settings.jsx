@@ -2,7 +2,6 @@ import Layout from '../components/Layout'
 import { LegalLinks } from './Legal'
 import CalendarSync from '../components/settings/CalendarSync'
 import OfflineMode from '../components/settings/OfflineMode'
-import ChurchSettings from '../components/settings/ChurchSettings'
 import MyTeams from '../components/settings/MyTeams'
 import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
@@ -203,10 +202,6 @@ export default function Settings() {
 
         <h1 className="text-2xl font-bold text-primary">Settings</h1>
 
-        <ChurchSettings />
-
-        <MyTeams />
-
         {/* ── Appearance ────────────────────────────────────────────────── */}
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Appearance</h2>
@@ -276,6 +271,8 @@ export default function Settings() {
           <OfflineMode />
 
           <CalendarSync />
+
+          <MyTeams />
         </section>
 
         {/* ── Licensing & Copyright ─────────────────────────────────────── */}
@@ -346,7 +343,7 @@ export default function Settings() {
         {/* Footer */}
         <div className="space-y-2 pb-6">
           <LegalLinks />
-          <p className="text-center text-xs text-muted">StaffList v0.1.0 · Built for worship</p>
+          <p className="text-center text-xs text-muted">StaffList v0.1.0</p>
         </div>
 
       </div>
