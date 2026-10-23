@@ -69,4 +69,25 @@ the TV to plain mirroring until StaffList is opened again.
   deep link.
 - **App Review guideline 4.2 (minimum functionality):** apps that are only a website in a wrapper
   can be rejected. The second-screen TV output and native sign-in help show it is an app; mention the TV output in the review notes.
-- Icons and launch screen: generate with `npx @capacitor/assets generate` from a 1024×1024 icon.
+- Icons and launch screen: see below.
+
+## App icon and launch screen
+
+The artwork is in `assets/`:
+
+| File | What it is |
+|---|---|
+| `assets/icon-only.png` | 1024×1024 app icon (square, no transparency; iOS rounds the corners) |
+| `assets/splash.png`, `assets/splash-dark.png` | 2732×2732 launch screen: the logo, "StaffList" and "To the Chief Musician" on the app's dark background, kept to the middle so it fits every iPad and iPhone shape |
+
+After `npx cap add ios`, on the Mac:
+
+```bash
+npm install @capacitor/splash-screen
+npx @capacitor/assets generate --ios     # writes every icon and launch-screen size into the Xcode project
+npx cap sync ios
+```
+
+The launch screen stays up until StaffList has drawn its first screen, then fades out (at most
+4 seconds, set in `capacitor.config.json`). If the artwork changes, replace the files in
+`assets/` and run the generate command again.

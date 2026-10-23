@@ -1,4 +1,5 @@
 import Layout from '../components/Layout'
+import { LegalLinks } from './Legal'
 import CalendarSync from '../components/settings/CalendarSync'
 import OfflineMode from '../components/settings/OfflineMode'
 import ChurchSettings from '../components/settings/ChurchSettings'
@@ -343,9 +344,10 @@ export default function Settings() {
         </section>
 
         {/* Footer */}
-        <p className="text-center text-xs text-muted pb-6">
-          StaffList v0.1.0 · Built for worship
-        </p>
+        <div className="space-y-2 pb-6">
+          <LegalLinks />
+          <p className="text-center text-xs text-muted">StaffList v0.1.0 · Built for worship</p>
+        </div>
 
       </div>
     </Layout>

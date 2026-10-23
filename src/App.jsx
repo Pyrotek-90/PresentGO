@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Privacy, Terms } from './pages/Legal'
 import { AuthProvider } from './contexts/AuthContext'
 import { ChurchProvider } from './contexts/ChurchContext'
 import { UpgradeProvider } from './contexts/UpgradeContext'
@@ -28,6 +29,8 @@ export default function App() {
           <Routes>
             {/* Public */}
             <Route path="/auth" element={<Auth />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
 
             {/* Present display window — no chrome, no auth guard needed
                 (opened programmatically, token passed via sessionStorage) */}

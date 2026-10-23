@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LegalLinks } from './Legal'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
@@ -152,9 +153,13 @@ export default function Auth() {
           )}
         </div>
 
-        <p className="text-center text-xs text-muted">
-          StaffList · Chord charts, worship sets &amp; presentation
-        </p>
+        <div className="space-y-2">
+          <p className="text-center text-xs text-muted">
+            {tab === 'login' ? 'StaffList · Chord charts, worship sets & presentation'
+              : 'By creating an account, you agree to the Terms of Use and Privacy Policy.'}
+          </p>
+          <LegalLinks />
+        </div>
       </div>
     </div>
   )
