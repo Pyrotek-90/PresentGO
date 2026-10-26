@@ -7,13 +7,15 @@ import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
   Sun, Moon, Shield, Check, ExternalLink,
-  Church, Zap, Bell, Star, Music, Languages, MonitorPlay,
+  Church, Zap, Bell, Star, Music, Languages, MonitorPlay, CreditCard, Loader2, AlertTriangle, PartyPopper,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
 import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
 import { useEffect, useState } from 'react'
+import { PLAN_LABEL } from '../lib/plans'
+import { startCheckout, openBillingPortal, getBilling } from '../lib/billing'
 
 // ─── Subscription plans ────────────────────────────────────────────────────────
 
@@ -22,7 +24,7 @@ const PLANS = [
     id: 'free',
     name: 'Free',
     price: null,
-    badge: 'Current Plan',
+    badge: null,
     badgeClass: 'bg-accent/20 text-accent-light',
     icon: Star,
     iconClass: 'text-accent-light',
@@ -41,10 +43,10 @@ const PLANS = [
   {
     id: 'solo',
     name: 'Solo',
-    price: '$5',
-    period: '/month',
-    yearly: 'or $50/year — save about 17%',
-    badge: 'Coming Soon',
+    monthly: '$5',
+    yearly: '$50',
+    yearlyNote: 'save about 17%',
+    badge: null,
     badgeClass: 'bg-sky-500/20 text-sky-300',
     icon: MonitorPlay,
     iconClass: 'text-sky-400',
@@ -57,17 +59,15 @@ const PLANS = [
       'CCLI Report',
       'Up to 3 devices signed in at once',
     ],
-    cta: 'Notify Me When Available',
-    ctaDisabled: false,
-    comingSoon: true,
+    purchasable: true,
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: '$12',
-    period: '/month',
-    yearly: 'or $100/year — save about 30%',
-    badge: 'Coming Soon',
+    monthly: '$12',
+    yearly: '$100',
+    yearlyNote: 'save about 30%',
+    badge: null,
     badgeClass: 'bg-purple-500/20 text-purple-300',
     icon: Zap,
     iconClass: 'text-purple-400',
@@ -83,9 +83,7 @@ const PLANS = [
       'Add, invite and message team members',
       'Shared team access: musicians and singers open their sets, charts and lyrics',
     ],
-    cta: 'Notify Me When Available',
-    ctaDisabled: false,
-    comingSoon: true,
+    purchasable: true,
   },
   {
     id: 'ultimate',
@@ -113,16 +111,25 @@ const PLANS = [
 
 // ─── Plan card ─────────────────────────────────────────────────────────────────
 
-// `current`: the team's plan. Billing isn't built yet, so other plans offer "Notify me".
-function PlanCard({ plan, current }) {
+// `current`: the team's plan. Solo and Pro are bought through Stripe by the team's Admin;
+// Ultimate still offers "Notify me".
+function PlanCard({ plan, current, interval, billing }) {
   const isCurrent = plan.id === current
   const [notified, setNotified] = useState(false)
   const Icon = plan.icon
+  const { canBuy, hasSub, busy, buy, manage } = billing
 
   const checkColor =
     plan.id === 'solo'     ? 'text-sky-400'    :
     plan.id === 'pro'      ? 'text-purple-400' :
     plan.id === 'ultimate' ? 'text-amber-400'  : 'text-accent-light'
+  const accentBtn =
+    plan.id === 'solo' ? 'bg-sky-500 hover:bg-sky-400' : 'bg-purple-600 hover:bg-purple-500'
+
+  const yearly = interval === 'year'
+  const price = plan.purchasable ? (yearly ? plan.yearly : plan.monthly) : null
+  const working = busy === plan.id
+  const badge = isCurrent ? 'Current Plan' : plan.badge
 
   return (
     <div className={`card space-y-4 ${plan.borderClass}`}>
@@ -131,17 +138,17 @@ function PlanCard({ plan, current }) {
         <div className="space-y-0.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-primary">{plan.name}</span>
-            {(isCurrent || plan.id !== 'free') && (
+            {badge && (
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isCurrent ? 'bg-accent/20 text-accent-light' : plan.badgeClass}`}>
-                {isCurrent ? 'Current Plan' : plan.badge}
+                {badge}
               </span>
             )}
           </div>
-          {plan.price ? (
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-xl font-bold text-primary">{plan.price}</span>
-              <span className="text-xs text-muted">{plan.period}</span>
-              {plan.yearly && <span className="text-xs text-muted ml-2">{plan.yearly}</span>}
+          {price ? (
+            <div className="flex items-baseline gap-0.5 flex-wrap">
+              <span className="text-xl font-bold text-primary">{price}</span>
+              <span className="text-xs text-muted">{yearly ? '/year' : '/month'}</span>
+              {yearly && <span className="text-xs text-green-400 ml-2">{plan.yearlyNote}</span>}
             </div>
           ) : (
             <div className="text-xl font-bold text-primary">
@@ -164,7 +171,30 @@ function PlanCard({ plan, current }) {
       </ul>
 
       {/* CTA */}
-      {!isCurrent && plan.id !== 'free' && (
+      {plan.purchasable && isCurrent && canBuy && hasSub && (
+        <button onClick={manage} disabled={!!busy}
+          className="w-full py-2 rounded-lg text-sm font-medium border border-border text-muted hover:text-primary hover:border-accent transition-colors disabled:opacity-60">
+          <span className="flex items-center justify-center gap-2">
+            {busy === 'portal' ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />} Manage billing
+          </span>
+        </button>
+      )}
+      {plan.purchasable && !isCurrent && (
+        canBuy ? (
+          <button onClick={() => buy(plan.id)} disabled={!!busy}
+            className={`w-full py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-60 ${accentBtn}`}>
+            <span className="flex items-center justify-center gap-2">
+              {working ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+              {hasSub ? `Switch to ${plan.name}` : `Upgrade to ${plan.name} — ${price}${yearly ? '/year' : '/month'}`}
+            </span>
+          </button>
+        ) : (
+          <p className="text-center text-xs text-muted py-2 border border-border rounded-lg">
+            Ask your team's Admin to upgrade.
+          </p>
+        )
+      )}
+      {!plan.purchasable && !isCurrent && plan.id !== 'free' && (
         <button
           onClick={() => setNotified(true)}
           disabled={notified}
@@ -189,6 +219,37 @@ function PlanCard({ plan, current }) {
   )
 }
 
+// ─── Billing status (Admins of a paying team) ──────────────────────────────────
+
+const fmtDate = d => (d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '')
+
+function BillingStatus({ info, busy, manage }) {
+  if (!info?.status || info.status === 'canceled' || info.status === 'incomplete_expired') return null
+  const trouble = ['past_due', 'unpaid', 'incomplete'].includes(info.status)
+  const ends = fmtDate(info.current_period_end)
+  return (
+    <div className={`card flex items-start gap-3 ${trouble ? 'border-amber-500/40' : ''}`}>
+      {trouble ? <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" /> : <CreditCard size={18} className="text-accent-light shrink-0 mt-0.5" />}
+      <div className="flex-1 min-w-0 space-y-1">
+        <p className="text-sm text-primary font-medium">
+          {PLAN_LABEL[info.plan] || 'Paid'} · {info.interval === 'year' ? 'Yearly' : 'Monthly'}
+        </p>
+        <p className="text-xs text-muted">
+          {trouble
+            ? "The last payment didn't go through. Update your card to keep your plan."
+            : info.cancel_at_period_end
+              ? `Cancelled — your plan stays active until ${ends}.`
+              : ends ? `Renews on ${ends}.` : 'Active.'}
+        </p>
+      </div>
+      <button onClick={manage} disabled={!!busy}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border text-muted hover:text-primary hover:border-accent shrink-0 disabled:opacity-60">
+        {busy === 'portal' ? <Loader2 size={13} className="animate-spin" /> : trouble ? 'Update card' : 'Manage'}
+      </button>
+    </div>
+  )
+}
+
 // ─── Main Settings page ────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -196,11 +257,44 @@ export default function Settings() {
   const [viewerMode, setViewerMode] = useState(() => getPref('viewerMode', 'lyrics'))
   const pickViewerMode = m => { setViewerMode(m); setPref('viewerMode', m) }
   const { user } = useAuth()
-  const { scope, plan: currentPlan } = useChurch()
+  const { scope, plan: currentPlan, church, isAdmin, legacy, refresh } = useChurch()
   // "See plans" from an upgrade prompt lands on the plans.
   useEffect(() => {
     if (window.location.hash === '#plans') setTimeout(() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' }), 150)
   }, [])
+
+  // ── Billing ──
+  const [interval, setInterval_] = useState('month')
+  const [billingInfo, setBillingInfo] = useState(null)
+  const [billingBusy, setBillingBusy] = useState(null)      // plan id or 'portal' while redirecting
+  const [billingError, setBillingError] = useState('')
+  const [returned] = useState(() => new URLSearchParams(window.location.search).get('billing'))   // success | cancelled
+  const loadBilling = () => (church?.id && isAdmin ? getBilling(church.id).then(setBillingInfo) : Promise.resolve())
+  useEffect(() => { loadBilling() }, [church?.id, isAdmin, currentPlan])   // eslint-disable-line react-hooks/exhaustive-deps
+  // Back from Stripe Checkout: the webhook updates the plan within a few seconds, so check again.
+  useEffect(() => {
+    if (returned !== 'success') return
+    let n = 0
+    const t = window.setInterval(() => { refresh(); loadBilling(); if (++n >= 6) window.clearInterval(t) }, 2500)
+    window.history.replaceState(null, '', '/settings#plans')
+    return () => window.clearInterval(t)
+  }, [returned])   // eslint-disable-line react-hooks/exhaustive-deps
+  const hasSub = !!billingInfo?.status && !['canceled', 'incomplete_expired'].includes(billingInfo.status)
+  const billing = {
+    canBuy: !legacy && !!church?.id && isAdmin,
+    hasSub,
+    busy: billingBusy,
+    buy: async planId => {
+      setBillingError(''); setBillingBusy(planId)
+      try { await (hasSub ? openBillingPortal(church.id) : startCheckout(church.id, planId, interval)) }
+      catch (e) { setBillingError(e.message); setBillingBusy(null) }
+    },
+    manage: async () => {
+      setBillingError(''); setBillingBusy('portal')
+      try { await openBillingPortal(church.id) }
+      catch (e) { setBillingError(e.message); setBillingBusy(null) }
+    },
+  }
   const [libLang, setLibLang] = useState(user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE)
   const [libLangState, setLibLangState] = useState(null)   // null | 'saving' | 'saved' | 'error'
   // Only offer languages that songs in the library are actually in.
@@ -357,9 +451,33 @@ export default function Settings() {
         {/* ── Subscription Plans ────────────────────────────────────────── */}
         <section className="space-y-3">
           <h2 id="plans" className="text-xs font-semibold text-muted uppercase tracking-wider scroll-mt-4">Subscription Plans</h2>
-          <div className="space-y-4">
-            {PLANS.map(plan => <PlanCard key={plan.id} plan={plan} current={currentPlan} />)}
+          {returned === 'success' && (
+            <div className="card flex items-center gap-3 border-green-500/40">
+              <PartyPopper size={18} className="text-green-400 shrink-0" />
+              <p className="text-sm text-primary">
+                Thank you! {['solo', 'pro'].includes(currentPlan) ? `Your team is now on ${PLAN_LABEL[currentPlan]}.` : 'Your plan will switch over in a moment.'}
+              </p>
+            </div>
+          )}
+          {returned === 'cancelled' && (
+            <p className="text-xs text-muted">Checkout was cancelled — nothing was charged.</p>
+          )}
+          {billingError && <p className="text-xs text-red-400">{billingError}</p>}
+          {billing.canBuy && <BillingStatus info={billingInfo} busy={billingBusy} manage={billing.manage} />}
+          <div className="flex justify-center">
+            <div className="inline-flex rounded-lg border border-border p-0.5 text-xs">
+              {[['month', 'Monthly'], ['year', 'Yearly']].map(([v, label]) => (
+                <button key={v} onClick={() => setInterval_(v)}
+                  className={`px-4 py-1.5 rounded-md font-medium transition-colors ${interval === v ? 'bg-accent text-white' : 'text-muted hover:text-primary'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
+          <div className="space-y-4">
+            {PLANS.map(plan => <PlanCard key={plan.id} plan={plan} current={currentPlan} interval={interval} billing={billing} />)}
+          </div>
+          <p className="text-[11px] text-muted text-center">Payments are handled securely by Stripe. Cancel anytime from Manage billing.</p>
         </section>
 
         {/* Footer */}
