@@ -77,3 +77,32 @@ Same as Vercel — connect your repo and add env vars in **Site Settings → Env
 3. **Songs** — paste lyrics, choose 2/3/4 lines per slide, click Format
 4. Click **Present** — a full-screen window opens (send to TV via AirPlay/screen mirror)
 5. Use the **Controller** window that opens on your device to navigate slides
+
+## Billing (Stripe) — Solo and Pro
+
+Admins buy Solo or Pro in **Settings → Subscription Plans**. Stripe Checkout takes the payment; the
+Stripe webhook then sets the team's plan. The customer portal (**Manage billing**) handles plan
+changes, card updates, invoices and cancelling.
+
+1. **Database:** run `supabase/migrations/2026-10-26_billing.sql` in Supabase → SQL Editor
+   (after `2026-10-26_solo_plan.sql`).
+2. **Products and prices:** with your Stripe *test* secret key, run
+   `STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup.mjs`. It creates Solo ($5/mo, $50/yr) and
+   Pro ($12/mo, $100/yr) with the lookup keys `solo_month`, `solo_year`, `pro_month`, `pro_year`.
+3. **Customer portal:** Stripe → Settings → Billing → Customer portal. Turn on "Switch plans"
+   (add the Solo and Pro products), "Cancel subscriptions" and "Update payment methods", then save.
+4. **Webhook:** Stripe → Developers → Webhooks → Add endpoint
+   `https://present-go-five.vercel.app/api/stripe-webhook` with events `checkout.session.completed`,
+   `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`.
+5. **Vercel environment variables** (then redeploy):
+   - `STRIPE_SECRET_KEY` — `sk_test_…` (later `sk_live_…`)
+   - `STRIPE_WEBHOOK_SECRET` — the endpoint's `whsec_…` signing secret
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase → Project Settings → API. Server only: never prefix it with `VITE_`.
+   - optional `STRIPE_AUTOMATIC_TAX=1` once Stripe Tax is set up
+6. **Test:** on Settings, Upgrade to Pro and pay with card `4242 4242 4242 4242`, any future date and CVC.
+   Back in StaffList the plan switches to Pro within a few seconds.
+7. **Go live:** repeat steps 2–5 in Stripe's live mode with the live keys.
+
+Until `STRIPE_SECRET_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are set, the Upgrade buttons show
+"Billing isn't set up yet." Ultimate is still set by hand (`update churches set plan = 'ultimate' …`)
+and Stripe never moves a team off it.
