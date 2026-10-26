@@ -3,25 +3,39 @@ import { useNavigate } from 'react-router-dom'
 import { Lock, X } from 'lucide-react'
 import { useChurch } from './ChurchContext'
 
-// Pro features stay visible but grayed out on the Free plan. Tapping one explains it's part of
-// Pro and offers the plans. Use:
-//   const { pro, requirePro } = useUpgrade()
+// Paid features stay visible but grayed out on lower plans. Tapping one explains which plan it's
+// part of and offers the plans. Use:
+//   const { pro, requirePro } = useUpgrade()          // Pro features (AI, scheduling, team)
+//   const { present, requirePresent } = useUpgrade()  // Solo and up (presenting)
 //   <button className={locked(pro)} onClick={() => requirePro('Smart Cleanup') && doIt()}>
-const UpgradeContext = createContext({ pro: true, requirePro: () => true })
+const UpgradeContext = createContext({ pro: true, present: true, requirePro: () => true, requirePresent: () => true })
 
-// Grayed-out look for a Pro feature on Free (the button stays tappable so it can explain itself).
+const TIERS = {
+  solo: { name: 'Solo', price: '$5 a month or $50 a year', also: 'Solo and Pro' },
+  pro: { name: 'Pro', price: '$12 a month or $100 a year', also: 'Pro' },
+}
+
+// Grayed-out look for a paid feature on a lower plan (the button stays tappable so it can explain itself).
 export const locked = pro => (pro ? '' : 'opacity-40 grayscale')
 
 export function UpgradeProvider({ children }) {
-  const { pro, isAdmin, unitLabel } = useChurch()
+  const { pro, present, isAdmin, unitLabel } = useChurch()
   const navigate = useNavigate()
   const [feature, setFeature] = useState(null)
 
   const requirePro = useCallback(name => {
     if (pro) return true
-    setFeature(name || 'This')
+    setFeature({ name: name || 'This', tier: 'pro' })
     return false
   }, [pro])
+
+  const requirePresent = useCallback(name => {
+    if (present) return true
+    setFeature({ name: name || 'This', tier: 'solo' })
+    return false
+  }, [present])
+
+  const tier = feature && TIERS[feature.tier]
 
   useEffect(() => {
     if (!feature) return
@@ -31,7 +45,7 @@ export function UpgradeProvider({ children }) {
   }, [feature])
 
   return (
-    <UpgradeContext.Provider value={{ pro, requirePro }}>
+    <UpgradeContext.Provider value={{ pro, present, requirePro, requirePresent }}>
       {children}
       {feature && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60" onClick={() => setFeature(null)}>
@@ -40,11 +54,11 @@ export function UpgradeProvider({ children }) {
             <div className="flex items-start gap-3">
               <span className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center shrink-0"><Lock size={17} /></span>
               <div className="flex-1 min-w-0">
-                <h2 id="upgrade-title" className="font-semibold leading-snug">{feature} is part of Pro</h2>
+                <h2 id="upgrade-title" className="font-semibold leading-snug">{feature.name} is part of {tier.also}</h2>
                 <p className="text-sm text-muted mt-1">
                   {isAdmin
-                    ? `Upgrade your ${unitLabel.toLowerCase()} to Pro ($12 a month or $100 a year) to use it.`
-                    : `Ask your ${unitLabel.toLowerCase()}'s admin about upgrading to Pro.`}
+                    ? `Upgrade your ${unitLabel.toLowerCase()} to ${tier.name} (${tier.price}) to use it.`
+                    : `Ask your ${unitLabel.toLowerCase()}'s admin about upgrading to ${tier.name}.`}
                   {' '}Free keeps your songs, charts, sets and schedule.
                 </p>
               </div>

@@ -80,7 +80,7 @@ export default function CalendarSync() {
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
-      {enabled && !pro && <p className="text-xs text-amber-300">Calendar sync is part of Pro. Your calendar stops updating while your team is on Free.</p>}
+      {enabled && !pro && <p className="text-xs text-amber-300">Calendar sync is part of Pro. Your calendar stops updating while your team isn't on Pro.</p>}
       {enabled && pro && (
         <div className="space-y-2.5 pt-1 border-t border-border">
           <p className="text-[11px] text-muted pt-2">Your private subscription link</p>

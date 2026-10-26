@@ -297,23 +297,23 @@ function SlideMatrix({ group, current, blank, onGo, fits, focus, mode = 'tiles' 
 const LOOP_SECS = 6   // Loop button: seconds per slide
 
 export default function Controller() {
-  const { pro } = useUpgrade()
+  const { present } = useUpgrade()
   const { setId } = useParams()
-  // Presenting is a Pro feature (the Present button explains it; this covers a saved link).
-  if (!pro && setId !== 'mock') return <ProOnly setId={setId} />
+  // Presenting is Solo and up (the Present button explains it; this covers a saved link).
+  if (!present && setId !== 'mock') return <ProOnly setId={setId} />
   return <ControllerInner />
 }
 
 function ProOnly({ setId }) {
   const navigate = useNavigate()
-  const { requirePro } = useUpgrade()
+  const { requirePresent } = useUpgrade()
   return (
     <div className="flex h-full items-center justify-center p-6 bg-[#0a0a0a]">
       <div className="max-w-sm text-center space-y-3">
-        <p className="font-semibold">Presenting is part of Pro</p>
+        <p className="font-semibold">Presenting is part of Solo and Pro</p>
         <p className="text-sm text-muted">Your team is on the Free plan.</p>
         <div className="flex gap-2 justify-center">
-          <button onClick={() => requirePro('Presenting')} className="btn-primary text-sm">See what Pro includes</button>
+          <button onClick={() => requirePresent('Presenting')} className="btn-primary text-sm">See the plans</button>
           <button onClick={() => navigate(`/sets/${setId}`)} className="btn-ghost text-sm border border-border rounded-lg">Back to the set</button>
         </div>
       </div>

@@ -17,13 +17,13 @@ const allNavItems = [
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
-  const { isEditor, pro } = useChurch()
+  const { isEditor, present } = useChurch()
   // Musicians and singers (Members) need Home (their sets, songs and charts) and their Schedule.
   const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/' || i.to === '/schedule')
   const tools = isEditor ? [
     { to: '/get-started', label: 'Import Songs', icon: Upload },
-    // CCLI Report is Pro: it isn't listed on the Free plan
-    ...(pro ? [{ to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart }] : []),
+    // CCLI Report is Solo and up: it isn't listed on the Free plan
+    ...(present ? [{ to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart }] : []),
   ] : []
   const navigate = useNavigate()
   const location = useLocation()

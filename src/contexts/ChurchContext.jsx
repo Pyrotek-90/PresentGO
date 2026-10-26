@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { makeScope } from '../lib/scope'
 import { teamColorMap, LEAD_COLOR } from '../lib/teamColors'
-import { isPaid } from '../lib/plans'
+import { isPaid, canPresent } from '../lib/plans'
 import { isOfflineEnabled } from '../lib/offline'
 import { downloadForOffline } from '../lib/offlineSync'
 
@@ -67,7 +67,7 @@ export function ChurchProvider({ children }) {
     const colors = teamColorMap(churches)
     return {
       loading, legacy, churches, church, workspace, isAdmin, isEditor, canLead, scope,
-      plan, pro: isPaid(plan),
+      plan, pro: isPaid(plan), present: canPresent(plan),
       // Free / Pro: one "Team". Ultimate: a "Church" with several workspaces.
       unitLabel: church?.plan === 'ultimate' ? 'Church' : 'Team',
       // this person's color for each team's sets

@@ -7,7 +7,7 @@ import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
   Sun, Moon, Shield, Check, ExternalLink,
-  Church, Zap, Bell, Star, Music, Languages,
+  Church, Zap, Bell, Star, Music, Languages, MonitorPlay,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -27,7 +27,7 @@ const PLANS = [
     icon: Star,
     iconClass: 'text-accent-light',
     borderClass: '',
-    description: 'Everything you need to keep your music book and run Sunday.',
+    description: 'Your music book: songs, charts and sets.',
     features: [
       'Unlimited songs, chord charts & transposition',
       'Unlimited imports (ChordPro, PDF charts, bulk folder)',
@@ -37,6 +37,29 @@ const PLANS = [
     ],
     cta: 'Your current plan',
     ctaDisabled: true,
+  },
+  {
+    id: 'solo',
+    name: 'Solo',
+    price: '$5',
+    period: '/month',
+    yearly: 'or $50/year — save about 17%',
+    badge: 'Coming Soon',
+    badgeClass: 'bg-sky-500/20 text-sky-300',
+    icon: MonitorPlay,
+    iconClass: 'text-sky-400',
+    borderClass: 'border-sky-500/30',
+    description: 'For a worship leader who presents on Sunday.',
+    features: [
+      'Everything in Free',
+      '500 MB Content Library',
+      'Presenting: controller, Up Next, Loop, TV output',
+      'CCLI Report',
+      'Up to 3 devices signed in at once',
+    ],
+    cta: 'Notify Me When Available',
+    ctaDisabled: false,
+    comingSoon: true,
   },
   {
     id: 'pro',
@@ -49,18 +72,16 @@ const PLANS = [
     icon: Zap,
     iconClass: 'text-purple-400',
     borderClass: 'border-purple-500/30',
-    description: 'For worship teams: live presenting, AI tools and scheduling.',
+    description: 'For worship teams: AI tools and scheduling.',
     features: [
-      'Everything in Free',
-      '500 MB Content Library',
-      'Presenting: controller, Up Next, Loop, TV output',
+      'Everything in Solo, with no device limit',
+      '1 GB Content Library',
       'AI Translate (lyrics & slide translations)',
       'AI Worship Leader Notes',
       'AI key / BPM lookup & Smart Cleanup',
       'Team scheduling, email invites & calendar sync',
       'Add, invite and message team members',
       'Shared team access: musicians and singers open their sets, charts and lyrics',
-      'CCLI Report',
     ],
     cta: 'Notify Me When Available',
     ctaDisabled: false,
@@ -99,6 +120,7 @@ function PlanCard({ plan, current }) {
   const Icon = plan.icon
 
   const checkColor =
+    plan.id === 'solo'     ? 'text-sky-400'    :
     plan.id === 'pro'      ? 'text-purple-400' :
     plan.id === 'ultimate' ? 'text-amber-400'  : 'text-accent-light'
 

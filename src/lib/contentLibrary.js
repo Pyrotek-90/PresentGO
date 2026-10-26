@@ -45,13 +45,13 @@ export async function storageUsed(scope) {
 }
 
 // `scope` (lib/scope.js): files are stored under the uploader, rows belong to the church.
-// Refuses when the upload would go past the plan's storage (Free 100 MB, Pro 500 MB, Ultimate 5 GB).
+// Refuses when the upload would go past the plan's storage (Free 100 MB, Solo 500 MB, Pro 1 GB, Ultimate 5 GB).
 export async function saveImport(scope, group, name, onProgress, folderId = null) {
   const adding = group.pages.reduce((n, p) => n + (p.blob?.size || 0), 0)
   const limit = storageLimit(scope.plan)
   const used = await storageUsed(scope)
   if (used + adding > limit) {
-    const more = scope.plan === 'free' ? ' Pro has 500 MB' : scope.plan === 'pro' ? ' Ultimate has 5 GB' : ''
+    const more = scope.plan === 'free' ? ' Solo has 500 MB' : scope.plan === 'solo' ? ' Pro has 1 GB' : scope.plan === 'pro' ? ' Ultimate has 5 GB' : ''
     throw new Error(`Your Content Library is full (${formatBytes(used)} of ${formatBytes(limit)} on ${PLAN_LABEL[scope.plan] || 'your plan'}). Delete or archive files to make room.${more ? `${more}.` : ''}`)
   }
   const folder = crypto.randomUUID()
