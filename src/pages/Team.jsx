@@ -202,18 +202,18 @@ export default function Team() {
             <div className="flex items-center gap-2">
               {(toInvite.length > 0 || (readOnly && !legacy)) && (
                 <button onClick={() => requirePro('Inviting people to your team') && sendTeamInvites(toInvite.map(m => m.id))} disabled={inviting}
-                  title={readOnly ? 'Invite (Pro)' : `Email an invitation to join ${teamName} to everyone not invited yet`}
-                  className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
-                  <Send size={14} /> {inviting ? 'Sending…' : <>Invite <span className="hidden sm:inline">to join</span>{toInvite.length > 0 && ` (${toInvite.length})`}</>}
+                  title={readOnly ? 'Invite (Pro)' : `Email an invitation to join ${teamName} to everyone not invited yet`} aria-label="Invite to join"
+                  className={`flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
+                  <Send size={14} /> <span className="hidden sm:inline">{inviting ? 'Sending…' : 'Invite to join'}</span>{toInvite.length > 0 && <span className="sm:ml-0">{`(${toInvite.length})`}</span>}
                 </button>
               )}
               <button onClick={() => requirePro('Message Team') && setMessaging(true)} disabled={pro && !members.length} title={readOnly ? 'Message Team (Pro)' : undefined}
-                aria-label="Message Team" className={`flex items-center gap-1.5 h-8 px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
-                <MessageSquare size={14} /> <span className="sm:hidden">Message</span><span className="hidden sm:inline">Message Team</span>
+                aria-label="Message Team" className={`flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
+                <MessageSquare size={14} /> <span className="hidden sm:inline">Message Team</span>
               </button>
               <button onClick={() => { if (!requirePro('Adding team members')) return; setForm({ ...EMPTY }); setError(null) }} title={readOnly ? 'Add Member (Pro)' : undefined}
-                className={`btn-primary flex items-center gap-1.5 !py-1 !px-3 text-sm whitespace-nowrap ${locked(pro)}`}>
-                <UserPlus size={14} /> <span className="sm:hidden">Add</span><span className="hidden sm:inline">Add Member</span>
+                aria-label="Add Member" className={`btn-primary flex items-center gap-1.5 !py-1 !px-2.5 sm:!px-3 text-sm whitespace-nowrap ${locked(pro)}`}>
+                <UserPlus size={14} /> <span className="hidden sm:inline">Add Member</span>
               </button>
             </div>
           </div>
