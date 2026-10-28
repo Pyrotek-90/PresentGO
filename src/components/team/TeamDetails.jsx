@@ -35,6 +35,9 @@ export default function TeamDetails() {
   const toggle = () => setOpen(o => { try { localStorage.setItem(KEY, o ? '0' : '1') } catch { /* ignore */ } return !o })
   const dirty = name !== saved.name || FIELDS.some(k => (d[k] || '') !== (saved.d[k] || ''))
   const set = k => e => { setD(x => ({ ...x, [k]: e.target.value })); setState(null) }
+  // Example text only guides the first entry; once details are saved the empty boxes stay empty.
+  const hasSaved = state === 'saved' || FIELDS.some(k => saved.d[k])
+  const hint = t => (hasSaved ? undefined : t)
   const me = user?.user_metadata?.full_name || user?.email?.split('@')[0] || ''
 
   const save = async () => {
@@ -63,35 +66,35 @@ export default function TeamDetails() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block">
               <span className="label !mb-1">Organization</span>
-              <input className="input !h-10" value={d.church_name} onChange={set('church_name')} placeholder="Grace Community Church" />
+              <input className="input !h-10" value={d.church_name} onChange={set('church_name')} placeholder={hint("Grace Community Church")} />
             </label>
             <label className="block">
               <span className="label !mb-1">{unitLabel} name</span>
               <input className="input !h-10" value={name} onChange={e => { setName(e.target.value); setState(null) }} disabled={!isAdmin}
-                placeholder="Grace Worship Team" title={isAdmin ? undefined : 'Only Admins can rename the team'} />
+                placeholder={hint("Grace Worship Team")} title={isAdmin ? undefined : 'Only Admins can rename the team'} />
             </label>
             <label className="block">
               <span className="label !mb-1">Location</span>
-              <input className="input !h-10" value={d.location} onChange={set('location')} placeholder="123 Main St, Schaumburg, IL" />
+              <input className="input !h-10" value={d.location} onChange={set('location')} placeholder={hint("123 Main St, Schaumburg, IL")} />
             </label>
             <label className="block">
               <span className="label !mb-1">Contact name</span>
-              <input className="input !h-10" value={d.contact_name} onChange={set('contact_name')} placeholder={me} />
+              <input className="input !h-10" value={d.contact_name} onChange={set('contact_name')} placeholder={hint(me)} />
             </label>
             <label className="block">
               <span className="label !mb-1">Contact phone</span>
-              <input className="input !h-10" type="tel" inputMode="tel" value={d.contact_phone} placeholder="555.555.5555"
+              <input className="input !h-10" type="tel" inputMode="tel" value={d.contact_phone} placeholder={hint("555.555.5555")}
                 onChange={e => { setD(x => ({ ...x, contact_phone: formatPhoneTyping(e.target.value) })); setState(null) }}
                 onBlur={() => setD(x => ({ ...x, contact_phone: formatPhone(x.contact_phone || '') }))} />
             </label>
             <label className="block">
               <span className="label !mb-1">Contact email</span>
-              <input className="input !h-10" type="email" value={d.contact_email} onChange={set('contact_email')} placeholder={user?.email || ''} title="Replies to invitation emails go here" />
+              <input className="input !h-10" type="email" value={d.contact_email} onChange={set('contact_email')} placeholder={hint(user?.email || '')} title="Replies to invitation emails go here" />
             </label>
             <label className="block sm:col-span-3">
               <span className="label !mb-1">Welcome message</span>
               <textarea className="input !h-auto py-2 min-h-[3.5rem]" rows={2} value={d.welcome} onChange={set('welcome')} maxLength={1000}
-                placeholder="Glad you're joining us! We prepare with StaffList: your sets, charts and lyrics will be waiting for you." />
+                placeholder={hint("Glad you're joining us! We prepare with StaffList: your sets, charts and lyrics will be waiting for you.")} />
             </label>
           </div>
           <div className="flex items-center gap-3">
