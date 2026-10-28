@@ -155,7 +155,7 @@ export default function Auth() {
 
         <div className="space-y-2">
           <p className="text-center text-xs text-muted">
-            {tab === 'login' ? 'StaffList · Chord charts, worship sets & presentation'
+            {tab === 'login' ? 'StaffList · Chord Charts, Set Lists & Presentation'
               : 'By creating an account, you agree to the Terms of Use and Privacy Policy.'}
           </p>
           <LegalLinks />
