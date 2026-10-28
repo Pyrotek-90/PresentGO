@@ -1,37 +1,35 @@
-// Billing for a team: Stripe Checkout (start Solo or Pro) and the Stripe customer portal
-// (change plan, update card, cancel, see invoices). Only the team's Admins can use it.
+// Billing for the signed-in person's OWN team: Stripe Checkout (start Solo or Pro) and the Stripe
+// customer portal (change plan, update card, cancel, see invoices).
 //
-//   POST { action: 'checkout', church, plan: 'solo' | 'pro', interval: 'month' | 'year' } → { url }
-//   POST { action: 'portal', church }                                                   → { url }
+// Anyone can upgrade. The plan goes on the team they started; if they haven't started one yet,
+// checkout starts one for them (named `teamName`). Teams they joined as a member are never billed
+// and stay as they are — they keep seeing the sets they're scheduled on, for free.
+//
+//   POST { action: 'checkout', plan: 'solo' | 'pro', interval: 'month' | 'year', teamName? } → { url }
+//   POST { action: 'portal' }                                                              → { url }
 //
 // The plan itself is set by the Stripe webhook (api/stripe-webhook.js) once payment goes through,
 // never here, so the database only ever reflects what Stripe has confirmed.
 
 import {
-  PLAN_KEYS, stripe, billingConfigured, currentUser, getChurch, isChurchAdmin, updateChurch, appOrigin,
+  PLAN_KEYS, stripe, billingConfigured, currentUser, ownTeam, createTeam, updateChurch, appOrigin,
 } from './_lib/billing.js'
 
-const UUID = /^[0-9a-f-]{36}$/i
 const LIVE = new Set(['active', 'trialing', 'past_due', 'unpaid', 'incomplete'])
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' })
   if (!billingConfigured()) return res.status(501).json({ error: "Billing isn't set up yet." })
 
-  const { action, church: churchId, plan, interval } = req.body || {}
-  if (!UUID.test(churchId || '')) return res.status(400).json({ error: 'bad_request' })
+  const { action, plan, interval, teamName } = req.body || {}
 
   try {
     const user = await currentUser(req)
     if (!user) return res.status(401).json({ error: 'Please sign in again.' })
-    if (!(await isChurchAdmin(churchId, user.id))) {
-      return res.status(403).json({ error: "Only your team's Admin can change the plan." })
-    }
-    const church = await getChurch(churchId)
-    if (!church) return res.status(404).json({ error: 'Team not found.' })
 
     const s = stripe()
     const back = `${appOrigin(req)}/settings`
+    let church = await ownTeam(user.id)
 
     const portal = async () => {
       const session = await s.billingPortal.sessions.create({
@@ -42,7 +40,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'portal') {
-      if (!church.stripe_customer_id) return res.status(400).json({ error: 'This team has no billing account yet.' })
+      if (!church?.stripe_customer_id) return res.status(400).json({ error: "You don't have a subscription yet." })
       return portal()
     }
 
@@ -50,12 +48,15 @@ export default async function handler(req, res) {
     const lookupKey = PLAN_KEYS[plan]?.[interval]
     if (!lookupKey) return res.status(400).json({ error: 'Choose Solo or Pro, monthly or yearly.' })
 
-    // Already subscribed: switching plans happens in the portal, so a team never pays twice.
-    if (church.stripe_subscription_id && LIVE.has(church.billing_status) && church.stripe_customer_id) {
+    // Already subscribed: switching plans happens in the portal, so nobody pays twice.
+    if (church?.stripe_subscription_id && LIVE.has(church.billing_status) && church.stripe_customer_id) {
       return portal()
     }
 
-    // One Stripe customer per team, remembered on the church.
+    // No team of their own yet: start one (it stays Free until Stripe confirms the payment).
+    if (!church) church = await createTeam(user, teamName)
+
+    // One Stripe customer per team, remembered on the team.
     let customer = church.stripe_customer_id
     if (!customer) {
       const c = await s.customers.create({
@@ -81,10 +82,10 @@ export default async function handler(req, res) {
       subscription_data: { metadata: { church_id: church.id } },
       allow_promotion_codes: true,
       ...(tax ? { automatic_tax: { enabled: true }, customer_update: { address: 'auto', name: 'auto' } } : {}),
-      success_url: `${back}?billing=success#plans`,
+      success_url: `${back}?billing=success&team=${church.id}#plans`,
       cancel_url: `${back}?billing=cancelled#plans`,
     })
-    return res.status(200).json({ url: session.url })
+    return res.status(200).json({ url: session.url, church: church.id })
   } catch (e) {
     console.error('billing', e)
     return res.status(500).json({ error: 'Something went wrong talking to Stripe. Please try again.' })

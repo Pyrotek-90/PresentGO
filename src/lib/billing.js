@@ -1,4 +1,4 @@
-// Starts Stripe Checkout or opens the Stripe customer portal for a team (see api/billing.js).
+// Starts Stripe Checkout or opens the Stripe customer portal for the person's own team (see api/billing.js).
 import { supabase } from './supabase'
 
 async function call(body) {
@@ -13,8 +13,9 @@ async function call(body) {
   window.location.assign(out.url)
 }
 
-export const startCheckout = (church, plan, interval) => call({ action: 'checkout', church, plan, interval })
-export const openBillingPortal = church => call({ action: 'portal', church })
+// The plan goes on the person's own team; teamName names it if one has to be started.
+export const startCheckout = (plan, interval, teamName) => call({ action: 'checkout', plan, interval, teamName })
+export const openBillingPortal = () => call({ action: 'portal' })
 
 // Billing status for the team's Admins (null for others, or before the billing update is run).
 export async function getBilling(church) {

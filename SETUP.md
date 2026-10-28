@@ -80,7 +80,9 @@ Same as Vercel — connect your repo and add env vars in **Site Settings → Env
 
 ## Billing (Stripe) — Solo and Pro
 
-Admins buy Solo or Pro in **Settings → Subscription Plans**. Stripe Checkout takes the payment; the
+Anyone can buy Solo or Pro in **Settings → Subscription Plans**. The plan goes on the team they
+started; if they haven't started one, checkout starts one for them. Teams they joined as a member
+stay free for them and aren't affected. Stripe Checkout takes the payment; the
 Stripe webhook then sets the team's plan. The customer portal (**Manage billing**) handles plan
 changes, card updates, invoices and cancelling.
 

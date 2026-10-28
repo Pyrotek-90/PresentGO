@@ -4,6 +4,9 @@
 --    is the only thing that changes churches.plan and the billing columns; it uses the service-role
 --    key, so people can't set their own plan (authenticated users may still only update `name`).
 --  • church_billing() lets a team's Admins see their subscription status in Settings.
+--  • Anyone can upgrade. The plan belongs to the team the person started ("owner" in my_churches);
+--    if they haven't started one, upgrading starts one for them. Being a member of someone else's
+--    team (on any plan) stays free and is unaffected.
 
 begin;
 
@@ -35,5 +38,24 @@ language sql stable security definer set search_path = public as $$
     from public.churches c where c.id = p_church
 $$;
 grant execute on function public.church_billing(uuid) to authenticated;
+
+-- my_churches(): same as before, plus "owner" — true for the team this person started.
+create or replace function public.my_churches() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', c.id, 'name', c.name, 'plan', c.plan, 'role', cm.role, 'color', cm.color,
+           'owner', c.created_by = auth.uid(),
+           'editor', public.sl_is_editor(c.id),
+           'workspaces', (
+             select coalesce(jsonb_agg(jsonb_build_object(
+                      'id', w.id, 'name', w.name,
+                      'lead', cm.role = 'admin' or exists (select 1 from public.workspace_leaders l where l.workspace_id = w.id and l.user_id = auth.uid()))
+                    order by w.created_at), '[]'::jsonb)
+               from public.workspaces w where w.church_id = c.id)
+         ) order by cm.created_at), '[]'::jsonb)
+    from public.church_members cm join public.churches c on c.id = cm.church_id
+   where cm.user_id = auth.uid()
+$$;
+grant execute on function public.my_churches() to authenticated;
 
 commit;

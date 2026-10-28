@@ -65,14 +65,28 @@ export async function admin(path, init = {}) {
   return text ? JSON.parse(text) : null
 }
 
+const BILLING_COLS = 'id,name,plan,created_by,stripe_customer_id,stripe_subscription_id,billing_status'
+
 export async function getChurch(id) {
-  const rows = await admin(`churches?id=eq.${id}&select=id,name,plan,stripe_customer_id,stripe_subscription_id,billing_status`)
+  const rows = await admin(`churches?id=eq.${id}&select=${BILLING_COLS}`)
   return rows?.[0] || null
 }
 
-export async function isChurchAdmin(churchId, userId) {
-  const rows = await admin(`church_members?church_id=eq.${churchId}&user_id=eq.${userId}&role=eq.admin&select=user_id`)
-  return rows?.length > 0
+// The team this person pays for: the one they started. Teams they joined (even as an Admin)
+// are paid for by the person who started them.
+export async function ownTeam(userId) {
+  const rows = await admin(`churches?created_by=eq.${userId}&select=${BILLING_COLS}&order=created_at.asc`)
+  return rows?.find(c => c.stripe_subscription_id) || rows?.[0] || null
+}
+
+// Starts a team for someone upgrading who hasn't started one (Free until Stripe confirms payment).
+export async function createTeam(user, name) {
+  const fallback = `${(user.user_metadata?.full_name || user.email || 'My').split(/[\s@]/)[0]}'s Team`
+  const teamName = String(name || '').trim().slice(0, 120) || fallback
+  const [church] = await admin('churches', { method: 'POST', body: JSON.stringify({ name: teamName, plan: 'free', created_by: user.id }) })
+  await admin('church_members', { method: 'POST', body: JSON.stringify({ church_id: church.id, user_id: user.id, role: 'admin' }) })
+  await admin('workspaces', { method: 'POST', body: JSON.stringify({ church_id: church.id, name: 'Main Service' }) })
+  return getChurch(church.id)
 }
 
 export async function updateChurch(match, fields) {

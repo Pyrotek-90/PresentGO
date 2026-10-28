@@ -257,23 +257,36 @@ export default function Settings() {
   const [viewerMode, setViewerMode] = useState(() => getPref('viewerMode', 'lyrics'))
   const pickViewerMode = m => { setViewerMode(m); setPref('viewerMode', m) }
   const { user } = useAuth()
-  const { scope, plan: currentPlan, church, isAdmin, legacy, refresh } = useChurch()
+  const { scope, churches, legacy, refresh, choose } = useChurch()
   // "See plans" from an upgrade prompt lands on the plans.
   useEffect(() => {
     if (window.location.hash === '#plans') setTimeout(() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' }), 150)
   }, [])
 
   // ── Billing ──
+  // The plans are about this person's OWN team (the one they started). Teams they joined as a
+  // member are free for them and aren't affected by anything here.
+  const ownTeam = churches.find(c => c.owner && ['solo', 'pro', 'ultimate'].includes(c.plan))
+    || churches.find(c => c.owner) || null
+  const currentPlan = legacy ? 'pro' : ownTeam?.plan || 'free'
+  const joinedTeams = churches.filter(c => c.id !== ownTeam?.id)
+  const firstName = (user?.user_metadata?.full_name || user?.email || '').split(/[\s@]/)[0]
+  const [teamName, setTeamName] = useState(firstName ? `${firstName}'s Team` : '')
   const [interval, setInterval_] = useState('month')
   const [billingInfo, setBillingInfo] = useState(null)
   const [billingBusy, setBillingBusy] = useState(null)      // plan id or 'portal' while redirecting
   const [billingError, setBillingError] = useState('')
-  const [returned] = useState(() => new URLSearchParams(window.location.search).get('billing'))   // success | cancelled
-  const loadBilling = () => (church?.id && isAdmin ? getBilling(church.id).then(setBillingInfo) : Promise.resolve())
-  useEffect(() => { loadBilling() }, [church?.id, isAdmin, currentPlan])   // eslint-disable-line react-hooks/exhaustive-deps
-  // Back from Stripe Checkout: the webhook updates the plan within a few seconds, so check again.
+  const [returned] = useState(() => {
+    const q = new URLSearchParams(window.location.search)
+    return { status: q.get('billing'), team: q.get('team') }   // success | cancelled
+  })
+  const loadBilling = () => (ownTeam?.id ? getBilling(ownTeam.id).then(setBillingInfo) : Promise.resolve())
+  useEffect(() => { loadBilling() }, [ownTeam?.id, currentPlan])   // eslint-disable-line react-hooks/exhaustive-deps
+  // Back from Stripe Checkout: the webhook updates the plan within a few seconds, so check again,
+  // and switch the app to the team that was just upgraded.
   useEffect(() => {
-    if (returned !== 'success') return
+    if (returned.status !== 'success') return
+    if (returned.team) choose(returned.team, null)
     let n = 0
     const t = window.setInterval(() => { refresh(); loadBilling(); if (++n >= 6) window.clearInterval(t) }, 2500)
     window.history.replaceState(null, '', '/settings#plans')
@@ -281,17 +294,18 @@ export default function Settings() {
   }, [returned])   // eslint-disable-line react-hooks/exhaustive-deps
   const hasSub = !!billingInfo?.status && !['canceled', 'incomplete_expired'].includes(billingInfo.status)
   const billing = {
-    canBuy: !legacy && !!church?.id && isAdmin,
+    canBuy: !legacy,
     hasSub,
     busy: billingBusy,
     buy: async planId => {
+      if (!ownTeam && !teamName.trim()) { setBillingError('Give your team a name first.'); return }
       setBillingError(''); setBillingBusy(planId)
-      try { await (hasSub ? openBillingPortal(church.id) : startCheckout(church.id, planId, interval)) }
+      try { await (hasSub ? openBillingPortal() : startCheckout(planId, interval, teamName.trim())) }
       catch (e) { setBillingError(e.message); setBillingBusy(null) }
     },
     manage: async () => {
       setBillingError(''); setBillingBusy('portal')
-      try { await openBillingPortal(church.id) }
+      try { await openBillingPortal() }
       catch (e) { setBillingError(e.message); setBillingBusy(null) }
     },
   }
@@ -451,7 +465,7 @@ export default function Settings() {
         {/* ── Subscription Plans ────────────────────────────────────────── */}
         <section className="space-y-3">
           <h2 id="plans" className="text-xs font-semibold text-muted uppercase tracking-wider scroll-mt-4">Subscription Plans</h2>
-          {returned === 'success' && (
+          {returned.status === 'success' && (
             <div className="card flex items-center gap-3 border-green-500/40">
               <PartyPopper size={18} className="text-green-400 shrink-0" />
               <p className="text-sm text-primary">
@@ -459,10 +473,29 @@ export default function Settings() {
               </p>
             </div>
           )}
-          {returned === 'cancelled' && (
+          {returned.status === 'cancelled' && (
             <p className="text-xs text-muted">Checkout was cancelled — nothing was charged.</p>
           )}
           {billingError && <p className="text-xs text-red-400">{billingError}</p>}
+          {!legacy && (
+            <div className="card space-y-2">
+              <p className="text-sm text-primary">
+                {ownTeam
+                  ? <>Your team, <span className="font-medium">{ownTeam.name}</span>, is on <span className="font-medium">{PLAN_LABEL[currentPlan]}</span>.</>
+                  : <>You're on <span className="font-medium">Free</span>. Upgrading starts your own team:</>}
+              </p>
+              {!ownTeam && (
+                <input value={teamName} onChange={e => setTeamName(e.target.value)} maxLength={120}
+                  placeholder="Team name" aria-label="Team name" className="input w-full" />
+              )}
+              {joinedTeams.length > 0 && (
+                <p className="text-xs text-muted">
+                  You'll stay on {joinedTeams.map(c => c.name).join(', ')} for free, whatever plan you choose.
+                  Those teams' plans are paid by their own Admins.
+                </p>
+              )}
+            </div>
+          )}
           {billing.canBuy && <BillingStatus info={billingInfo} busy={billingBusy} manage={billing.manage} />}
           <div className="flex justify-center">
             <div className="inline-flex rounded-lg border border-border p-0.5 text-xs">
