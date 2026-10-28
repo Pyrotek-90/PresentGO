@@ -91,3 +91,9 @@ npx cap sync ios
 The launch screen stays up until StaffList has drawn its first screen, then fades out (at most
 4 seconds, set in `capacitor.config.json`). If the artwork changes, replace the files in
 `assets/` and run the generate command again.
+
+## App Store description
+
+Use this as the App Store subtitle / short description (same wording as the login page and the web meta description):
+
+> Chord Charts, Set Lists & Presentation
