@@ -147,7 +147,7 @@ export default function Landing() {
       <section id="features" className="scroll-mt-20 border-t border-border bg-surface">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24 space-y-16 sm:space-y-20">
           <div className="text-center space-y-3 max-w-2xl mx-auto">
-            <h2 className="text-2xl sm:text-4xl font-semibold tracking-tight">All your set list resources in one place, so prep is easy</h2>
+            <h2 className="text-2xl sm:text-4xl font-semibold tracking-tight">Creating sets has never been this easy</h2>
             <p className="text-muted">Import your charts once, build a set in a few taps and share it with your team. No more hunting for files or keys before Sunday.</p>
           </div>
           {FEATURES.map((f, i) => {
