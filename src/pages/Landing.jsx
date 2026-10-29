@@ -132,7 +132,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-20 sm:pt-24 sm:pb-28 flex flex-col items-center text-center gap-8">
           <HeroLogo />
           <div className="space-y-4 max-w-2xl">
-            <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight leading-tight">Chord charts, set lists and presentation for your worship team</h1>
+            <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight leading-tight">Chord charts, set lists and presentation, all in one app</h1>
             <p className="text-base sm:text-lg text-muted leading-relaxed">Keep every song, key and slide in one place. Build a set in a few taps, present from your iPad or iPhone, and share the whole program with your band.</p>
           </div>
           <div className="flex flex-wrap justify-center gap-3">
