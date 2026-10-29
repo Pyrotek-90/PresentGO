@@ -16,7 +16,7 @@ const DARK = {
 export default function PublicLayout({ children }) {
   const { user } = useAuth()
   return (
-    <div style={DARK} className="h-full overflow-y-auto bg-bg text-primary">
+    <div style={DARK} className="relative h-full overflow-y-auto bg-bg text-primary">
       <header className="sticky top-0 z-30 border-b border-border backdrop-blur" style={{ background: 'rgba(11,15,18,0.88)' }}>
         <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4" aria-label="Main">
           <Link to="/welcome" className="mr-auto rounded-md hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label="StaffList home">
