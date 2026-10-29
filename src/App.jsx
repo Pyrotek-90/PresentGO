@@ -18,6 +18,8 @@ import Calendar from './pages/Calendar'
 import Team from './pages/Team'
 import GetStarted from './pages/GetStarted'
 import CcliReport from './pages/CcliReport'
+import Landing from './pages/Landing'
+import Support from './pages/Support'
 
 export default function App() {
   return (
@@ -31,6 +33,8 @@ export default function App() {
             <Route path="/auth" element={<Auth />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/welcome" element={<Landing />} />
+            <Route path="/support" element={<Support />} />
 
             {/* Present display window — no chrome, no auth guard needed
                 (opened programmatically, token passed via sessionStorage) */}

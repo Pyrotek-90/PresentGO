@@ -160,6 +160,7 @@ export function LegalLinks({ className = '' }) {
     <p className={`text-xs text-muted flex justify-center gap-4 ${className}`}>
       <Link to="/privacy" className="hover:text-primary underline-offset-2 hover:underline">Privacy Policy</Link>
       <Link to="/terms" className="hover:text-primary underline-offset-2 hover:underline">Terms of Use</Link>
+      <Link to="/support" className="hover:text-primary underline-offset-2 hover:underline">Support</Link>
     </p>
   )
 }

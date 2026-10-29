@@ -22,7 +22,8 @@ const AppleIcon = () => (
 export default function Auth() {
   const { signIn, signUp, signInWithGoogle, signInWithApple } = useAuth()
   const navigate = useNavigate()
-  const [tab, setTab] = useState('login')
+  // /auth?signup=1 (Get started on the landing page) opens on Create Account.
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).has('signup') ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)

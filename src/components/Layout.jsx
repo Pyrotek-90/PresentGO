@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Home, CalendarDays, Users, LogOut, FolderOpen, Settings, ChevronDown, FileBarChart, Upload } from 'lucide-react'
+import { Home, CalendarDays, Users, LogOut, FolderOpen, Settings, ChevronDown, FileBarChart, Upload, LifeBuoy } from 'lucide-react'
 import Logo from './Logo'
 import NotificationBell from './NotificationBell'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
@@ -20,11 +20,14 @@ export default function Layout({ children }) {
   const { isEditor, present } = useChurch()
   // Musicians and singers (Members) need Home (their sets, songs and charts) and their Schedule.
   const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/' || i.to === '/schedule')
-  const tools = isEditor ? [
-    { to: '/get-started', label: 'Import Songs', icon: Upload },
-    // CCLI Report is Solo and up: it isn't listed on the Free plan
-    ...(present ? [{ to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart }] : []),
-  ] : []
+  const tools = [
+    ...(isEditor ? [
+      { to: '/get-started', label: 'Import Songs', icon: Upload },
+      // CCLI Report is Solo and up: it isn't listed on the Free plan
+      ...(present ? [{ to: '/ccli-report', label: 'CCLI Report', icon: FileBarChart }] : []),
+    ] : []),
+    { to: '/support', label: 'Help & Support', icon: LifeBuoy },
+  ]
   const navigate = useNavigate()
   const location = useLocation()
   const [online, setOnline] = useState(() => navigator.onLine)
