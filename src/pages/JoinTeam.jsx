@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { Check, X, CalendarDays, MapPin, Music, Users, Phone, Clock3, Church } from 'lucide-react'
-import Logo from '../components/Logo'
+import Wordmark from '../components/Wordmark'
 import { supabase } from '../lib/supabase'
 import { formatSetTime } from '../lib/sets'
 import { extraTimes, timeText } from '../lib/setTimes'
@@ -54,8 +54,7 @@ export default function JoinTeam() {
     <div className="min-h-[100dvh] bg-black text-[#f5f5f5] flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 space-y-5">
         <div className="flex items-center gap-2">
-          <Logo className="text-accent" size={24} />
-          <span className="font-semibold tracking-tight">StaffList</span>
+          <Wordmark className="text-[22px]" />
         </div>
 
         {state === 'loading' && <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}

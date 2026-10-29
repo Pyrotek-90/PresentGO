@@ -1,7 +1,7 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Home, CalendarDays, Users, LogOut, FolderOpen, Settings, ChevronDown, FileBarChart, Upload, LifeBuoy } from 'lucide-react'
-import Logo from './Logo'
+import Wordmark from './Wordmark'
 import NotificationBell from './NotificationBell'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
 import { useChurch } from '../contexts/ChurchContext'
@@ -69,8 +69,7 @@ export default function Layout({ children }) {
         <div className="flex items-center gap-2 min-w-0">
           <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="StaffList home" title="Home"
             className="flex items-center gap-3 rounded-lg hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0">
-            <Logo className="text-accent" size={26} />
-            <span className="text-lg font-semibold tracking-tight text-primary">StaffList</span>
+            <Wordmark className="text-[20px] text-primary" />
           </Link>
           <WorkspaceSwitcher />
         </div>

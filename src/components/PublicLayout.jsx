@@ -20,7 +20,7 @@ export default function PublicLayout({ children }) {
       <header className="sticky top-0 z-30 border-b border-border backdrop-blur" style={{ background: 'rgba(11,15,18,0.88)' }}>
         <nav className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4" aria-label="Main">
           <Link to="/welcome" className="mr-auto rounded-md hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label="StaffList home">
-            <Wordmark className="text-[22px] sm:text-[26px]" staff={false} />
+            <Wordmark className="text-[24px] sm:text-[28px]" />
           </Link>
           <Link to="/welcome#features" className="hidden md:inline text-sm text-muted hover:text-primary">Features</Link>
           <Link to="/welcome#pricing" className="hidden md:inline text-sm text-muted hover:text-primary">Pricing</Link>
@@ -36,8 +36,7 @@ export default function PublicLayout({ children }) {
       <footer className="border-t border-border">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row gap-6 sm:items-center">
           <div className="space-y-2 mr-auto">
-            <Wordmark className="text-[22px]" staff={false} />
-            <p className="text-sm text-muted italic">To the Chief Musician</p>
+            <Wordmark tagline className="text-[36px]" />
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
             <Link to="/welcome#features" className="hover:text-primary">Features</Link>

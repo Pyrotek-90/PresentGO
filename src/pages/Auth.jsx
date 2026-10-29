@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { LegalLinks } from './Legal'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import Logo from '../components/Logo'
+import Wordmark from '../components/Wordmark'
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -61,14 +61,8 @@ export default function Auth() {
     <div className="flex h-full items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-8">
         {/* Logo */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-accent/20 border border-accent/40 flex items-center justify-center">
-            <Logo size={40} className="text-accent" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-2xl font-bold">StaffList</h1>
-            <p className="text-muted text-sm mt-1 italic">To the Chief Musician</p>
-          </div>
+        <div className="flex justify-center">
+          <h1 className="m-0 font-normal"><Wordmark tagline className="text-[54px] text-primary" /></h1>
         </div>
 
         {/* Card */}

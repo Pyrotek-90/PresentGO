@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import Logo from '../components/Logo'
+import Wordmark from '../components/Wordmark'
 import { LEGAL } from '../lib/legal'
 
 const mail = <a href={`mailto:${LEGAL.contactEmail}`} className="text-accent-light underline">{LEGAL.contactEmail}</a>
@@ -122,7 +122,7 @@ function LegalPage({ title, intro, sections, other }) {
     <div className="min-h-[100dvh] bg-bg text-primary">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         <header className="flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 hover:opacity-80"><Logo className="text-accent" size={26} /><span className="font-semibold tracking-tight">StaffList</span></Link>
+          <Link to="/" className="flex items-center gap-2 hover:opacity-80"><Wordmark className="text-[22px] text-primary" /></Link>
           <Link to={other.to} className="text-sm text-muted hover:text-primary">{other.label}</Link>
         </header>
         <div className="space-y-2">

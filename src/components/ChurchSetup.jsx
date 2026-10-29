@@ -3,7 +3,7 @@ import { Church, Users, LogOut, Check, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
-import Logo from './Logo'
+import Wordmark from './Wordmark'
 
 // First sign-in for someone who isn't on a team yet: answer a team invitation, start a team,
 // or ask to be added.
@@ -43,8 +43,7 @@ export default function ChurchSetup() {
     <div className="min-h-full flex items-center justify-center p-6 bg-bg">
       <div className="w-full max-w-md space-y-5">
         <div className="flex items-center gap-3 justify-center">
-          <Logo className="text-accent" size={30} />
-          <span className="text-xl font-semibold tracking-tight">StaffList</span>
+          <Wordmark className="text-[28px] text-primary" />
         </div>
 
         {invites.map(inv => (
