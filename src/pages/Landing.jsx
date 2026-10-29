@@ -94,6 +94,35 @@ function Cell({ v, featured }) {
   return <span className={`text-sm ${featured ? 'text-primary font-medium' : 'text-primary'}`}>{v}</span>
 }
 
+// Five staff lines framing the hero logo, centered on "taffList". PREVIEW: ?staff=full | frame | split
+const STAFF_LINE = 'rgba(34,211,238,0.34)'
+function StaffLines({ style, mask }) {
+  return (
+    <span aria-hidden="true" className="absolute flex flex-col justify-between pointer-events-none"
+      style={{ top: '50%', height: '0.72em', marginTop: '-0.3em', WebkitMaskImage: mask, maskImage: mask, ...style }}>
+      {[0, 1, 2, 3, 4].map(i => <span key={i} className="block" style={{ height: 'max(1px, 0.016em)', background: STAFF_LINE }} />)}
+    </span>
+  )
+}
+
+function HeroLogo() {
+  const variant = new URLSearchParams(window.location.search).get('staff') || 'none'
+  const fade = 'linear-gradient(to right, transparent, #000 18%, #000 82%, transparent)'
+  return (
+    <div className="relative w-full flex justify-center text-[64px] sm:text-[96px] lg:text-[116px]">
+      {variant === 'full' && <StaffLines mask={fade} style={{ left: '50%', width: '100vw', transform: 'translateX(-50%)' }} />}
+      {variant === 'split' && <>
+        <StaffLines mask="linear-gradient(to right, transparent, #000 60%)" style={{ right: 'calc(50% + 2.3em)', width: '50vw' }} />
+        <StaffLines mask="linear-gradient(to left, transparent, #000 60%)" style={{ left: 'calc(50% + 2.3em)', width: '50vw' }} />
+      </>}
+      <span className="relative inline-flex">
+        {variant === 'frame' && <StaffLines mask="linear-gradient(to right, transparent, #000 12%, #000 88%, transparent)" style={{ left: '-0.9em', right: '-0.9em' }} />}
+        <Wordmark tagline className="relative" />
+      </span>
+    </div>
+  )
+}
+
 export default function Landing() {
   const { user } = useAuth()
   const { hash } = useLocation()
@@ -112,7 +141,7 @@ export default function Landing() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-20 sm:pt-24 sm:pb-28 flex flex-col items-center text-center gap-8">
-          <Wordmark tagline className="text-[64px] sm:text-[96px] lg:text-[116px]" />
+          <HeroLogo />
           <div className="space-y-4 max-w-2xl">
             <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight leading-tight">Chord charts, set lists and presentation for your worship team</h1>
             <p className="text-base sm:text-lg text-muted leading-relaxed">Keep every song, key and slide in one place. Build a set in a few taps, present from your iPad or iPhone, and share the whole program with your band.</p>
