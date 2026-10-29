@@ -454,6 +454,8 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [savedId, setSavedId] = useState(song?.id || null)   // set once a new song is first saved
   const [keysSaved, setKeysSaved] = useState(false)
+  // Example text only guides a brand-new song; when editing a saved song the empty boxes stay empty.
+  const hint = t => (isNew && !savedId ? t : undefined)
 
   const lyricsRef = useRef(null)
 
@@ -861,11 +863,11 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label !mb-1">Title *</label>
-          <input className="input" placeholder="Amazing Grace" value={title} onChange={e => setTitle(e.target.value)} />
+          <input className="input" placeholder={hint("Amazing Grace")} value={title} onChange={e => setTitle(e.target.value)} />
         </div>
         <div>
           <label className="label !mb-1">Artist / Author</label>
-          <input className="input" placeholder="John Newton" value={artist} onChange={e => setArtist(e.target.value)} />
+          <input className="input" placeholder={hint("John Newton")} value={artist} onChange={e => setArtist(e.target.value)} />
         </div>
       </div>
 
@@ -913,7 +915,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
 
         <textarea ref={lyricsRef}
           className={`input resize-none font-mono text-sm leading-relaxed flex-1 min-h-[10rem] ${lyricsTab === 0 ? '' : 'hidden'}`}
-          placeholder={`[Verse 1]\nAmazing grace how sweet the sound\nThat saved a wretch like me\n\n[Chorus]\nMy chains are gone I've been set free`}
+          placeholder={hint(`[Verse 1]\nAmazing grace how sweet the sound\nThat saved a wretch like me\n\n[Chorus]\nMy chains are gone I've been set free`)}
           value={rawLyrics}
           onChange={e => {
             setRawLyrics(e.target.value)
@@ -1187,7 +1189,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
           <textarea id="chord-chart-area"
             className="input resize-none font-mono text-sm leading-relaxed"
             style={{ height: 'max(16rem, calc(92dvh - 380px))' }}
-            placeholder={`[Verse 1]\nG         D      Em    C\nAmazing grace how sweet the sound\nG         D         G\nThat saved a wretch like me\n\n[Chorus]\nC    G      D        Em\nMy chains are gone I've been set free`}
+            placeholder={hint(`[Verse 1]\nG         D      Em    C\nAmazing grace how sweet the sound\nG         D         G\nThat saved a wretch like me\n\n[Chorus]\nC    G      D        Em\nMy chains are gone I've been set free`)}
             value={chordChart}
             onChange={e => setChordChart(e.target.value)}
           />
@@ -1250,11 +1252,11 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
         <label className="h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
           <span className="text-[9px] uppercase tracking-normal sm:tracking-wider text-muted shrink-0">BPM</span>
           <input className="w-full min-w-0 max-w-[2.75rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none placeholder:font-normal placeholder:text-muted/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            type="number" inputMode="numeric" min="40" max="240" placeholder="75" value={bpm} onChange={e => setBpm(e.target.value)} />
+            type="number" inputMode="numeric" min="40" max="240" placeholder={hint("75")} value={bpm} onChange={e => setBpm(e.target.value)} />
         </label>
         <label className="h-9 min-w-0 flex items-center justify-center gap-1 px-1 sm:px-1.5 rounded-lg border border-border bg-card focus-within:border-accent cursor-text">
           <span className="text-[9px] uppercase tracking-normal sm:tracking-wider text-muted shrink-0">CCLI</span>
-          <input className="w-full min-w-0 max-w-[4.5rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none placeholder:font-normal placeholder:text-muted/40" inputMode="numeric" placeholder="22025" value={ccliNumber}
+          <input className="w-full min-w-0 max-w-[4.5rem] bg-transparent text-[13px] sm:text-sm font-semibold tracking-tight sm:tracking-normal focus:outline-none placeholder:font-normal placeholder:text-muted/40" inputMode="numeric" placeholder={hint("22025")} value={ccliNumber}
             onChange={e => setCcliNumber(e.target.value.replace(/[^\d]/g, ''))} />
         </label>
         {youtubeId && !ytOpen ? (
