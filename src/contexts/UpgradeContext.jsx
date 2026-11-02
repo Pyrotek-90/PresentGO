@@ -58,7 +58,7 @@ export function UpgradeProvider({ children }) {
                 <p className="text-sm text-muted mt-1">
                   {isAdmin
                     ? `Upgrade your ${unitLabel.toLowerCase()} to ${tier.name} (${tier.price}) to use it.`
-                    : `Ask your ${unitLabel.toLowerCase()}'s admin about upgrading to ${tier.name}.`}
+                    : `Ask your ${unitLabel.toLowerCase()}'s admin about upgrading to ${tier.name}, or start your own team on ${tier.name} (${tier.price}) — you'll stay on this one for free.`}
                   {' '}Free keeps your songs, charts, sets and schedule.
                 </p>
               </div>
