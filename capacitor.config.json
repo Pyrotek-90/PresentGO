@@ -3,7 +3,7 @@
   "appName": "StaffList",
   "webDir": "dist",
   "server": {
-    "url": "https://present-go-five.vercel.app",
+    "url": "https://stafflist.app",
     "cleartext": false
   },
   "ios": {
