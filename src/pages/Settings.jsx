@@ -3,6 +3,7 @@ import { LegalLinks } from './Legal'
 import CalendarSync from '../components/settings/CalendarSync'
 import OfflineMode from '../components/settings/OfflineMode'
 import MyTeams from '../components/settings/MyTeams'
+import DeleteAccount from '../components/settings/DeleteAccount'
 import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
@@ -360,6 +361,12 @@ export default function Settings() {
           <div className="space-y-4">
             {PLANS.map(plan => <PlanCard key={plan.id} plan={plan} current={currentPlan} />)}
           </div>
+        </section>
+
+        {/* ── Account ───────────────────────────────────────────────────── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Account</h2>
+          <DeleteAccount />
         </section>
 
         {/* Footer */}

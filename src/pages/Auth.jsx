@@ -23,6 +23,7 @@ export default function Auth() {
   const { signIn, signUp, signInWithGoogle, signInWithApple } = useAuth()
   const navigate = useNavigate()
   // /auth?signup=1 (Get started on the landing page) opens on Create Account.
+  const deleted = new URLSearchParams(window.location.search).has('deleted')
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).has('signup') ? 'register' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -83,6 +84,7 @@ export default function Auth() {
           </div>
 
           {/* OAuth buttons */}
+          {deleted && <p className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted">Your StaffList account has been deleted.</p>}
           <div className="space-y-2">
             <button
               onClick={() => handleOAuth('google')}

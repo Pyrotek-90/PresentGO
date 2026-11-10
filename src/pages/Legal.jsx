@@ -48,7 +48,7 @@ const PRIVACY = [
     <ul className="list-disc pl-5 space-y-1">
       <li>You can view and change most of your information in the app.</li>
       <li>You can decline or leave a team, and turn off calendar sync, at any time.</li>
-      <li>You can ask for a copy of your information, a correction, or deletion of your account by emailing {mail}. We answer within 30 days.</li>
+      <li>You can delete your account at any time in Settings → Account → Delete my account. You can also ask for a copy of your information, a correction, or deletion by emailing {mail}. We answer within 30 days.</li>
       <li>Depending on where you live (for example California or the European Union), you may have further rights, including to object to or limit some uses. We honor them however you contact us, and we won't treat you differently for using them.</li>
     </ul>
   </>],
@@ -97,7 +97,7 @@ const TERMS = [
     <p>We are always improving StaffList and may add, change or remove features. We work to keep it running, but can't promise it will always be available or error-free, so keep your own copies of anything you can't do without, and have a backup plan for services.</p>
   </>],
   ['Ending your use', <>
-    <p>You can stop using StaffList at any time and ask us to delete your account. We may suspend or end access if you seriously or repeatedly break these Terms, or if we have to stop offering the service (in which case we will give reasonable notice where we can so you can export your content).</p>
+    <p>You can stop using StaffList at any time and delete your account in Settings. We may suspend or end access if you seriously or repeatedly break these Terms, or if we have to stop offering the service (in which case we will give reasonable notice where we can so you can export your content).</p>
   </>],
   ['Disclaimers', <>
     <p>StaffList is provided "as is" and "as available". To the fullest extent the law allows, we disclaim all warranties, express or implied, including merchantability, fitness for a particular purpose and non-infringement.</p>
