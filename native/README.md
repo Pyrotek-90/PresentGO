@@ -1,7 +1,7 @@
 # StaffList for iPad and iPhone
 
 The iPad / iPhone app is a thin native shell (Capacitor) around the live web app. It loads
-https://present-go-five.vercel.app, so every web update reaches the app without a new App Store
+https://stafflist.app, so every web update reaches the app without a new App Store
 build. The shell adds one thing a browser can't do:
 
 **TV output that shows only the Now Showing slide.** When the user turns on Screen Mirroring to
