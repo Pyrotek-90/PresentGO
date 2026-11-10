@@ -1,4 +1,4 @@
-import { isChordLine } from './chords'
+import { isChordLine } from './chords.js'
 
 const norm = s => s.trim().toLowerCase().replace(/\s+/g, ' ')
 const HEADER_RE = /^\[(.+)\]$/

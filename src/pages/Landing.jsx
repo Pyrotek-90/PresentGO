@@ -64,6 +64,7 @@ const MATRIX = [
     ['Unlimited imports: ChordPro, PDF charts, whole folders', true, true, true, true],
     ['Set lists, the Song Viewer and the schedule calendar', true, true, true, true],
     ['Team Details', true, true, true, true],
+    ['Export the Song Library as a PDF songbook', false, true, true, true],
     ['Content Library storage', '100 MB', '500 MB', '1 GB', '5 GB'],
   ]],
   ['Presenting', [

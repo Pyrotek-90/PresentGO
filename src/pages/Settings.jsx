@@ -4,6 +4,7 @@ import CalendarSync from '../components/settings/CalendarSync'
 import OfflineMode from '../components/settings/OfflineMode'
 import MyTeams from '../components/settings/MyTeams'
 import DeleteAccount from '../components/settings/DeleteAccount'
+import ExportLibrary from '../components/settings/ExportLibrary'
 import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
@@ -56,6 +57,7 @@ const PLANS = [
       '500 MB Content Library',
       'Presenting: controller, Up Next, Loop, TV output',
       'CCLI Report',
+      'Export the Song Library as a PDF songbook',
       'Up to 3 devices signed in at once',
     ],
     cta: 'Notify Me When Available',
@@ -366,6 +368,7 @@ export default function Settings() {
         {/* ── Account ───────────────────────────────────────────────────── */}
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Account</h2>
+          <ExportLibrary />
           <DeleteAccount />
         </section>
 

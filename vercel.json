@@ -1,5 +1,14 @@
 {
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/export-songbook.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    }
+  }
 }
