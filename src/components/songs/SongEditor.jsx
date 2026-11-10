@@ -590,7 +590,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
       try { json = await res.json() } catch {
         throw new Error(
           res.status === 404
-            ? 'Smart Cleanup only runs on the deployed app (present-go-five.vercel.app), not locally.'
+            ? 'Smart Cleanup only runs on the deployed app (stafflist.app), not locally.'
             : `Server error (${res.status}) — try again or paste lyrics manually.`
         )
       }
@@ -612,7 +612,7 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
       let json
       try { json = await res.json() } catch {
         throw new Error(res.status === 404
-          ? 'Translate only runs on the deployed app (present-go-five.vercel.app), not locally.'
+          ? 'Translate only runs on the deployed app (stafflist.app), not locally.'
           : `Server error (${res.status}) — try again.`)
       }
       if (!res.ok || json.error) throw new Error(json.error || 'Translation failed')

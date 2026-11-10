@@ -4,5 +4,5 @@ export const LEGAL = {
   contactEmail: 'contact@stafflist.app',      // where privacy and account requests go
   effective: 'October 22, 2026',
   state: 'Illinois',                           // governing law
-  site: 'https://present-go-five.vercel.app',
+  site: 'https://stafflist.app',
 }
