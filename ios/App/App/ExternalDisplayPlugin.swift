@@ -12,7 +12,9 @@
 //   send({ payload })  -> hand a control message to the TV page (window.staffListReceive)
 //   event "change"     -> { connected, name } when a TV connects or disconnects
 //
-// The app does not use UIScenes (Capacitor's default), so the classic UIScreen API is used.
+// The app uses the UIScene life cycle (required for apps built with the iOS 27 SDK). The TV
+// arrives as its own non-interactive scene (TVSceneDelegate.swift); putting a window in that
+// scene replaces mirroring, and removing the window returns the TV to mirroring.
 
 import Capacitor
 import UIKit
@@ -35,9 +37,7 @@ public class ExternalDisplayPlugin: CAPPlugin, CAPBridgedPlugin {
     private var url: URL?
 
     override public func load() {
-        let nc = NotificationCenter.default
-        nc.addObserver(self, selector: #selector(screenDidConnect(_:)), name: UIScreen.didConnectNotification, object: nil)
-        nc.addObserver(self, selector: #selector(screenDidDisconnect(_:)), name: UIScreen.didDisconnectNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(tvDidChange), name: TVDisplay.didChange, object: nil)
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
@@ -56,8 +56,8 @@ public class ExternalDisplayPlugin: CAPPlugin, CAPBridgedPlugin {
             self.url = u
             if let web = self.tvWebView {
                 if web.url != u { web.load(URLRequest(url: u)) }
-            } else if let screen = self.externalScreen() {
-                self.attach(to: screen)
+            } else if let scene = self.tvScene() {
+                self.attach(to: scene)
             }
             call.resolve(self.status())
         }
@@ -83,28 +83,28 @@ public class ExternalDisplayPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    // MARK: - Screens
+    // MARK: - TV scene
 
-    @objc private func screenDidConnect(_ note: Notification) {
-        guard let screen = note.object as? UIScreen else { return }
+    @objc private func tvDidChange() {
         DispatchQueue.main.async {
-            if self.url != nil && self.tvWindow == nil { self.attach(to: screen) }
-            self.notifyListeners("change", data: self.status(connected: true))
+            if let scene = self.tvScene() {
+                if self.url != nil && self.tvWindow?.windowScene !== scene { self.attach(to: scene) }
+                self.notifyListeners("change", data: self.status(connected: true))
+            } else {
+                self.detach()
+                self.notifyListeners("change", data: self.status(connected: false))
+            }
         }
     }
 
-    @objc private func screenDidDisconnect(_ note: Notification) {
-        DispatchQueue.main.async {
-            self.detach()
-            self.notifyListeners("change", data: self.status(connected: false))
-        }
+    private func tvScene() -> UIWindowScene? {
+        if let scene = TVDisplay.shared.scene { return scene }
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.session.role != .windowApplication }
     }
 
-    private func externalScreen() -> UIScreen? {
-        UIScreen.screens.first { $0 != UIScreen.main }
-    }
-
-    private func attach(to screen: UIScreen) {
+    private func attach(to scene: UIWindowScene) {
         guard let url = url else { return }
         detach()
 
@@ -120,7 +120,8 @@ public class ExternalDisplayPlugin: CAPPlugin, CAPBridgedPlugin {
             source: "window.__STAFFLIST_TV__ = true;",
             injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
-        let web = WKWebView(frame: screen.bounds, configuration: config)
+        let bounds = scene.coordinateSpace.bounds
+        let web = WKWebView(frame: bounds, configuration: config)
         web.isOpaque = true
         web.backgroundColor = .black
         web.scrollView.backgroundColor = .black
@@ -134,8 +135,8 @@ public class ExternalDisplayPlugin: CAPPlugin, CAPBridgedPlugin {
         vc.view.addSubview(web)
         web.frame = vc.view.bounds
 
-        let window = UIWindow(frame: screen.bounds)
-        window.screen = screen
+        let window = UIWindow(windowScene: scene)
+        window.frame = bounds
         window.rootViewController = vc
         window.backgroundColor = .black
         window.isHidden = false
@@ -147,12 +148,13 @@ public class ExternalDisplayPlugin: CAPPlugin, CAPBridgedPlugin {
     private func detach() {
         tvWebView?.stopLoading()
         tvWindow?.isHidden = true
+        tvWindow?.windowScene = nil   // hands the TV back to mirroring
         tvWindow = nil
         tvWebView = nil
     }
 
     private func status(connected: Bool? = nil) -> [String: Any] {
-        let isConnected = connected ?? (externalScreen() != nil)
+        let isConnected = connected ?? (tvScene() != nil)
         var out: [String: Any] = ["connected": isConnected]
         if isConnected, let name = airPlayName() { out["name"] = name }
         return out
