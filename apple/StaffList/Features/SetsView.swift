@@ -140,15 +140,7 @@ struct SetDetailView: View {
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
 
     var body: some View {
-        List {
-            Section {
-                ForEach(items) { item in row(item) }
-                    .onMove(perform: canEdit ? move : nil)
-                    .onDelete(perform: canEdit ? remove : nil)
-            } header: {
-                if let when = set.whenText { Text(when) }
-            }
-        }
+        itemList
         .overlay {
             if loading && items.isEmpty { ProgressView() }
             else if !loading && items.isEmpty {
@@ -168,20 +160,7 @@ struct SetDetailView: View {
                 }
             }
         }
-        .sheet(item: $sheet) { kind in
-            switch kind {
-            case .addSong:
-                AddSongSheet { song in
-                    Task { await add(type: "song", content: ["song_id": .string(song.id.uuidString), "song_title": .string(song.title), "song_artist": .string(song.artist ?? "")]) }
-                }
-            case .announcement:
-                AnnouncementSheet { title, slides in
-                    Task { await add(type: "announcement", content: ["title": .string(title), "slides": .array(slides.map { .object(["lines": .array($0.map(AnyJSON.string))]) })]) }
-                }
-            case .details:
-                SetDetailsSheet(set: set, onSaved: { set = $0 }, onDeleted: { dismiss() })
-            }
-        }
+        .sheet(item: $sheet) { kind in sheetView(kind) }
         .alert("Something went wrong", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") {}
         } message: { Text(error ?? "") }
@@ -189,16 +168,67 @@ struct SetDetailView: View {
         .task { await load() }
     }
 
+    private var itemList: some View {
+        List {
+            Section {
+                ForEach(items) { item in
+                    row(item)
+                }
+                .onMove { from, to in move(from: from, to: to) }
+                .onDelete { offsets in remove(at: offsets) }
+                .moveDisabled(!canEdit)
+                .deleteDisabled(!canEdit)
+            } header: {
+                Text(set.whenText ?? "")
+            }
+        }
+    }
+
+    @ViewBuilder private func sheetView(_ kind: SheetKind) -> some View {
+        switch kind {
+        case .addSong:
+            AddSongSheet { song in Task { await addSong(song) } }
+        case .announcement:
+            AnnouncementSheet { title, slides in Task { await addAnnouncement(title: title, slides: slides) } }
+        case .details:
+            SetDetailsSheet(set: set, onSaved: { set = $0 }, onDeleted: { dismiss() })
+        }
+    }
+
+    private func addSong(_ song: Song) async {
+        var content: JSONObject = [:]
+        content["song_id"] = .string(song.id.uuidString)
+        content["song_title"] = .string(song.title)
+        content["song_artist"] = .string(song.artist ?? "")
+        await add(type: "song", content: content)
+    }
+
+    private func addAnnouncement(title: String, slides: [[String]]) async {
+        var slideValues: [AnyJSON] = []
+        for lines in slides {
+            let lineValues: [AnyJSON] = lines.map { AnyJSON.string($0) }
+            let slide: JSONObject = ["lines": AnyJSON.array(lineValues)]
+            slideValues.append(AnyJSON.object(slide))
+        }
+        var content: JSONObject = [:]
+        content["title"] = .string(title)
+        content["slides"] = .array(slideValues)
+        await add(type: "announcement", content: content)
+    }
+
+    private func addWelcome() async {
+        var content: JSONObject = [:]
+        content["title"] = .string("Welcome")
+        content["subtitle"] = .string("Glad you're here!")
+        await add(type: "welcome", content: content)
+    }
+
     private var addMenu: some View {
         Menu {
             Button("Add Song", systemImage: "music.note") { sheet = .addSong }
-            Button("Add Welcome", systemImage: "hand.wave") {
-                Task { await add(type: "welcome", content: ["title": "Welcome", "subtitle": "Glad you're here!"]) }
-            }
+            Button("Add Welcome", systemImage: "hand.wave") { Task { await addWelcome() } }
             Button("Add Announcement", systemImage: "megaphone") { sheet = .announcement }
-            Button("Add Blank Slide", systemImage: "rectangle") {
-                Task { await add(type: "blank", content: [:]) }
-            }
+            Button("Add Blank Slide", systemImage: "rectangle") { Task { await add(type: "blank", content: JSONObject()) } }
             Divider()
             Button("Edit Set Details", systemImage: "pencil") { sheet = .details }
         } label: {
@@ -282,7 +312,8 @@ struct SetDetailView: View {
         Task {
             do {
                 for (id, position) in changed {
-                    try await supabase.from("set_items").update(["position": position]).eq("id", value: id).execute()
+                    let patch: JSONObject = ["position": AnyJSON.integer(position)]
+                    try await supabase.from("set_items").update(patch).eq("id", value: id).execute()
                 }
             } catch {
                 self.error = "Couldn't save the new order. \(error.localizedDescription)"
@@ -309,7 +340,8 @@ struct SetDetailView: View {
         var content = items[index].content
         if let key { content["key"] = .string(key) } else { content.removeValue(forKey: "key") }
         do {
-            try await supabase.from("set_items").update(["content": AnyJSON.object(content)]).eq("id", value: item.id).execute()
+            let patch: JSONObject = ["content": AnyJSON.object(content)]
+            try await supabase.from("set_items").update(patch).eq("id", value: item.id).execute()
             items[index].content = content
         } catch {
             self.error = error.localizedDescription
