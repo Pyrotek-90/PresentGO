@@ -24,9 +24,8 @@ StaffList/
 
 1. `git pull` (or clone https://github.com/Pyrotek-90/PresentGO.git), then open
    `apple/StaffList.xcodeproj` in Xcode. It downloads the Supabase package the first time.
-2. In `StaffList/Core/AppConfig.swift`, paste the Supabase URL and anon key: the same values
-   as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Vercel → Settings → Environment
-   Variables.
+2. `StaffList/Core/AppConfig.swift` already has the Supabase URL and public anon key (the same
+   values the web app ships, `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 3. Click the blue **StaffList** project → **StaffList** target → **Signing & Capabilities**,
    choose your Team, and add the **Sign in with Apple** capability if Xcode asks.
 4. Choose an iPad simulator or your iPad and press ▶.
