@@ -161,24 +161,11 @@ struct SetDetailView: View {
         }
         .navigationTitle(set.name)
         .toolbar {
-            if canEdit {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button("Add Song", systemImage: "music.note") { sheet = .addSong }
-                        Button("Add Welcome", systemImage: "hand.wave") {
-                            Task { await add(type: "welcome", content: ["title": "Welcome", "subtitle": "Glad you're here!"]) }
-                        }
-                        Button("Add Announcement", systemImage: "megaphone") { sheet = .announcement }
-                        Button("Add Blank Slide", systemImage: "rectangle") {
-                            Task { await add(type: "blank", content: [:]) }
-                        }
-                        Divider()
-                        Button("Edit Set Details", systemImage: "pencil") { sheet = .details }
-                    } label: {
-                        Label("Add", systemImage: "plus")
-                    }
+            ToolbarItemGroup(placement: .primaryAction) {
+                if canEdit {
+                    EditButton()
+                    addMenu
                 }
-                ToolbarItem(placement: .topBarTrailing) { EditButton() }
             }
         }
         .sheet(item: $sheet) { kind in
@@ -200,6 +187,23 @@ struct SetDetailView: View {
         } message: { Text(error ?? "") }
         .refreshable { await load() }
         .task { await load() }
+    }
+
+    private var addMenu: some View {
+        Menu {
+            Button("Add Song", systemImage: "music.note") { sheet = .addSong }
+            Button("Add Welcome", systemImage: "hand.wave") {
+                Task { await add(type: "welcome", content: ["title": "Welcome", "subtitle": "Glad you're here!"]) }
+            }
+            Button("Add Announcement", systemImage: "megaphone") { sheet = .announcement }
+            Button("Add Blank Slide", systemImage: "rectangle") {
+                Task { await add(type: "blank", content: [:]) }
+            }
+            Divider()
+            Button("Edit Set Details", systemImage: "pencil") { sheet = .details }
+        } label: {
+            Label("Add", systemImage: "plus")
+        }
     }
 
     @ViewBuilder private func row(_ item: SetItem) -> some View {
