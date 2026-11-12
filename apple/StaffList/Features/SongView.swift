@@ -1,8 +1,37 @@
 import SwiftUI
 
-/// One song: chord chart or lyrics, with transposition done by the StaffList API so the iPad
-/// and the web app always agree.
+/// One song, with Edit for Admins and Leaders. Reloads the chart after a save.
 struct SongView: View {
+    @Environment(SessionStore.self) private var session
+    @Environment(\.dismiss) private var dismiss
+    @State private var song: Song
+    let setKey: String?
+    @State private var editing = false
+
+    init(song: Song, setKey: String? = nil) {
+        _song = State(initialValue: song)
+        self.setKey = setKey
+    }
+
+    var body: some View {
+        SongChartView(song: song, setKey: setKey)
+            .id(song.updatedAt ?? song.title)
+            .toolbar {
+                if session.currentTeam?.canEdit ?? false {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Edit") { editing = true }
+                    }
+                }
+            }
+            .sheet(isPresented: $editing) {
+                SongEditorView(song: song, onSaved: { song = $0 }, onDeleted: { dismiss() })
+            }
+    }
+}
+
+/// A song's chord chart or lyrics, with transposition done by the StaffList API so the iPad
+/// and the web app always agree.
+struct SongChartView: View {
     let song: Song
     var setKey: String? = nil   // key chosen for this song in a set
 

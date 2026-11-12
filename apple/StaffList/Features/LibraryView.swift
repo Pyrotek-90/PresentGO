@@ -8,6 +8,7 @@ struct LibraryView: View {
     @State private var search = ""
     @State private var loading = true
     @State private var error: String?
+    @State private var creating = false
 
     private var filtered: [Song] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -31,8 +32,19 @@ struct LibraryView: View {
             .navigationTitle("Songs")
             .navigationDestination(for: Song.self) { SongView(song: $0) }
             .searchable(text: $search, prompt: "Title, artist or CCLI #")
+            .toolbar {
+                if session.currentTeam?.canEdit ?? false {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("New Song", systemImage: "plus") { creating = true }
+                    }
+                }
+            }
+            .sheet(isPresented: $creating) { SongEditorView() }
             .refreshable { await load() }
             .task { await load() }
+            .onReceive(NotificationCenter.default.publisher(for: .songsChanged)) { _ in
+                Task { await load() }
+            }
         }
     }
 
@@ -43,7 +55,7 @@ struct LibraryView: View {
             ContentUnavailableView("Couldn't load songs", systemImage: "wifi.exclamationmark", description: Text(error))
         } else if songs.isEmpty {
             ContentUnavailableView("No songs yet", systemImage: "music.note",
-                                   description: Text("Import your charts at stafflist.app → Import Songs."))
+                                   description: Text("Tap + to add a song or import a chart file."))
         } else if filtered.isEmpty {
             ContentUnavailableView.search(text: search)
         }

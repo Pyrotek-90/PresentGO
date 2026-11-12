@@ -21,6 +21,7 @@ const ROUTES = {
   'songs/keys':       { load: () => import('./_handlers/songs.js'), action: 'keys', auth: true },
   'songs/language':   { load: () => import('./_handlers/songs.js'), action: 'language', auth: true },
   'songs/import-pdf': { load: () => import('./_handlers/import-pdf.js'), auth: true },
+  'songs/save':       { load: () => import('./_handlers/song-save.js'), auth: true },
 
   // AI tools (Pro plan checked inside)
   'song-details':     { load: () => import('./_handlers/song-details.js') },
