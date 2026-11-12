@@ -11,6 +11,7 @@ struct SetsView: View {
     @State private var path: [ServiceSet] = []
     @State private var creating = false
     @State private var offline = false
+    @State private var showingInbox = false
 
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var today: String { ServiceSet.dayFormatter.string(from: .now) }
@@ -52,12 +53,16 @@ struct SetsView: View {
             .navigationTitle(session.currentTeam?.name ?? "Sets")
             .navigationDestination(for: ServiceSet.self) { SetDetailView(set: $0) }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Notifications", systemImage: "bell") { showingInbox = true }
+                }
                 if canEdit {
                     ToolbarItem(placement: .primaryAction) {
                         Button("New Set", systemImage: "plus") { creating = true }
                     }
                 }
             }
+            .sheet(isPresented: $showingInbox) { InboxView() }
             .sheet(isPresented: $creating) {
                 SetDetailsSheet(set: nil, onSaved: { created in
                     sets.insert(created, at: 0)
@@ -211,6 +216,15 @@ struct SetDetailView: View {
                 .deleteDisabled(!canEdit)
             } header: {
                 Text(set.whenText ?? "")
+            }
+            if canEdit {
+                Section {
+                    NavigationLink {
+                        SetScheduleView(set: set)
+                    } label: {
+                        Label("Team for This Set", systemImage: "person.2")
+                    }
+                }
             }
         }
     }

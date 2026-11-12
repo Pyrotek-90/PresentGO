@@ -29,6 +29,10 @@ struct MainTabView: View {
                 .tabItem { Label("Songs", systemImage: "books.vertical") }
             MediaLibraryView()
                 .tabItem { Label("Media", systemImage: "photo.on.rectangle") }
+            if session.currentTeam?.canEdit ?? false {
+                TeamView()
+                    .tabItem { Label("Team", systemImage: "person.3") }
+            }
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
