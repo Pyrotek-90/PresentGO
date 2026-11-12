@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import Supabase
 
 /// Import many chord charts at once (ChordPro, text or text-based PDFs — e.g. a folder of
 /// SongSelect or PraiseCharts downloads). The API reads each file and saves it as a song;
