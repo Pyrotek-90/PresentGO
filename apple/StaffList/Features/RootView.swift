@@ -27,6 +27,8 @@ struct MainTabView: View {
                 .tabItem { Label("Sets", systemImage: "music.note.list") }
             LibraryView()
                 .tabItem { Label("Songs", systemImage: "books.vertical") }
+            MediaLibraryView()
+                .tabItem { Label("Media", systemImage: "photo.on.rectangle") }
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }

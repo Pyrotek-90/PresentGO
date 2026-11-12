@@ -9,6 +9,7 @@ struct LibraryView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var creating = false
+    @State private var importing = false
     @State private var offline = false
 
     private var filtered: [Song] {
@@ -42,11 +43,17 @@ struct LibraryView: View {
             .toolbar {
                 if session.currentTeam?.canEdit ?? false {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("New Song", systemImage: "plus") { creating = true }
+                        Menu {
+                            Button("New Song", systemImage: "square.and.pencil") { creating = true }
+                            Button("Import Charts…", systemImage: "square.and.arrow.down.on.square") { importing = true }
+                        } label: {
+                            Label("Add", systemImage: "plus")
+                        }
                     }
                 }
             }
             .sheet(isPresented: $creating) { SongEditorView() }
+            .sheet(isPresented: $importing) { BulkImportView(existingTitles: Set(songs.map(\.title))) }
             .refreshable { await load() }
             .task { await load() }
             .onReceive(NotificationCenter.default.publisher(for: .songsChanged)) { _ in

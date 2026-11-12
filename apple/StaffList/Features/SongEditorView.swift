@@ -23,6 +23,15 @@ struct SongEditorView: View {
     @State private var lyrics: String
     @State private var chart: String
     @State private var linesPerSlide: Int
+    @State private var order: [String]
+    @State private var orderTouched = false
+    @State private var otherKeys: Set<String>
+    @State private var preferredKey: String
+    @State private var translations: [Translation]
+    @State private var translationsTouched = false
+    @State private var slideTranslation: String
+    @State private var youtube: String
+    @State private var themes: Set<String>
 
     @State private var saving = false
     @State private var importing = false
@@ -50,6 +59,18 @@ struct SongEditorView: View {
         _lyrics = State(initialValue: song?.rawLyrics ?? "")
         _chart = State(initialValue: m?.chordChart ?? "")
         _linesPerSlide = State(initialValue: song?.linesPerSlide ?? 2)
+        _order = State(initialValue: slideSequence(song?.slides))
+        _otherKeys = State(initialValue: Set(m?.transposedKeys ?? []))
+        _preferredKey = State(initialValue: m?.preferredKey ?? "")
+        _translations = State(initialValue: m?.translations ?? [])
+        _slideTranslation = State(initialValue: m?.slideTranslation ?? "")
+        _youtube = State(initialValue: m?.youtubeURL ?? "")
+        _themes = State(initialValue: Set(m?.themes ?? []))
+    }
+
+    private var orderSummary: String {
+        let current = orderTouched || !order.isEmpty ? order : lyricSections(lyrics)
+        return current.isEmpty ? "Same as lyrics" : current.joined(separator: " · ")
     }
 
     private var keyOptions: [String] {
@@ -128,6 +149,80 @@ struct SongEditorView: View {
 
                 Section("Slides") {
                     Stepper("\(linesPerSlide) line\(linesPerSlide == 1 ? "" : "s") per slide", value: $linesPerSlide, in: 1...8)
+                    NavigationLink {
+                        ArrangementEditor(title: "Song Order", order: Binding(
+                            get: { order.isEmpty && !orderTouched ? lyricSections(lyrics) : order },
+                            set: { order = $0; orderTouched = true }
+                        ), sections: lyricSections(lyrics), onReset: { order = lyricSections(lyrics); orderTouched = true })
+                    } label: {
+                        LabeledContent("Song Order") {
+                            Text(orderSummary).lineLimit(1)
+                        }
+                    }
+                    .disabled(lyricSections(lyrics).isEmpty)
+                }
+
+                if !key.isEmpty {
+                    Section("Keys") {
+                        NavigationLink {
+                            KeyListPicker(original: key, selected: $otherKeys)
+                        } label: {
+                            LabeledContent("Other Keys", value: otherKeys.isEmpty ? "None" : otherKeys.sorted().map(Song.shortKey).joined(separator: ", "))
+                        }
+                        Picker("Preferred Key", selection: $preferredKey) {
+                            Text("Song's key").tag("")
+                            ForEach([key] + otherKeys.sorted(), id: \.self) { Text(Song.shortKey($0)).tag($0) }
+                        }
+                    }
+                }
+
+                Section {
+                    ForEach(translations.indices, id: \.self) { i in
+                        NavigationLink {
+                            TranslationEditorView(translation: Binding(
+                                get: { translations.indices.contains(i) ? translations[i] : Translation(title: "", text: "") },
+                                set: { if translations.indices.contains(i) { translations[i] = $0; translationsTouched = true } }
+                            ), onDelete: {
+                                if translations.indices.contains(i) { translations.remove(at: i); translationsTouched = true }
+                            })
+                        } label: {
+                            Text(translations[i].title.isEmpty ? "Translation" : translations[i].title)
+                        }
+                    }
+                    Button("Add Translation", systemImage: "plus") {
+                        translations.append(Translation(title: "English Translation", text: lyricSections(lyrics).map { "[\($0)]\n" }.joined(separator: "\n")))
+                        translationsTouched = true
+                    }
+                    if !translations.isEmpty {
+                        Picker("Show on Slides", selection: $slideTranslation) {
+                            Text("None").tag("")
+                            ForEach(translations.map(\.title), id: \.self) { Text($0).tag($0) }
+                        }
+                    }
+                } header: {
+                    Text("Translations")
+                } footer: {
+                    Text("A translation chosen for slides shows smaller, in italics, under each lyric line.")
+                }
+
+                Section("More") {
+                    TextField("YouTube link", text: $youtube)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    NavigationLink {
+                        List(songThemes, id: \.self) { t in
+                            Button {
+                                if themes.contains(t) { themes.remove(t) } else { themes.insert(t) }
+                            } label: {
+                                HStack { Text(t); Spacer(); if themes.contains(t) { Image(systemName: "checkmark").foregroundStyle(.tint) } }
+                            }
+                            .tint(.primary)
+                        }
+                        .navigationTitle("Themes")
+                    } label: {
+                        LabeledContent("Themes", value: themes.isEmpty ? "None" : themes.sorted().joined(separator: ", "))
+                    }
                 }
 
                 if song != nil {
@@ -176,7 +271,8 @@ struct SongEditorView: View {
             church_id: song == nil ? session.currentTeam?.id : nil,
             title: title, artist: artist, ccli_number: ccli,
             raw_lyrics: lyrics, lines_per_slide: linesPerSlide, chord_chart: chart,
-            metadata: ["key": key, "bpm": bpm, "author": author, "copyright": copyright]
+            arrangement: orderTouched ? order : nil,
+            metadata: metadataPatch()
         )
         do {
             let reply = try await StaffListAPI.shared.post("songs/save", request, as: SongSaveReply.self)
@@ -186,6 +282,32 @@ struct SongEditorView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func metadataPatch() -> JSONObject {
+        var m: JSONObject = [:]
+        m["key"] = .string(key)
+        m["bpm"] = .string(bpm)
+        m["author"] = .string(author)
+        m["copyright"] = .string(copyright)
+        m["youtube_url"] = .string(youtube.trimmingCharacters(in: .whitespaces))
+        m["themes"] = .array(themes.sorted().map { AnyJSON.string($0) })
+        let keys = key.isEmpty ? [] : otherKeys.sorted()
+        m["transposed_keys"] = .array(keys.map { AnyJSON.string($0) })
+        m["preferred_key"] = .string(preferredKey == key || keys.contains(preferredKey) ? preferredKey : "")
+        let titles = translations.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.title)
+        m["slide_translation"] = .string(titles.contains(slideTranslation) ? slideTranslation : "")
+        if translationsTouched {
+            var list: [AnyJSON] = []
+            for t in translations where !t.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                var o: JSONObject = [:]
+                o["title"] = .string(t.title)
+                o["text"] = .string(t.text)
+                list.append(.object(o))
+            }
+            m["translations"] = .array(list)
+        }
+        return m
     }
 
     private func delete() async {

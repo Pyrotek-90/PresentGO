@@ -26,11 +26,25 @@ struct Team: Codable, Identifiable, Hashable, Sendable {
 struct Slide: Codable, Hashable, Sendable {
     let lines: [String]
     let label: String?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        lines = (try? c.decodeIfPresent([String].self, forKey: .lines)) ?? []
+        label = try? c.decodeIfPresent(String.self, forKey: .label)
+    }
 }
 
 struct Translation: Codable, Hashable, Sendable {
-    let title: String
-    let text: String
+    var title: String
+    var text: String
+
+    init(title: String, text: String) { self.title = title; self.text = text }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? "Translation"
+        text = (try? c.decodeIfPresent(String.self, forKey: .text)) ?? ""
+    }
 }
 
 struct SongMetadata: Codable, Hashable, Sendable {
@@ -45,14 +59,39 @@ struct SongMetadata: Codable, Hashable, Sendable {
     var translations: [Translation]?
     var language: String?
     var youtubeURL: String?
+    var themes: [String]?
+    var slideTranslation: String?
 
     enum CodingKeys: String, CodingKey {
-        case key, bpm, author, copyright, translations, language
+        case key, bpm, author, copyright, translations, language, themes
+        case slideTranslation = "slide_translation"
         case originalKey = "original_key"
         case chordChart = "chord_chart"
         case preferredKey = "preferred_key"
         case transposedKeys = "transposed_keys"
         case youtubeURL = "youtube_url"
+    }
+
+    /// Reads each field on its own, so one unexpected value never hides the whole song.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        key = try? c.decodeIfPresent(String.self, forKey: .key)
+        originalKey = try? c.decodeIfPresent(String.self, forKey: .originalKey)
+        chordChart = try? c.decodeIfPresent(String.self, forKey: .chordChart)
+        bpm = try? c.decodeIfPresent(FlexibleString.self, forKey: .bpm)
+        author = try? c.decodeIfPresent(String.self, forKey: .author)
+        copyright = try? c.decodeIfPresent(String.self, forKey: .copyright)
+        preferredKey = try? c.decodeIfPresent(String.self, forKey: .preferredKey)
+        transposedKeys = try? c.decodeIfPresent([String].self, forKey: .transposedKeys)
+        translations = try? c.decodeIfPresent([Translation].self, forKey: .translations)
+        language = try? c.decodeIfPresent(String.self, forKey: .language)
+        youtubeURL = try? c.decodeIfPresent(String.self, forKey: .youtubeURL)
+        slideTranslation = try? c.decodeIfPresent(String.self, forKey: .slideTranslation)
+        if let list = try? c.decodeIfPresent([String].self, forKey: .themes) {
+            themes = list
+        } else if let text = try? c.decodeIfPresent(String.self, forKey: .themes) {
+            themes = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        }
     }
 }
 
@@ -131,6 +170,12 @@ struct SetItem: Codable, Identifiable, Hashable, Sendable {
     static let columns = "id,type,position,content"
 
     var songId: UUID? { content["song_id"]?.stringValue.flatMap(UUID.init(uuidString:)) }
+    /// This set's order of the song's sections, if it differs from the song's own.
+    var arrangement: [String]? {
+        guard let list = content["arrangement"]?.arrayValue, !list.isEmpty else { return nil }
+        return list.compactMap(\.stringValue)
+    }
+
     /// The key chosen for this song in this set ("A Major"), if any.
     var key: String? { content["key"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
 
@@ -233,7 +278,8 @@ struct SongSaveRequest: Encodable {
     var raw_lyrics: String
     var lines_per_slide: Int
     var chord_chart: String
-    var metadata: [String: String]
+    var arrangement: [String]?
+    var metadata: JSONObject
 }
 
 struct SongSaveReply: Decodable { let song: Song }

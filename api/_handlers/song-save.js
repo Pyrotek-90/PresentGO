@@ -1,7 +1,9 @@
 // POST /api/v1/songs/save — create or update a song, the same way for the web app and the iOS app.
 //
 // Body: { id?, church_id? (new songs), title, artist?, ccli_number?, raw_lyrics, lines_per_slide?,
-//         chord_chart?, metadata?: { key, bpm, author, copyright, youtube_url, preferred_key, … } }
+//         chord_chart?, arrangement?: ['Verse 1', 'Chorus', …],
+//         metadata?: { key, bpm, author, copyright, youtube_url, preferred_key, transposed_keys,
+//                      themes, translations, slide_translation, … } }
 // Returns { song } — the saved row.
 //
 // The server does the work every client would otherwise repeat:
@@ -26,8 +28,13 @@ export function normaliseKey(k) {
 }
 
 // New slides from the lyrics, in the song's previous section order if every section still exists.
-export function rebuildSlides(rawLyrics, linesPer, previousSlides) {
+export function rebuildSlides(rawLyrics, linesPer, previousSlides, arrangement) {
   const fresh = buildSongSlides(rawLyrics, linesPer)
+  if (Array.isArray(arrangement) && arrangement.length) {
+    const available = new Set(songSections({ slides: fresh }).order)
+    const order = arrangement.map(String).filter(label => available.has(label))
+    if (order.length) return arrangedSlides({ slides: fresh }, order)
+  }
   const { sequence } = songSections({ slides: previousSlides || [] })
   if (!sequence.length) return fresh
   const available = new Set(songSections({ slides: fresh }).order)
@@ -67,14 +74,15 @@ export default async function handler(req, res) {
     metadata.language = looksNonEnglish(rawLyrics) ? (guessLanguage(rawLyrics) || '') : 'English'
   }
 
-  const lyricsChanged = !existing || existing.raw_lyrics !== rawLyrics || existing.lines_per_slide !== linesPer
+  const arrangement = Array.isArray(b.arrangement) ? b.arrangement.slice(0, 100) : null
+  const lyricsChanged = !existing || arrangement || existing.raw_lyrics !== rawLyrics || existing.lines_per_slide !== linesPer
   const payload = {
     title,
     artist: str(b.artist, 300).trim(),
     ccli_number: str(b.ccli_number, 40).trim(),
     raw_lyrics: rawLyrics,
     lines_per_slide: linesPer,
-    slides: lyricsChanged ? rebuildSlides(rawLyrics, linesPer, existing?.slides) : existing.slides,
+    slides: lyricsChanged ? rebuildSlides(rawLyrics, linesPer, existing?.slides, arrangement) : existing.slides,
     metadata,
   }
 

@@ -148,8 +148,10 @@ struct SetDetailView: View {
     @State private var presenting = false
     @State private var showingCharts = false
 
+    @State private var arranging: SetItem?
+
     enum SheetKind: String, Identifiable {
-        case addSong, announcement, details
+        case addSong, announcement, details, media
         var id: String { rawValue }
     }
 
@@ -183,6 +185,13 @@ struct SetDetailView: View {
         .fullScreenCover(isPresented: $presenting) { PresenterView(set: set) }
         .fullScreenCover(isPresented: $showingCharts) { SetChartsView(set: set) }
         .sheet(item: $sheet) { kind in sheetView(kind) }
+        .sheet(item: $arranging) { item in
+            if let id = item.songId, let song = songs[id] {
+                SetArrangementSheet(song: song, initial: item.arrangement) { order in
+                    Task { await setArrangement(order, on: item) }
+                }
+            }
+        }
         .alert("Something went wrong", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") {}
         } message: { Text(error ?? "") }
@@ -214,6 +223,8 @@ struct SetDetailView: View {
             AnnouncementSheet { title, slides in Task { await addAnnouncement(title: title, slides: slides) } }
         case .details:
             SetDetailsSheet(set: set, onSaved: { set = $0 }, onDeleted: { dismiss() })
+        case .media:
+            MediaLibraryView(onPick: { media in Task { await add(type: "media", content: media.setItemContent) } })
         }
     }
 
@@ -250,6 +261,7 @@ struct SetDetailView: View {
             Button("Add Song", systemImage: "music.note") { sheet = .addSong }
             Button("Add Welcome", systemImage: "hand.wave") { Task { await addWelcome() } }
             Button("Add Announcement", systemImage: "megaphone") { sheet = .announcement }
+            Button("Add Media", systemImage: "photo.on.rectangle") { sheet = .media }
             Button("Add Blank Slide", systemImage: "rectangle") { Task { await add(type: "blank", content: JSONObject()) } }
             Divider()
             Button("Edit Set Details", systemImage: "pencil") { sheet = .details }
@@ -272,7 +284,8 @@ struct SetDetailView: View {
             }
             .contextMenu {
                 if canEdit {
-                    Menu("Key for This Set", systemImage: "tuningfork") {
+                    Button("Song Order for This Set", systemImage: "list.number") { arranging = item }
+                Menu("Key for This Set", systemImage: "tuningfork") {
                         Button("Song's Key" + (song.key.map { " (\(Song.shortKey($0)))" } ?? "")) {
                             Task { await setKey(nil, on: item) }
                         }
@@ -282,9 +295,29 @@ struct SetDetailView: View {
                     }
                 }
             }
+        } else if item.type == "note" {
+            NavigationLink {
+                NoteView(content: item.content)
+            } label: {
+                Label(item.displayTitle, systemImage: item.systemImage)
+            }
         } else {
             Label(item.displayTitle, systemImage: item.systemImage)
                 .foregroundStyle(item.type == "song" ? .secondary : .primary)
+        }
+    }
+
+    private func setArrangement(_ order: [String]?, on item: SetItem) async {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        var content = items[index].content
+        if let order, !order.isEmpty { content["arrangement"] = .array(order.map { AnyJSON.string($0) }) }
+        else { content.removeValue(forKey: "arrangement") }
+        do {
+            let patch: JSONObject = ["content": AnyJSON.object(content)]
+            try await supabase.from("set_items").update(patch).eq("id", value: item.id).execute()
+            items[index].content = content
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
@@ -569,6 +602,85 @@ struct AnnouncementSheet: View {
                     Button("Add") { onSave(title, slides); dismiss() }.disabled(slides.isEmpty)
                 }
             }
+        }
+    }
+}
+
+/// A song's order of sections for one set only (the song itself keeps its own order).
+struct SetArrangementSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let song: Song
+    var onSave: ([String]?) -> Void
+    @State private var order: [String]
+    private let sections: [String]
+
+    init(song: Song, initial: [String]?, onSave: @escaping ([String]?) -> Void) {
+        self.song = song
+        self.onSave = onSave
+        let own = slideSequence(song.slides)
+        var unique: [String] = []
+        for label in own where !unique.contains(label) { unique.append(label) }
+        sections = unique
+        _order = State(initialValue: initial ?? own)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ArrangementEditor(title: song.title, order: $order, sections: sections,
+                              resetLabel: "Use the Song's Own Order", onReset: { order = slideSequence(song.slides) })
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            onSave(order == slideSequence(song.slides) ? nil : order)
+                            dismiss()
+                        }
+                    }
+                }
+        }
+    }
+}
+
+/// A Worship Leader Note: summary, reflection and Scripture for a song.
+struct NoteView: View {
+    let content: JSONObject
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(content["song_title"]?.stringValue ?? "Song").font(.title2.bold())
+                    if let a = content["song_artist"]?.stringValue, !a.isEmpty { Text(a).foregroundStyle(.secondary) }
+                }
+                if let s = content["summary"]?.stringValue, !s.isEmpty {
+                    section("Summary") { Text(s) }
+                }
+                if let r = content["reflection"]?.stringValue, !r.isEmpty {
+                    section("Reflection") { Text(r) }
+                }
+                if let verses = content["verses"]?.arrayValue, !verses.isEmpty {
+                    section("Scripture") {
+                        ForEach(Array(verses.enumerated()), id: \.offset) { _, v in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(v.objectValue?["reference"]?.stringValue ?? "").font(.headline).foregroundStyle(.tint)
+                                Text("“\(v.objectValue?["text"]?.stringValue ?? "")”").italic().font(.system(.body, design: .serif))
+                            }
+                        }
+                    }
+                }
+            }
+            .padding()
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .navigationTitle("Worship Leader Note")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func section<C: View>(_ title: String, @ViewBuilder _ body: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.caption.bold()).foregroundStyle(.secondary)
+            body()
         }
     }
 }
