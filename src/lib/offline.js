@@ -1,4 +1,4 @@
-import { getPref, setPref } from './prefs'
+import { getPref, setPref } from './prefs.js'
 
 export const API_CACHE = 'presentgo-api-v1'
 export const MEDIA_CACHE = 'presentgo-media-v1'

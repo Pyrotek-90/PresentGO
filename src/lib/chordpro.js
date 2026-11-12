@@ -1,4 +1,4 @@
-import { formatKey } from './chords'
+import { formatKey } from './chords.js'
 
 // Parses a ChordPro file (as downloaded from SongSelect, PraiseCharts, OnSong, etc.) into
 // StaffList's song shape: raw lyrics with [Section] headers, a chords-over-lyrics chart whose

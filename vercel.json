@@ -1,12 +1,12 @@
 {
   "rewrites": [
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/v1/:route*", "destination": "/api/v1?__route=:route*" },
+    { "source": "/api/calendar/:token", "destination": "/api/v1?__route=calendar/:token" },
+    { "source": "/api/:route([a-z-]+)", "destination": "/api/v1?__route=:route" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/export-songbook.js": {
+    "api/v1.js": {
       "maxDuration": 60,
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }

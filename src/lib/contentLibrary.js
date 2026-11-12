@@ -1,7 +1,7 @@
-import { supabase } from './supabase'
-import { storageLimit, PLAN_LABEL } from './plans'
-import { filesToSlideImages } from './importSlides'
-import { groupSets } from './sets'
+import { supabase } from './supabase.js'
+import { storageLimit, PLAN_LABEL } from './plans.js'
+import { filesToSlideImages } from './importSlides.js'
+import { groupSets } from './sets.js'
 
 // Content Library imports: PDFs and images only, organised into folders (media_folders).
 // Everything is stored as compressed slide JPEGs:

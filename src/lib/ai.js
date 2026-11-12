@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase.js'
 
 // Calls one of the AI functions (/api/cleanup-lyrics, translate-lyrics, song-details,
 // worship-note) with the signed-in person's login, so the server can check the team's plan.

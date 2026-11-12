@@ -1,5 +1,5 @@
-import { supabase } from './supabase'
-import { todayISO } from './sets'
+import { supabase } from './supabase.js'
+import { todayISO } from './sets.js'
 
 // In-app notifications: serving requests (Accept / Decline), answers, and set reminders.
 // Needs the notifications SQL (supabase/migrations/2026-10-15_notifications.sql); until it has been

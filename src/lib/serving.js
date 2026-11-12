@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase.js'
 
 // Sets I serve on in every team I've joined (accepted, plus requests waiting for my answer),
 // shaped like set rows with a `serving` block: { status, token, positions, churchId }.

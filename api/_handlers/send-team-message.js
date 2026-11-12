@@ -1,4 +1,4 @@
-import { checkPaid } from './_lib/plan.js'
+import { checkPaid } from '../_lib/plan.js'
 
 // Emails a message from the worship leader to team members who don't have a StaffList account yet
 // (members with an account get it in the app). Uses Resend like send-invites.

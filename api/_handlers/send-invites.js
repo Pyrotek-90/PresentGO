@@ -10,7 +10,7 @@
 // The caller's own Supabase login is used for every read and write, so row-level security
 // limits it to their own team. Needs RESEND_API_KEY and EMAIL_FROM in Vercel.
 
-import { extraTimes, timeText as extraTimeText } from '../src/lib/setTimes.js'
+import { extraTimes, timeText as extraTimeText } from '../../src/lib/setTimes.js'
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const UUID = /^[0-9a-f-]{36}$/i

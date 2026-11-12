@@ -1,4 +1,4 @@
-import { buildSongbookHtml } from '../src/lib/songbook.js'
+import { buildSongbookHtml } from '../../src/lib/songbook.js'
 
 // Settings → Export Song Library: every song in the team's library as one PDF songbook.
 // Paid plans only (Solo, Pro, Ultimate). Reads the songs with the caller's own login, so the

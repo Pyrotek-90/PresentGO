@@ -1,4 +1,4 @@
-import { LEGAL } from '../src/lib/legal.js'
+import { LEGAL } from '../../src/lib/legal.js'
 
 // Support page forms (Feature Request and Contact Us). Emails the request with Resend, with
 // Reply-To set to the sender so a reply goes straight back to them.

@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { checkPaid } from './_lib/plan.js'
+import { checkPaid } from '../_lib/plan.js'
 
 // Worship Leader Note for one song (same shape as the Sunday Song Prep reflection page):
 // a summary, a pastoral reflection, and 2-3 Scripture verses (KJV, public domain).

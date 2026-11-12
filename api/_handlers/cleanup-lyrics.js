@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { checkPaid } from './_lib/plan.js'
+import { checkPaid } from '../_lib/plan.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })

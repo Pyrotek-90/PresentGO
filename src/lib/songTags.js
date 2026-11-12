@@ -1,4 +1,4 @@
-import { guessLanguage } from './language'
+import { guessLanguage } from './language.js'
 
 // Song tags used by the editor (Details step) and the Song Library filters.
 export const THEMES = ['Worship', 'Praise', 'Communion', 'Offering', 'Opening', 'Closing', 'Prayer', 'Salvation', 'Healing']

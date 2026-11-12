@@ -1,7 +1,7 @@
-import { parseChordPro, looksLikeChordPro, formatSongTitle } from './chordpro'
-import { readPdfChart } from './pdfChart'
-import { buildSongSlides } from './songSlides'
-import { hasChords } from './chords'
+import { parseChordPro, looksLikeChordPro, formatSongTitle } from './chordpro.js'
+import { api } from './api.js'
+import { buildSongSlides } from './songSlides.js'
+import { hasChords } from './chords.js'
 
 export const CHORDPRO_EXT = ['chordpro', 'cho', 'crd', 'chopro', 'pro', 'chord']
 export const MAX_FILES = 500
@@ -90,19 +90,39 @@ const READ_ERRORS = {
 }
 
 // Reads one chart file into a song draft. Never throws.
+// PDF charts are read by the API (same reader as the iOS app). If the server can't be reached,
+// fall back to reading in the browser so imports still work.
+async function readPdfOnServer(file) {
+  let out
+  try {
+    out = await api('songs/import-pdf', { body: file, query: { filename: file.name } })
+  } catch (err) {
+    if (err.status === 401 || err.status === 413) throw err
+    const { readPdfChart } = await import('./pdfChart.js')
+    return readPdfChart(file)
+  }
+  if (out.status !== 'ready') return { error: 'server', message: out.message }
+  const s = out.song
+  return {
+    title: s.title, artist: s.artist, author: s.author, ccli: s.ccli_number, key: s.key, bpm: s.bpm,
+    copyright: s.copyright, rawLyrics: s.raw_lyrics, chordChart: s.chord_chart,
+    warnings: out.warnings || [], ...(s.translations?.length ? { translations: s.translations } : {}),
+  }
+}
+
 export async function readChart(entry) {
   const fromName = parseFilename(entry.file.name)
   try {
     let parsed
     if (entry.kind === 'pdf') {
-      parsed = await readPdfChart(entry.file)
+      parsed = await readPdfOnServer(entry.file)
     } else {
       const text = await entry.file.text()
       if (entry.kind === 'text' && !looksLikeChordPro(text)) parsed = { error: 'not_chordpro' }
       else parsed = parseChordPro(text)
       if (!parsed.error && !parsed.rawLyrics.trim()) parsed = { ...parsed, error: 'no_lyrics' }
     }
-    if (parsed.error) return { ...entry, status: 'error', message: READ_ERRORS[parsed.error] || 'Could not read this file.' }
+    if (parsed.error) return { ...entry, status: 'error', message: parsed.message || READ_ERRORS[parsed.error] || 'Could not read this file.' }
     const song = {
       ...parsed,
       title: formatSongTitle(parsed.title || fromName.title),
@@ -115,7 +135,7 @@ export async function readChart(entry) {
     return { ...entry, status: 'ready', song, message: notes.join(' ') }
   } catch (err) {
     console.error('chart read failed', entry.path, err)
-    return { ...entry, status: 'error', message: 'Could not read this file — it may be damaged or password-protected.' }
+    return { ...entry, status: 'error', message: err.status ? err.message : 'Could not read this file — it may be damaged or password-protected.' }
   }
 }
 

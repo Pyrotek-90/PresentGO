@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { checkPaid } from './_lib/plan.js'
+import { checkPaid } from '../_lib/plan.js'
 
 async function deezerBpm(title, artist) {
   try {

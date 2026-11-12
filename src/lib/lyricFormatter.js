@@ -1,6 +1,6 @@
-import { translationForSlides, slideTranslationText } from './translationLines'
-import { arrangedSlides } from './arrangement'
-import { stripRepeat } from './repeat'
+import { translationForSlides, slideTranslationText } from './translationLines.js'
+import { arrangedSlides } from './arrangement.js'
+import { stripRepeat } from './repeat.js'
 /**
  * Parses raw lyric text into structured slides.
  * - Detects section labels: [Verse 1], [Chorus], Chorus:, etc.

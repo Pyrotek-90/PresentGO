@@ -1,5 +1,5 @@
-import { isChordLine, isBarToken } from './chords'
-import { assembleSong, parseChordProKey, titleCase } from './chordpro'
+import { isChordLine, isBarToken } from './chords.js'
+import { assembleSong, parseChordProKey, titleCase } from './chordpro.js'
 
 // Reads a text-based PDF chord chart (SongSelect, Planning Center, PraiseCharts chord charts,
 // or anything printed from a chart app) into the same song shape as the ChordPro reader.

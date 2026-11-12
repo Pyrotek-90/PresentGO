@@ -1,6 +1,6 @@
-import { supabase } from './supabase'
-import { MEDIA_CACHE } from './offline'
-import { setPref } from './prefs'
+import { supabase } from './supabase.js'
+import { MEDIA_CACHE } from './offline.js'
+import { setPref } from './prefs.js'
 
 let running = null
 

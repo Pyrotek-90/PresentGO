@@ -1,5 +1,5 @@
-import { supabase } from './supabase'
-import { isTvScreen, sendToDisplay } from './externalDisplay'
+import { supabase } from './supabase.js'
+import { isTvScreen, sendToDisplay } from './externalDisplay.js'
 
 // Link between the Controller and the display window. It always uses Supabase Realtime and,
 // when both windows are in the same browser, also a BroadcastChannel so it keeps working offline.

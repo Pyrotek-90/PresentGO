@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase.js'
 
 // Team invitations and set requests go out through /api/send-invites (Resend).
 //   { members: [teamMemberId] }   invitation to join the team

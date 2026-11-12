@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { checkPaid } from './_lib/plan.js'
+import { checkPaid } from '../_lib/plan.js'
 
 // Translates song lyrics into English line by line, keeping the same [Section] labels and the
 // same number of lines in each section so the translation can line up with the slides.
