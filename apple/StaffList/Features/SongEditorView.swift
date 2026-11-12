@@ -32,6 +32,7 @@ struct SongEditorView: View {
     @State private var slideTranslation: String
     @State private var youtube: String
     @State private var themes: Set<String>
+    @State private var aiWorking: String?
 
     @State private var saving = false
     @State private var importing = false
@@ -97,6 +98,19 @@ struct SongEditorView: View {
                         .disabled(importing)
                     } footer: {
                         Text(importNote ?? "ChordPro (.cho, .chordpro), text or text-based PDF charts from SongSelect, PraiseCharts and similar.")
+                    }
+                }
+
+                if session.currentTeam?.isPaid ?? false {
+                    Section {
+                        Button("Look Up Key, Tempo & Writers", systemImage: "sparkle.magnifyingglass") { Task { await lookUp() } }
+                            .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || aiWorking != nil)
+                        Button("Smart Cleanup of Lyrics", systemImage: "wand.and.stars") { Task { await cleanUp() } }
+                            .disabled(lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || aiWorking != nil)
+                        Button("Translate to English", systemImage: "character.book.closed") { Task { await translate() } }
+                            .disabled(lyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || aiWorking != nil)
+                    } header: {
+                        HStack { Text("AI Tools"); if let aiWorking { Spacer(); ProgressView(); Text(aiWorking).textCase(nil) } }
                     }
                 }
 
@@ -281,6 +295,42 @@ struct SongEditorView: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    private func lookUp() async {
+        aiWorking = "Looking up…"
+        defer { aiWorking = nil }
+        do {
+            let d = try await AITools.lookUp(title: title, artist: artist)
+            if let k = d.key, !k.isEmpty, key.isEmpty { key = MusicKeys.normalise(k) }
+            if let b = d.bpm, bpm.isEmpty { bpm = String(b) }
+            if let w = d.songwriters, !w.isEmpty, author.isEmpty { author = w }
+        } catch {
+            self.error = AITools.message(for: error)
+        }
+    }
+
+    private func cleanUp() async {
+        aiWorking = "Cleaning up…"
+        defer { aiWorking = nil }
+        do { lyrics = try await AITools.cleanUp(lyrics) } catch { self.error = AITools.message(for: error) }
+    }
+
+    private func translate() async {
+        aiWorking = "Translating…"
+        defer { aiWorking = nil }
+        do {
+            let t = try await AITools.translate(lyrics)
+            guard let text = t.text, !text.isEmpty else {
+                self.error = t.language.map { "These lyrics look like \($0) already." } ?? "Nothing to translate."
+                return
+            }
+            translations.append(Translation(title: "English Translation", text: text))
+            translationsTouched = true
+            if slideTranslation.isEmpty { slideTranslation = "English Translation" }
+        } catch {
+            self.error = AITools.message(for: error)
         }
     }
 

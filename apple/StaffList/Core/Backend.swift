@@ -44,6 +44,20 @@ actor StaffListAPI {
         return try await send(request)
     }
 
+    /// POST JSON and return the raw reply (e.g. a PDF).
+    func postData<Body: Encodable>(_ route: String, _ body: Body) async throws -> Data {
+        var request = try await makeRequest(route)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            let message = (try? decoder.decode([String: String].self, from: data))?["error"] ?? "Something went wrong. Try again."
+            throw APIError(status: status, message: message)
+        }
+        return data
+    }
+
     private func makeRequest(_ route: String, query: [String: String] = [:]) async throws -> URLRequest {
         var components = URLComponents(url: AppConfig.apiBaseURL.appendingPathComponent(route), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }

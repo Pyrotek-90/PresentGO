@@ -276,6 +276,9 @@ struct SetDetailView: View {
             Button("Add Welcome", systemImage: "hand.wave") { Task { await addWelcome() } }
             Button("Add Announcement", systemImage: "megaphone") { sheet = .announcement }
             Button("Add Media", systemImage: "photo.on.rectangle") { sheet = .media }
+            if session.currentTeam?.isPaid ?? false {
+                Button("Add Worship Leader Notes", systemImage: "text.quote") { Task { await addNotes() } }
+            }
             Button("Add Blank Slide", systemImage: "rectangle") { Task { await add(type: "blank", content: JSONObject()) } }
             Divider()
             Button("Edit Set Details", systemImage: "pencil") { sheet = .details }
@@ -318,6 +321,39 @@ struct SetDetailView: View {
         } else {
             Label(item.displayTitle, systemImage: item.systemImage)
                 .foregroundStyle(item.type == "song" ? .secondary : .primary)
+        }
+    }
+
+    /// AI Worship Leader Notes for songs that don't have one yet, each placed just before its song.
+    private func addNotes() async {
+        var noted = Set<String>()
+        for item in items where item.type == "note" { if let s = item.content["song_id"]?.stringValue { noted.insert(s.lowercased()) } }
+        let targets = items.filter { $0.type == "song" && $0.songId != nil && !noted.contains($0.songId!.uuidString.lowercased()) }
+        guard !targets.isEmpty else { error = "Every song in this set already has a note."; return }
+        for target in targets {
+            guard let id = target.songId, let song = songs[id] else { continue }
+            do {
+                let n = try await AITools.worshipNote(title: song.title, artist: song.artist ?? "", lyrics: song.rawLyrics ?? "")
+                var content: JSONObject = [:]
+                content["song_id"] = .string(id.uuidString.lowercased())
+                content["song_title"] = .string(song.title)
+                content["song_artist"] = .string(song.artist ?? "")
+                content["summary"] = .string(n.summary)
+                content["reflection"] = .string(n.reflection)
+                content["verses"] = .array(n.verses.map { v in .object(["reference": .string(v.reference), "text": .string(v.text)]) })
+                guard let at = items.firstIndex(where: { $0.id == target.id }) else { continue }
+                let row = NewSetItem(set_id: set.id, type: "note", content: content, position: items[at].position)
+                let saved: SetItem = try await supabase.from("set_items").insert(row).select(SetItem.columns).single().execute().value
+                items.insert(saved, at: at)
+                for i in items.indices where i > at {
+                    items[i].position += 1
+                    let patch: JSONObject = ["position": .integer(items[i].position)]
+                    try await supabase.from("set_items").update(patch).eq("id", value: items[i].id).execute()
+                }
+            } catch {
+                self.error = AITools.message(for: error)
+                return
+            }
         }
     }
 
