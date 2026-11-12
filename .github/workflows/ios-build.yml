@@ -1,0 +1,43 @@
+name: iOS build
+
+# Compiles the SwiftUI app (apple/) for the iOS Simulator on GitHub's Macs — no signing needed.
+# Runs when the iOS app changes, or by hand from the Actions tab.
+on:
+  push:
+    paths: ['apple/**', '.github/workflows/ios-build.yml']
+  pull_request:
+    paths: ['apple/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the newest Xcode on the runner
+        run: |
+          XC=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+      - name: Build for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project apple/StaffList.xcodeproj \
+            -scheme StaffList \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log | grep -E "error:|warning: .*(deprecated|concurrency)|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-log
+          path: build.log
