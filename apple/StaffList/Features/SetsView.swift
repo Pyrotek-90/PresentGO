@@ -1,7 +1,7 @@
 import SwiftUI
 import Supabase
 
-/// Upcoming sets for the current team. Members only see sets they're scheduled on — the
+/// The current team's sets, Upcoming and Past. Members only see sets they're scheduled on — the
 /// database enforces that, so the app simply asks for the team's sets.
 struct SetsView: View {
     @Environment(SessionStore.self) private var session
@@ -9,23 +9,32 @@ struct SetsView: View {
     @State private var loading = true
     @State private var error: String?
 
+    private var today: String { ServiceSet.dayFormatter.string(from: .now) }
+    /// Today and later (and sets without a date), soonest first.
+    private var upcoming: [ServiceSet] {
+        sets.filter { ($0.serviceDate ?? today) >= today }
+            .sorted { ($0.serviceDate ?? "9999") < ($1.serviceDate ?? "9999") }
+    }
+    /// Earlier sets, most recent first.
+    private var past: [ServiceSet] {
+        sets.filter { ($0.serviceDate ?? today) < today }
+    }
+
     var body: some View {
         NavigationStack {
-            List(sets) { set in
-                NavigationLink(value: set) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(set.name).font(.body.weight(.medium))
-                        if let date = set.date {
-                            Text(date, format: .dateTime.weekday(.wide).month(.wide).day())
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                    }
+            List {
+                if !upcoming.isEmpty {
+                    Section("Upcoming") { ForEach(upcoming) { SetRow(set: $0) } }
+                }
+                if !past.isEmpty {
+                    Section("Past") { ForEach(past) { SetRow(set: $0) } }
                 }
             }
             .overlay {
                 if loading && sets.isEmpty { ProgressView() }
                 else if let error { ContentUnavailableView("Couldn't load sets", systemImage: "wifi.exclamationmark", description: Text(error)) }
-                else if sets.isEmpty { ContentUnavailableView("No upcoming sets", systemImage: "calendar") }
+                else if sets.isEmpty { ContentUnavailableView("No sets yet", systemImage: "calendar",
+                                                             description: Text("Create sets at stafflist.app — they'll show up here.")) }
             }
             .navigationTitle(session.currentTeam?.name ?? "Sets")
             .navigationDestination(for: ServiceSet.self) { SetDetailView(set: $0) }
@@ -38,19 +47,34 @@ struct SetsView: View {
         guard let team = session.currentTeam else { loading = false; return }
         loading = true
         defer { loading = false }
-        let today = ServiceSet.dayFormatter.string(from: .now)
         do {
+            // Newest first; the view splits them into Upcoming and Past.
             sets = try await supabase.from("sets")
                 .select(ServiceSet.columns)
                 .eq("church_id", value: team.id)
-                .gte("service_date", value: today)
-                .order("service_date")
-                .limit(100)
+                .order("service_date", ascending: false)
+                .limit(200)
                 .execute()
                 .value
             error = nil
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+struct SetRow: View {
+    let set: ServiceSet
+
+    var body: some View {
+        NavigationLink(value: set) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(set.name).font(.body.weight(.medium))
+                if let date = set.date {
+                    Text(date, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
         }
     }
 }
