@@ -11,6 +11,9 @@ enum AppConfig {
     /// The StaffList API shared with the web app (api/v1.js in the repo).
     static let apiBaseURL = URL(string: "https://stafflist.app/api/v1/")!
 
+    /// Where Google sign-in returns to the app (allowed in Supabase → Auth → URL Configuration).
+    static let authCallbackURL = URL(string: "stafflist://login-callback")!
+
     static let supportURL = URL(string: "https://stafflist.app/support")!
     static let privacyURL = URL(string: "https://stafflist.app/privacy")!
 }

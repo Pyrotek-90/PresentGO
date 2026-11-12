@@ -62,6 +62,20 @@ struct SignInView: View {
                 .signInWithAppleButtonStyle(.white)
                 .frame(height: 48)
 
+                Button {
+                    Task { await session.signInWithGoogle() }
+                } label: {
+                    HStack(spacing: 10) {
+                        GoogleMark()
+                        Text("Sign in with Google").font(.system(size: 19, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .foregroundStyle(.black)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Sign in with Google")
+
                 if let message = session.errorMessage {
                     Text(message)
                         .font(.footnote)
@@ -86,5 +100,23 @@ struct SignInView: View {
             await session.signIn(email: email, password: password)
             working = false
         }
+    }
+}
+
+/// Google's "G", drawn with its four brand colors (no image asset needed).
+private struct GoogleMark: View {
+    var body: some View {
+        ZStack {
+            Circle().trim(from: 0.0, to: 0.25).stroke(Color(red: 0.92, green: 0.26, blue: 0.21), lineWidth: 3.5)
+                .rotationEffect(.degrees(-135))
+            Circle().trim(from: 0.25, to: 0.5).stroke(Color(red: 0.98, green: 0.74, blue: 0.02), lineWidth: 3.5)
+                .rotationEffect(.degrees(-135))
+            Circle().trim(from: 0.5, to: 0.75).stroke(Color(red: 0.20, green: 0.66, blue: 0.33), lineWidth: 3.5)
+                .rotationEffect(.degrees(-135))
+            Circle().trim(from: 0.75, to: 0.93).stroke(Color(red: 0.26, green: 0.52, blue: 0.96), lineWidth: 3.5)
+                .rotationEffect(.degrees(-135))
+            Rectangle().fill(Color(red: 0.26, green: 0.52, blue: 0.96)).frame(width: 9, height: 3.5).offset(x: 4.5)
+        }
+        .frame(width: 18, height: 18)
     }
 }

@@ -82,6 +82,27 @@ final class SessionStore {
         try? await supabase.auth.signOut()
     }
 
+    // MARK: - Google
+
+    /// Signs in with Google through Supabase in Apple's secure sign-in sheet
+    /// (ASWebAuthenticationSession), using the same Google setup as the web app.
+    /// Supabase must list stafflist://login-callback under Auth → URL Configuration.
+    func signInWithGoogle() async {
+        errorMessage = nil
+        do {
+            try await supabase.auth.signInWithOAuth(
+                provider: .google,
+                redirectTo: AppConfig.authCallbackURL,
+                queryParams: [(name: "prompt", value: "select_account")],
+                configure: { session in session.prefersEphemeralWebBrowserSession = false }
+            )
+        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            return
+        } catch {
+            errorMessage = "Google sign-in didn't finish. \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Sign in with Apple
 
     /// Call from SignInWithAppleButton's onRequest.
