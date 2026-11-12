@@ -9,6 +9,7 @@ struct LibraryView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var creating = false
+    @State private var offline = false
 
     private var filtered: [Song] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -30,6 +31,12 @@ struct LibraryView: View {
             .listStyle(.plain)
             .overlay { overlay }
             .navigationTitle("Songs")
+            .safeAreaInset(edge: .top) {
+                if offline {
+                    Label("Offline — showing your saved library", systemImage: "icloud.slash")
+                        .font(.footnote).foregroundStyle(.secondary).padding(.vertical, 4)
+                }
+            }
             .navigationDestination(for: Song.self) { SongView(song: $0) }
             .searchable(text: $search, prompt: "Title, artist or CCLI #")
             .toolbar {
@@ -74,8 +81,15 @@ struct LibraryView: View {
                 .execute()
                 .value
             error = nil
+            offline = false
+            OfflineStore.save(songs, as: OfflineStore.songsKey(team.id))
         } catch {
-            self.error = error.localizedDescription
+            if let saved = OfflineStore.load([Song].self, from: OfflineStore.songsKey(team.id)) {
+                songs = saved
+                offline = true
+            } else {
+                self.error = error.localizedDescription
+            }
         }
     }
 }

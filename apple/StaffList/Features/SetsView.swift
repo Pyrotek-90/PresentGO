@@ -10,6 +10,7 @@ struct SetsView: View {
     @State private var error: String?
     @State private var path: [ServiceSet] = []
     @State private var creating = false
+    @State private var offline = false
 
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var today: String { ServiceSet.dayFormatter.string(from: .now) }
@@ -26,6 +27,10 @@ struct SetsView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                if offline {
+                    Label("Offline — showing your saved sets", systemImage: "icloud.slash")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 if !upcoming.isEmpty {
                     Section("Upcoming") { ForEach(upcoming) { SetRow(set: $0) } }
                 }
@@ -81,8 +86,17 @@ struct SetsView: View {
                 .execute()
                 .value
             error = nil
+            offline = false
+            OfflineStore.save(sets, as: OfflineStore.setsKey(team.id))
+            let soon = upcoming
+            Task.detached(priority: .background) { await OfflineStore.prefetch(soon) }
         } catch {
-            self.error = error.localizedDescription
+            if let saved = OfflineStore.load([ServiceSet].self, from: OfflineStore.setsKey(team.id)) {
+                sets = saved
+                offline = true
+            } else {
+                self.error = error.localizedDescription
+            }
         }
     }
 }
@@ -131,6 +145,8 @@ struct SetDetailView: View {
     @State private var loading = true
     @State private var sheet: SheetKind?
     @State private var error: String?
+    @State private var presenting = false
+    @State private var showingCharts = false
 
     enum SheetKind: String, Identifiable {
         case addSong, announcement, details
@@ -154,12 +170,18 @@ struct SetDetailView: View {
         .navigationTitle(set.name)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                Button("Charts", systemImage: "music.quarternote.3") { showingCharts = true }
+                if session.currentTeam?.canPresent ?? false {
+                    Button("Present", systemImage: "play.rectangle.fill") { presenting = true }
+                }
                 if canEdit {
-                    EditButton()
                     addMenu
+                    EditButton()
                 }
             }
         }
+        .fullScreenCover(isPresented: $presenting) { PresenterView(set: set) }
+        .fullScreenCover(isPresented: $showingCharts) { SetChartsView(set: set) }
         .sheet(item: $sheet) { kind in sheetView(kind) }
         .alert("Something went wrong", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") {}
@@ -279,7 +301,13 @@ struct SetDetailView: View {
                 .value
             await loadSongs()
         } catch {
-            self.error = error.localizedDescription
+            // Offline: use the saved copy of this set, if there is one.
+            if let saved = OfflineStore.load(SetPresentation.self, from: OfflineStore.presentationKey(set.id)) {
+                items = saved.items
+                for s in saved.songs { songs[s.id] = s }
+            } else {
+                self.error = error.localizedDescription
+            }
         }
     }
 

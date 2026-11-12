@@ -289,3 +289,27 @@ extension Notification.Name {
     static let songsChanged = Notification.Name("StaffListSongsChanged")
     static let setsChanged = Notification.Name("StaffListSetsChanged")
 }
+
+// MARK: - Presenting (api/_handlers/set-slides.js)
+
+struct PresentSlide: Codable, Hashable, Sendable {
+    let type: String
+    let itemId: String?
+    let itemTitle: String?
+    let lines: [String]
+    let subs: [String?]?
+    let label: String?
+    let sectionLabel: String?
+    let title: String?
+    let subtitle: String?
+    let image: String?
+}
+
+struct SetPresentation: Codable, Sendable {
+    let set: ServiceSet
+    let items: [SetItem]
+    let songs: [Song]
+    let slides: [PresentSlide]
+}
+
+struct SetIDRequest: Encodable { let set_id: UUID }

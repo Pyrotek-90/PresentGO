@@ -11,8 +11,7 @@
 //   • normalises the key ("g" / "G" / "G Major" → "G Major") and fills in the language
 // It writes with the caller's own access token, so the database's row-level security applies.
 
-import { createClient } from '@supabase/supabase-js'
-import { supabaseEnv } from '../_lib/auth.js'
+import { userDb } from '../_lib/db.js'
 import { buildSongSlides } from '../../src/lib/songSlides.js'
 import { reconcileChart } from '../../src/lib/chart.js'
 import { parseKey, formatKey } from '../../src/lib/chords.js'
@@ -44,12 +43,7 @@ export default async function handler(req, res) {
   if (!title) return res.status(400).json({ error: 'Song title is required.' })
   if (!b.id && !b.church_id) return res.status(400).json({ error: 'church_id is required for a new song.' })
 
-  const { url, anon } = supabaseEnv()
-  const token = req.headers.authorization.replace(/^Bearer\s+/i, '')
-  const db = createClient(url, anon, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
+  const db = userDb(req)
 
   let existing = null
   if (b.id) {

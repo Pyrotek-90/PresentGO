@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct StaffListApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate   // TV output (Present/TVScene.swift)
     @State private var session = SessionStore()
 
     var body: some Scene {
