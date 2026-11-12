@@ -11,33 +11,37 @@ something you can install on the iPad and use. ✅ = in the app now.
 - ✅ Order of service: add songs, Welcome, Announcement, Blank; drag to reorder; swipe to remove;
   key for this set
 
-## Phase 2 — Sunday: present and play
-- Present on the iPad: full-screen slides for the whole set (songs, welcome, announcements, blank),
-  tap / swipe / Bluetooth foot pedal to move
-- AirPlay / HDMI TV shows only the current slide (external-display scene); the iPad shows the
-  controller with next slide and set list
-- Musician view: chord charts for the set in order, page turns by pedal, per-set keys
-- Live sync with the web controller (Supabase Realtime)
-- Offline: songs and upcoming sets saved on the iPad (SwiftData), synced when online
+## Phase 2 — Sunday: present and play ✅ (Nov 12, 2026)
+- ✅ Present on the iPad: controller (current / next slide, slides by song, blank), tap or
+  Bluetooth foot pedal (arrows, Space, Page Up/Down), B to blank, full-screen slide
+- ✅ TV (AirPlay Screen Mirroring or HDMI) shows only the slide (external-display scene); mirrors
+  when nothing is presenting
+- ✅ Live sync with the web Controller / Present screen (Supabase Realtime, same messages)
+- ✅ Charts: the set's chord charts in order and key, page turns by swipe or pedal
+- ✅ Offline: library, sets and the next 4 upcoming sets' slides and charts saved on the device
+- API: `sets/slides` builds a set's slides on the server (same builder as the web)
 
-## Phase 3 — Editing extras
-- Song editor extras: arrangement (song order), transposed keys and preferred key, key notes,
-  themes, YouTube link, translations and the translation line on slides
-- Set item options: arrangement for this set, Worship Leader Notes
-- Media items and the Content Library (images, backgrounds)
-- Bulk import from Files (many charts at once) — Get Started page
+## Phase 3 — Editing extras ✅
+- ✅ Song editor: Song Order (arrangement, built on the server), other keys + preferred key,
+  translations and the slide translation line, YouTube link, themes
+- ✅ Set: song order for one set, Worship Leader Notes view, Add Media
+- ✅ Media tab (Content Library): add photos or PDFs (each page a slide), delete
+- ✅ Import Charts: many ChordPro / text / PDF charts at once
 
-## Phase 4 — Team and schedule
-- Team: members, positions, invite to team
-- Calendar / schedule per set: assign people, send invites, Accepted / Declined status
-- Respond to invites in the app; push notifications (APNs) for new requests
-- Message Team; calendar sync link
+## Phase 4 — Team and schedule ✅
+- ✅ Team tab: members, positions, add / edit / remove, invite to join, Message Team
+- ✅ Team for This Set: people per position, Waiting / Accepted / Declined, Send Requests
+- ✅ Notifications (bell): Accept / Decline requests, reminders, messages, team invitations
+- ⏳ Push notifications — needs an APNs key from the Apple Developer account and a server
+  sender; in-app notifications work now
 
-## Phase 5 — Pro tools and account
-- AI: Translate, Smart Cleanup, key / BPM lookup, Worship Leader Notes (Pro)
-- CCLI Report; Export songbook (PDF)
-- Settings: church settings, my teams, offline mode, delete account
-- Subscriptions with StoreKit 2 (RevenueCat), same plans as Stripe on the web
+## Phase 5 — Pro tools and account ✅
+- ✅ AI (Pro): look up key / tempo / writers, Smart Cleanup, Translate, Worship Leader Notes
+- ✅ CCLI Report (API `reports/ccli`): share CSV, copy numbers; Export songbook (PDF)
+- ✅ Settings: team details, plan and role, calendar subscription, offline copies, delete account
+- ⏳ Buying a plan in the app (StoreKit 2 / RevenueCat) — needs subscription products in App Store
+  Connect and the LLC / banking set up; the app shows the plan and never links to web checkout
 
 ## Phase 6 — Release
-- TestFlight for the worship team, then the App Store (screenshots, privacy labels, review notes)
+- Test on iPads with an Apple TV and the band, then TestFlight, then the App Store
+  (screenshots, privacy labels, review notes with a demo account)
