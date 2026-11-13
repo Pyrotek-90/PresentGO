@@ -11,6 +11,7 @@ struct LibraryView: View {
     @State private var creating = false
     @State private var importing = false
     @State private var offline = false
+    @State private var adding = AddToSetModel()
 
     private var filtered: [Song] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -25,11 +26,21 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             List(filtered) { song in
-                NavigationLink(value: song) {
-                    SongRow(song: song)
+                if adding.active {
+                    HStack(spacing: 10) {
+                        NavigationLink(value: song) { SongRow(song: song) }
+                        AddSongButton(song: song, model: adding)
+                    }
+                } else {
+                    NavigationLink(value: song) {
+                        SongRow(song: song)
+                    }
                 }
             }
             .listStyle(.plain)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if adding.active { AddToSetBar(model: adding) }
+            }
             .overlay { overlay }
             .navigationTitle("Songs")
             .safeAreaInset(edge: .top) {
@@ -43,11 +54,20 @@ struct LibraryView: View {
             .toolbar {
                 if session.currentTeam?.canEdit ?? false {
                     ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button("New Song", systemImage: "square.and.pencil") { creating = true }
-                            Button("Import Charts…", systemImage: "square.and.arrow.down.on.square") { importing = true }
-                        } label: {
-                            Label("Add", systemImage: "plus")
+                        if adding.active {
+                            Button { adding.active = false } label: { Label("Done", systemImage: "checkmark") }
+                                .labelStyle(.titleAndIcon)
+                        } else {
+                            Menu {
+                                Button("Add Songs to a Set", systemImage: "text.badge.plus") {
+                                    Task { await adding.start(team: session.currentTeam, user: session.user) }
+                                }
+                                Divider()
+                                Button("New Song", systemImage: "square.and.pencil") { creating = true }
+                                Button("Import Charts…", systemImage: "square.and.arrow.down.on.square") { importing = true }
+                            } label: {
+                                Label("Add", systemImage: "plus")
+                            }
                         }
                     }
                 }
