@@ -1,56 +1,93 @@
 import SwiftUI
 import Supabase
 
-/// Who's serving on a set: positions and people, with each person's answer. Admins and Leaders
-/// add people and send the requests (by email and in the app, through the shared API).
-struct SetScheduleView: View {
+/// "Team for This Set", shown right in the set's list: who's serving in each position and
+/// their answer (Not sent / Waiting / Accepted / Declined). Admins and Leaders add and remove
+/// people and send the requests (email and in-app, through the shared API).
+struct SetTeamSection: View {
     @Environment(SessionStore.self) private var session
     let set: ServiceSet
     @State private var assignments: [Assignment] = []
     @State private var members: [UUID: TeamMember] = [:]
     @State private var positions: [Position] = []
+    @State private var loaded = false
     @State private var adding = false
-    @State private var note: String?
     @State private var sending = false
+    @State private var note: String?
 
+    private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var drafts: [Assignment] { assignments.filter { ($0.status ?? "draft") == "draft" } }
 
+    /// Assignments in the team's position order, then by name.
+    private var rows: [(assignment: Assignment, position: String, name: String)] {
+        let order = Dictionary(uniqueKeysWithValues: positions.enumerated().map { ($1.id, $0) })
+        let names = Dictionary(uniqueKeysWithValues: positions.map { ($0.id, $0.name) })
+        return assignments
+            .sorted {
+                let a = order[$0.positionId] ?? .max, b = order[$1.positionId] ?? .max
+                if a != b { return a < b }
+                return (members[$0.memberId]?.name ?? "") < (members[$1.memberId]?.name ?? "")
+            }
+            .map { ($0, names[$0.positionId] ?? "Position", members[$0.memberId]?.name ?? "Someone") }
+    }
+
     var body: some View {
-        List {
-            if let note { Section { Text(note).font(.footnote) } }
-            ForEach(positions.filter { p in assignments.contains { $0.positionId == p.id } }) { p in
-                Section(p.name) {
-                    ForEach(assignments.filter { $0.positionId == p.id }) { a in
-                        HStack {
-                            Text(members[a.memberId]?.name ?? "Someone")
-                            Spacer()
-                            Text(a.statusLabel).font(.caption.bold()).foregroundStyle(color(a.status))
-                        }
-                        .swipeActions {
-                            Button("Remove", role: .destructive) { Task { await remove(a) } }
+        Section {
+            if !loaded {
+                HStack { Spacer(); ProgressView(); Spacer() }
+            } else if assignments.isEmpty {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.2.slash").foregroundStyle(.secondary).frame(width: 30)
+                    Text("No one scheduled yet").foregroundStyle(.secondary)
+                }
+            } else {
+                ForEach(rows, id: \.assignment.id) { row in
+                    HStack(spacing: 12) {
+                        Text(row.position)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 96, alignment: .leading)
+                            .lineLimit(1)
+                        Text(row.name).lineLimit(1)
+                        Spacer(minLength: 8)
+                        StatusPill(status: row.assignment.status)
+                    }
+                    .swipeActions {
+                        if canEdit {
+                            Button("Remove", role: .destructive) { Task { await remove(row.assignment) } }
                         }
                     }
                 }
             }
-        }
-        .overlay {
-            if assignments.isEmpty {
-                ContentUnavailableView {
-                    Label("No one scheduled yet", systemImage: "person.2.badge.plus")
-                } actions: {
-                    Button("Add Person") { adding = true }.buttonStyle(.borderedProminent)
+            if canEdit && loaded {
+                HStack(spacing: 10) {
+                    Button { adding = true } label: {
+                        Label("Add Person", systemImage: "person.badge.plus")
+                    }
+                    .buttonStyle(.bordered)
+                    if !drafts.isEmpty {
+                        Button { Task { await sendRequests() } } label: {
+                            if sending { ProgressView() } else {
+                                Label("Send Requests (\(drafts.count))", systemImage: "paperplane")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(sending)
+                    }
                 }
+                .padding(.vertical, 2)
             }
-        }
-        .navigationTitle("Team for \(set.name)")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(drafts.isEmpty ? "Sent" : "Send Requests (\(drafts.count))", systemImage: "paperplane") {
-                    Task { await sendRequests() }
+            if let note {
+                Text(note).font(.footnote).foregroundStyle(.secondary)
+            }
+        } header: {
+            HStack {
+                Text("Team for This Set")
+                Spacer()
+                if !assignments.isEmpty {
+                    let yes = assignments.filter { $0.status == "accepted" }.count
+                    Text("\(yes) of \(assignments.count) accepted").textCase(nil)
                 }
-                .disabled(drafts.isEmpty || sending)
-                Button("Add Person", systemImage: "plus") { adding = true }
             }
         }
         .sheet(isPresented: $adding) {
@@ -58,20 +95,11 @@ struct SetScheduleView: View {
                 Task { await add(position: position, member: member) }
             }
         }
-        .refreshable { await load() }
-        .task { await load() }
+        .task(id: set.id) { await load() }
     }
 
-    private func color(_ status: String?) -> Color {
-        switch status {
-        case "accepted": return .green
-        case "declined": return .red
-        case "invited": return .orange
-        default: return .secondary
-        }
-    }
-
-    private func load() async {
+    func load() async {
+        defer { loaded = true }
         guard let team = session.currentTeam else { return }
         async let a: [Assignment] = supabase.from("set_assignments").select("id,set_id,position_id,member_id,status").eq("set_id", value: set.id).execute().value
         async let m: [TeamMember] = supabase.from("team_members").select(TeamMember.columns).eq("church_id", value: team.id).order("name").execute().value
@@ -87,6 +115,7 @@ struct SetScheduleView: View {
                 .insert(NewAssignment(set_id: set.id, position_id: position.id, member_id: member.id))
                 .select("id,set_id,position_id,member_id,status").single().execute().value
             assignments.append(a)
+            note = nil
         } catch {
             note = "\(member.name) is already on this set for \(position.name), or couldn't be added."
         }
@@ -106,6 +135,37 @@ struct SetScheduleView: View {
         defer { sending = false }
         note = await Invites.send(assignments: drafts.map(\.id))
         await load()
+    }
+}
+
+/// Not sent / Waiting / Accepted / Declined, in the web Team Schedule's colors.
+struct StatusPill: View {
+    let status: String?
+
+    var body: some View {
+        Text(label)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .foregroundStyle(color)
+            .background(color.opacity(0.15), in: Capsule())
+    }
+
+    private var label: String {
+        switch status ?? "draft" {
+        case "invited": return "Waiting"
+        case "accepted": return "Accepted"
+        case "declined": return "Declined"
+        default: return "Not sent"
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case "accepted": return .green
+        case "declined": return .red
+        case "invited": return .orange
+        default: return .secondary
+        }
     }
 }
 

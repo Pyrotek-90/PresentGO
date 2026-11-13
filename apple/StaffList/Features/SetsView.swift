@@ -224,15 +224,7 @@ struct SetDetailView: View {
             } header: {
                 Text(set.whenText ?? "")
             }
-            if canEdit {
-                Section {
-                    NavigationLink {
-                        SetScheduleView(set: set)
-                    } label: {
-                        Label("Team for This Set", systemImage: "person.2")
-                    }
-                }
-            }
+            SetTeamSection(set: set)
         }
     }
 
