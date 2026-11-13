@@ -282,66 +282,60 @@ struct SetDetailView: View {
         await add(type: "welcome", content: content)
     }
 
-    /// Everything from the New Set form, shown at the top of the set. Admins and Leaders tap any
-    /// line (or Edit) to change it in the same form.
+    /// A compact summary of the set at the top — name, when, where, extra times, repeat — with Edit
+    /// beside it (Admins and Leaders), which opens the full form.
     private var detailsSection: some View {
         Section {
-            detailRow("Set Name", set.name, icon: "textformat")
-            detailRow("Date", set.date.map { $0.formatted(.dateTime.weekday(.wide).month(.wide).day().year()) } ?? "Not set", icon: "calendar")
-            detailRow("Time", timeAndLength ?? "Not set", icon: "clock")
-            if let venue = set.venueName, !venue.isEmpty {
-                detailRow("Venue", venue, icon: "building.columns")
-            }
-            if let address = set.locationAddress, !address.isEmpty {
-                detailRow("Address", address, icon: "mappin.and.ellipse")
-            }
-            if let room = set.locationDetails, !room.isEmpty {
-                detailRow("Room", room, icon: "door.left.hand.open")
-            }
-            if (set.venueName ?? "").isEmpty && (set.locationAddress ?? "").isEmpty && (set.locationDetails ?? "").isEmpty {
-                detailRow("Location", "Not set", icon: "mappin.and.ellipse")
-            }
-            ForEach(set.extraTimes ?? []) { t in
-                detailRow(t.label, Self.extraTimeText(t), icon: "clock.badge")
-            }
-            detailRow("Repeat", set.seriesId != nil ? (set.recurrence.map { Self.repeatText($0, from: set.date) } ?? "Part of a series") : "Does not repeat", icon: "repeat")
-            if let notice {
-                Text(notice).font(.footnote).foregroundStyle(.tint)
-            }
-        } header: {
-            HStack {
-                Text("Set Details")
-                Spacer()
-                if canEdit {
-                    Button("Edit") { sheet = .details }
-                        .font(.subheadline.weight(.semibold))
-                        .textCase(nil)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(set.name)
+                        .font(.title3.weight(.bold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    if canEdit {
+                        Button { sheet = .details } label: {
+                            Label("Edit", systemImage: "pencil")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    summaryLine(whenLine, icon: "calendar")
+                    if let venue = set.venueText { summaryLine(venue, icon: "mappin.and.ellipse") }
+                    ForEach(set.extraTimes ?? []) { t in
+                        summaryLine("\(t.label) · \(Self.extraTimeText(t))", icon: "clock")
+                    }
+                    if set.seriesId != nil, let rule = set.recurrence {
+                        summaryLine(Self.repeatText(rule, from: set.date), icon: "repeat")
+                    }
+                }
+                if let notice {
+                    Text(notice).font(.footnote).foregroundStyle(.tint)
                 }
             }
+            .padding(.vertical, 4)
         }
     }
 
-    private var timeAndLength: String? {
-        guard let t = set.timeValue else { return nil }
-        let clock = t.formatted(date: .omitted, time: .shortened)
-        return set.durationMin.map { "\(clock) · \(SetDetailsSheet.durationLabel($0))" } ?? clock
+    /// "Sunday, November 16, 2026 · 10:00 AM · 1 hr 30 min"
+    private var whenLine: String {
+        var parts: [String] = []
+        if let d = set.date { parts.append(d.formatted(.dateTime.weekday(.wide).month(.wide).day().year())) }
+        if let t = set.timeValue { parts.append(t.formatted(date: .omitted, time: .shortened)) }
+        if set.timeValue != nil, let m = set.durationMin { parts.append(SetDetailsSheet.durationLabel(m)) }
+        return parts.isEmpty ? "No date yet" : parts.joined(separator: " · ")
     }
 
-    @ViewBuilder private func detailRow(_ label: String, _ value: String, icon: String) -> some View {
-        let content = HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: icon).foregroundStyle(.secondary).frame(width: 22)
-            Text(label).foregroundStyle(.secondary)
-            Spacer(minLength: 12)
-            Text(value)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(value == "Not set" || value == "Does not repeat" ? .secondary : .primary)
+    private func summaryLine(_ text: String, icon: String) -> some View {
+        Label {
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(.secondary)
         }
-        if canEdit {
-            Button { sheet = .details } label: { content.contentShape(Rectangle()) }
-                .tint(.primary)
-        } else {
-            content
-        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
     }
 
     static func extraTimeText(_ t: ExtraTime) -> String {
