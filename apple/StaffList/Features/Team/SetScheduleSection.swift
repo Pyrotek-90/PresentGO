@@ -83,39 +83,28 @@ struct SetTeamSection: View {
     }
 
     var body: some View {
-        Group {
+        Section {
             if !loaded {
-                Section("Team for This Set") { HStack { Spacer(); ProgressView(); Spacer() } }
+                HStack { Spacer(); ProgressView(); Spacer() }
             } else {
-                ForEach(Array(visibleSections.enumerated()), id: \.element) { i, section in
-                    Section {
-                        let list = rows(in: section)
-                        if list.isEmpty {
-                            Text("No one yet").foregroundStyle(.secondary)
-                        }
-                        ForEach(list) { a in personRow(a) }
-                    } header: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            if i == 0 { teamTitle }
-                            HStack {
-                                Text(section.label)
-                                Spacer()
-                                if canEdit {
-                                    Button { addingTo = section } label: {
-                                        Label("Add", systemImage: "person.badge.plus")
-                                            .font(.caption.weight(.semibold))
-                                            .padding(.horizontal, 10).padding(.vertical, 4)
-                                            .foregroundStyle(Theme.accentLight)
-                                            .overlay(Capsule().stroke(Theme.accent.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
-                                    }
-                                    .buttonStyle(.plain)
-                                    .textCase(nil)
-                                }
-                            }
-                        }
-                    } footer: {
-                        if section == visibleSections.last { sendFooter }
+                ForEach(visibleSections) { section in
+                    groupHeader(section)
+                    let list = rows(in: section)
+                    if list.isEmpty {
+                        Text("No one yet").font(.subheadline).foregroundStyle(.secondary)
                     }
+                    ForEach(list) { a in personRow(a) }
+                }
+                if canEdit && !assignments.isEmpty { sendRow }
+                if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
+            }
+        } header: {
+            HStack {
+                Text("Team for This Set")
+                Spacer()
+                if !assignments.isEmpty {
+                    let yes = assignments.filter { $0.status == "accepted" }.count
+                    Text("\(yes) of \(assignments.count) accepted").textCase(nil)
                 }
             }
         }
@@ -127,17 +116,53 @@ struct SetTeamSection: View {
         .task(id: set.id) { await load() }
     }
 
-    private var teamTitle: some View {
-        HStack {
-            Text("Team for This Set").font(.headline).foregroundStyle(.primary)
-            Spacer()
-            if !assignments.isEmpty {
-                let yes = assignments.filter { $0.status == "accepted" }.count
-                Text("\(yes) of \(assignments.count) accepted").font(.caption)
+    /// "PRODUCTION ─────── + Add", as a small label row inside the section.
+    private func groupHeader(_ section: TeamSection) -> some View {
+        HStack(spacing: 10) {
+            Text(section.label.uppercased())
+                .font(.caption.weight(.semibold))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+            Rectangle().fill(Color.secondary.opacity(0.25)).frame(height: 1)
+            if canEdit {
+                Button { addingTo = section } label: {
+                    Label("Add", systemImage: "person.badge.plus")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .foregroundStyle(Theme.accentLight)
+                        .overlay(Capsule().stroke(Theme.accent.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+                }
+                .buttonStyle(.borderless)
             }
         }
-        .textCase(nil)
-        .padding(.bottom, 4)
+        .listRowSeparator(.hidden)
+        .padding(.top, 4)
+    }
+
+    private var sendRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button { Task { await sendRequests() } } label: {
+                HStack {
+                    Spacer()
+                    if sending { ProgressView() } else {
+                        Label(drafts.isEmpty ? "Everyone has been asked" : "Send Requests (\(drafts.count))", systemImage: "envelope")
+                    }
+                    Spacer()
+                }
+                .font(.subheadline.weight(.semibold))
+                .padding(.vertical, 10)
+                .foregroundStyle(.white)
+                .background(drafts.isEmpty ? Color.secondary.opacity(0.3) : Theme.accent, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.borderless)
+            .disabled(drafts.isEmpty || sending)
+            let noEmail = assignments.filter { members[$0.memberId]?.email == nil && ($0.status ?? "draft") == "draft" }.count
+            if noEmail > 0 {
+                Text("\(noEmail) \(noEmail == 1 ? "person has" : "people have") no email address. Add one on the Team tab to invite them.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func personRow(_ a: Assignment) -> some View {
@@ -163,34 +188,6 @@ struct SetTeamSection: View {
                     .accessibilityLabel("Remove \(m?.name ?? "") from this set")
             }
         }
-    }
-
-    @ViewBuilder private var sendFooter: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if canEdit && !assignments.isEmpty {
-                Button { Task { await sendRequests() } } label: {
-                    HStack {
-                        Spacer()
-                        if sending { ProgressView() } else {
-                            Label(drafts.isEmpty ? "Everyone has been asked" : "Send Requests (\(drafts.count))", systemImage: "envelope")
-                        }
-                        Spacer()
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.vertical, 10)
-                    .foregroundStyle(.white)
-                    .background(drafts.isEmpty ? Color.secondary.opacity(0.3) : Theme.accent, in: RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-                .disabled(drafts.isEmpty || sending)
-                let noEmail = assignments.filter { members[$0.memberId]?.email == nil && ($0.status ?? "draft") == "draft" }.count
-                if noEmail > 0 {
-                    Text("\(noEmail) \(noEmail == 1 ? "person has" : "people have") no email address. Add one on the Team tab to invite them.")
-                }
-            }
-            if let note { Text(note) }
-        }
-        .padding(.top, 8)
     }
 
     func load() async {
