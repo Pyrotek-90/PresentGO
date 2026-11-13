@@ -204,6 +204,7 @@ struct SetDetailView: View {
 
     private var itemList: some View {
         List {
+            detailsSection
             Section {
                 if items.isEmpty {
                     if loading {
@@ -227,7 +228,11 @@ struct SetDetailView: View {
                 .moveDisabled(!canEdit)
                 .deleteDisabled(!canEdit)
             } header: {
-                setHeader
+                HStack {
+                    Text("Program")
+                    Spacer()
+                    if !items.isEmpty { Text("\(items.count) item\(items.count == 1 ? "" : "s")").textCase(nil) }
+                }
             }
             SetTeamSection(set: set)
         }
@@ -277,21 +282,66 @@ struct SetDetailView: View {
         await add(type: "welcome", content: content)
     }
 
-    private var setHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let when = set.whenText { Text(when) }
-            if let venue = set.venueText { Label(venue, systemImage: "mappin.and.ellipse").lineLimit(1) }
+    /// Everything from the New Set form, shown at the top of the set. Admins and Leaders tap any
+    /// line (or Edit) to change it in the same form.
+    private var detailsSection: some View {
+        Section {
+            detailRow("Set Name", set.name, icon: "textformat")
+            detailRow("Date", set.date.map { $0.formatted(.dateTime.weekday(.wide).month(.wide).day().year()) } ?? "Not set", icon: "calendar")
+            detailRow("Time", timeAndLength ?? "Not set", icon: "clock")
+            if let venue = set.venueName, !venue.isEmpty {
+                detailRow("Venue", venue, icon: "building.columns")
+            }
+            if let address = set.locationAddress, !address.isEmpty {
+                detailRow("Address", address, icon: "mappin.and.ellipse")
+            }
+            if let room = set.locationDetails, !room.isEmpty {
+                detailRow("Room", room, icon: "door.left.hand.open")
+            }
+            if (set.venueName ?? "").isEmpty && (set.locationAddress ?? "").isEmpty && (set.locationDetails ?? "").isEmpty {
+                detailRow("Location", "Not set", icon: "mappin.and.ellipse")
+            }
             ForEach(set.extraTimes ?? []) { t in
-                Label("\(t.label): \(Self.extraTimeText(t))", systemImage: "clock")
+                detailRow(t.label, Self.extraTimeText(t), icon: "clock.badge")
             }
-            if let rule = set.recurrence, set.seriesId != nil {
-                Label(Self.repeatText(rule), systemImage: "repeat")
+            detailRow("Repeat", set.seriesId != nil ? (set.recurrence.map { Self.repeatText($0, from: set.date) } ?? "Part of a series") : "Does not repeat", icon: "repeat")
+            if let notice {
+                Text(notice).font(.footnote).foregroundStyle(.tint)
             }
-            if let notice { Text(notice).foregroundStyle(.tint).textCase(nil) }
+        } header: {
+            HStack {
+                Text("Set Details")
+                Spacer()
+                if canEdit {
+                    Button("Edit") { sheet = .details }
+                        .font(.subheadline.weight(.semibold))
+                        .textCase(nil)
+                }
+            }
         }
-        .textCase(nil)
-        .font(.footnote)
-        .padding(.bottom, 4)
+    }
+
+    private var timeAndLength: String? {
+        guard let t = set.timeValue else { return nil }
+        let clock = t.formatted(date: .omitted, time: .shortened)
+        return set.durationMin.map { "\(clock) · \(SetDetailsSheet.durationLabel($0))" } ?? clock
+    }
+
+    @ViewBuilder private func detailRow(_ label: String, _ value: String, icon: String) -> some View {
+        let content = HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: icon).foregroundStyle(.secondary).frame(width: 22)
+            Text(label).foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(value == "Not set" || value == "Does not repeat" ? .secondary : .primary)
+        }
+        if canEdit {
+            Button { sheet = .details } label: { content.contentShape(Rectangle()) }
+                .tint(.primary)
+        } else {
+            content
+        }
     }
 
     static func extraTimeText(_ t: ExtraTime) -> String {
@@ -302,8 +352,17 @@ struct SetDetailView: View {
         return parts.joined(separator: " · ")
     }
 
-    static func repeatText(_ r: RepeatRule) -> String {
-        let f = ["weekly": "Repeats weekly", "biweekly": "Repeats every 2 weeks", "monthly": "Repeats monthly"][r.freq] ?? "Repeats"
+    /// "Weekly · 12 sets", "Monthly (last Sunday) until Mar 1, 2027", "Monthly (day 15) · 6 sets".
+    static func repeatText(_ r: RepeatRule, from start: Date?) -> String {
+        var f = ["weekly": "Weekly", "biweekly": "Every 2 weeks", "monthly": "Monthly"][r.freq] ?? "Repeats"
+        if r.freq == "monthly", let start {
+            if r.by == "date" {
+                f += " (day \(Calendar.current.component(.day, from: start)))"
+            } else {
+                let n = r.week ?? SetDetailsSheet.weekOfMonth(start)
+                f += " (\(["1st", "2nd", "3rd", "4th", "last"][min(max(n, 0), 4)]) \(start.formatted(.dateTime.weekday(.wide))))"
+            }
+        }
         if let u = r.until, let d = ServiceSet.dayFormatter.date(from: u) { return "\(f) until \(d.formatted(date: .abbreviated, time: .omitted))" }
         return "\(f) · \(r.count ?? 12) sets"
     }
