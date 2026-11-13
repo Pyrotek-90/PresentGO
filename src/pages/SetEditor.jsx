@@ -364,7 +364,7 @@ export default function SetEditor() {
           if (error) throw error
           patch.series_id = seriesId; patch.recurrence = rule
           const n = await createSeriesSets(nextDates(details.date, rule), shared, seriesId, rule, details.copyProgram)
-          msg = `Repeats ${freqLabel(rule.freq, details.date).toLowerCase()} — added ${n} more set${n === 1 ? '' : 's'}.`
+          msg = `Repeats ${freqLabel(rule.freq, details.date, rule).toLowerCase()} — added ${n} more set${n === 1 ? '' : 's'}.`
         } else if (inSeries) {
           const { error } = await supabase.from('sets').update({ ...patch, recurrence: rule }).eq('id', setId)
           if (error) throw error
@@ -581,7 +581,7 @@ export default function SetEditor() {
             </div>
             <p className="text-xs text-muted flex items-center gap-1 min-w-0">
               {set?.series_id && set?.recurrence && <Repeat size={11} className="text-accent-light shrink-0" aria-label="Repeating set" />}
-              <span className="truncate">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.series_id && set?.recurrence && freqLabel(set.recurrence.freq, set.service_date), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</span>
+              <span className="truncate">{[set?.service_date && formatDate(set.service_date), set?.service_time && formatSetTime(set.service_time), set?.series_id && set?.recurrence && freqLabel(set.recurrence.freq, set.service_date, set.recurrence), set?.updated_at && `Updated ${formatModified(set.updated_at)}`].filter(Boolean).join(' · ')}</span>
             </p>
             {extraTimes(set).map((t, i) => (
               <p key={i} className="text-xs text-muted flex items-center gap-1 truncate"><Clock3 size={11} className="shrink-0" />{t.label} {timeText(t, { short: true })}</p>

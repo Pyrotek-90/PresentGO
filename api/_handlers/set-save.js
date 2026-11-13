@@ -1,7 +1,7 @@
 // POST /api/v1/sets/save — create a set or save its details, the same way the web Set page does
 // (src/pages/SetEditor.jsx saveDetails), so the iOS app gets repeating sets and extra times too.
 //
-// Body: {
+// Body: {   (repeat for monthly may add by: 'weekday' + week: 0-4 (4 = last), or by: 'date')
 //   id?, church_id? (new sets), workspace_id?,
 //   name, date: 'YYYY-MM-DD', time?: 'HH:MM', duration?: minutes,
 //   venue?, address?, room?,
@@ -36,8 +36,12 @@ export const timesFor = (times, fromDate, date) =>
 
 export function ruleFrom(r) {
   if (!r?.freq || !['weekly', 'biweekly', 'monthly'].includes(r.freq)) return null
-  if (r.until && DAY.test(r.until)) return { freq: r.freq, until: r.until }
-  return { freq: r.freq, count: Math.min(Math.max(Number(r.count) || DEFAULT_COUNT, 2), MAX_OCCURRENCES) }
+  // Monthly: which day of the month — the Nth (or last) weekday, or the same date.
+  const day = r.freq !== 'monthly' ? {}
+    : r.by === 'date' ? { by: 'date' }
+    : Number.isInteger(r.week) && r.week >= 0 && r.week <= 4 ? { by: 'weekday', week: r.week } : {}
+  if (r.until && DAY.test(r.until)) return { freq: r.freq, ...day, until: r.until }
+  return { freq: r.freq, ...day, count: Math.min(Math.max(Number(r.count) || DEFAULT_COUNT, 2), MAX_OCCURRENCES) }
 }
 
 export default async function handler(req, res) {
@@ -120,7 +124,7 @@ export default async function handler(req, res) {
       if (error) throw error
       set = data
       const n = await createSeriesSets(nextDates(date, rule), seriesId)
-      message = `Repeats ${freqLabel(rule.freq, date).toLowerCase()} — added ${n} more set${n === 1 ? '' : 's'}.`
+      message = `Repeats ${freqLabel(rule.freq, date, rule).toLowerCase()} — added ${n} more set${n === 1 ? '' : 's'}.`
     } else if (set.series_id) {
       const ruleChanged = !sameRule(rule, set.recurrence)
       const before = set

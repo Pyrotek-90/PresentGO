@@ -14,7 +14,6 @@ struct SetDetailsSheet: View {
 
     @State private var name: String
     @State private var date: Date
-    @State private var hasTime: Bool
     @State private var time: Date
     @State private var duration: Int
     @State private var venue: String
@@ -25,6 +24,9 @@ struct SetDetailsSheet: View {
     @State private var endsOn: Bool
     @State private var count: Int
     @State private var until: Date
+    @State private var monthlyDay: String   // "w0"…"w4" (1st–4th, last weekday) or "date"
+    @State private var newTimeName = ""
+    @State private var askingTimeName = false
     @State private var copyProgram = false
     @State private var applyToFollowing = false
     @State private var saving = false
@@ -50,9 +52,9 @@ struct SetDetailsSheet: View {
         self.onDeleted = onDeleted
         let cal = Calendar.current
         let tenAM = cal.date(bySettingHour: 10, minute: 0, second: 0, of: .now) ?? .now
-        _name = State(initialValue: set?.name ?? "Sunday Service")
-        _date = State(initialValue: set?.date ?? SetDetailsSheet.nextSunday())
-        _hasTime = State(initialValue: set == nil || set?.timeValue != nil)
+        let startDate = set?.date ?? SetDetailsSheet.nextSunday()
+        _name = State(initialValue: set?.name ?? "")
+        _date = State(initialValue: startDate)
         _time = State(initialValue: set?.timeValue ?? tenAM)
         _duration = State(initialValue: set?.durationMin ?? 90)
         _venue = State(initialValue: set?.venueName ?? "")
@@ -64,6 +66,8 @@ struct SetDetailsSheet: View {
             return EditableTime(label: t.label, date: d, hasTime: clock != nil, time: clock ?? tenAM, minutes: t.minutes ?? 90)
         })
         _freq = State(initialValue: set?.recurrence?.freq ?? "")
+        let rule = set?.recurrence
+        _monthlyDay = State(initialValue: rule?.by == "date" ? "date" : "w\(rule?.week ?? SetDetailsSheet.weekOfMonth(startDate))")
         _endsOn = State(initialValue: set?.recurrence?.until != nil)
         _count = State(initialValue: set?.recurrence?.count ?? 12)
         _until = State(initialValue: set?.recurrence?.until.flatMap { ServiceSet.dayFormatter.date(from: $0) }
@@ -74,14 +78,21 @@ struct SetDetailsSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Set name", text: $name)
+                    LabeledContent("Set Name") {
+                        TextField("Required", text: $name)
+                            .multilineTextAlignment(.trailing)
+                    }
                     DatePicker("Date", selection: $date, displayedComponents: .date)
-                    Toggle("Start time", isOn: $hasTime.animation())
-                    if hasTime {
+                    HStack {
+                        Text("Time")
+                        Spacer()
                         DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
                         Picker("Length", selection: $duration) {
                             ForEach(Self.durations, id: \.self) { Text(Self.durationLabel($0)).tag($0) }
                         }
+                        .labelsHidden()
+                        .fixedSize()
                     }
                 }
 
@@ -98,13 +109,18 @@ struct SetDetailsSheet: View {
                         ForEach(ExtraTime.names, id: \.self) { n in
                             Button(n) { addTime(n) }
                         }
+                        Divider()
+                        Button("New Time Name…", systemImage: "square.and.pencil") {
+                            newTimeName = ""
+                            askingTimeName = true
+                        }
                     } label: {
                         Label("Add Time", systemImage: "plus")
                     }
                 } header: {
                     Text("Extra Times")
                 } footer: {
-                    Text("Rehearsal, practice, run-thru or soundcheck. They go in the invitations and calendars.")
+                    Text("Rehearsal, practice, soundcheck or your own. They go in the invitations and calendars.")
                 }
 
                 Section {
@@ -112,7 +128,16 @@ struct SetDetailsSheet: View {
                         Text("Does not repeat").tag("")
                         Text("Weekly").tag("weekly")
                         Text("Every 2 weeks").tag("biweekly")
-                        Text(monthlyLabel).tag("monthly")
+                        Text("Monthly").tag("monthly")
+                    }
+                    if freq == "monthly" {
+                        Picker("Day of the month", selection: $monthlyDay) {
+                            ForEach(0..<5, id: \.self) { n in
+                                Text("\(Self.ordinals[n]) \(weekdayName)").tag("w\(n)")
+                            }
+                            Text("Day \(Calendar.current.component(.day, from: date)) of each month").tag("date")
+                        }
+                        .onChange(of: monthlyDay) { _, choice in moveDate(to: choice) }
                     }
                     if !freq.isEmpty {
                         Picker("Ends", selection: $endsOn) {
@@ -164,47 +189,70 @@ struct SetDetailsSheet: View {
             } message: {
                 Text("The set and its program are deleted for everyone on the team. Songs stay in the library.")
             }
+            .alert("New Time", isPresented: $askingTimeName) {
+                TextField("Name, e.g. Band Prayer", text: $newTimeName)
+                Button("Add") { addCustomTime() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("What is this time for?")
+            }
             .interactiveDismissDisabled(saving)
         }
     }
 
     private func timeRow(_ t: Binding<EditableTime>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                TextField("Name", text: t.label).font(.body.weight(.medium))
-                DatePicker("", selection: t.date, displayedComponents: .date).labelsHidden()
-            }
-            HStack {
-                Toggle("Time", isOn: t.hasTime).fixedSize()
-                if t.wrappedValue.hasTime {
-                    DatePicker("", selection: t.time, displayedComponents: .hourAndMinute).labelsHidden()
-                    Spacer()
-                    Picker("", selection: t.minutes) {
-                        ForEach(Self.durations, id: \.self) { Text(Self.durationLabel($0)).tag($0) }
-                    }
-                    .labelsHidden()
+        VStack(alignment: .leading, spacing: 6) {
+            TextField("Name", text: t.label).font(.body.weight(.medium))
+            HStack(spacing: 8) {
+                DatePicker("Date", selection: t.date, displayedComponents: .date).labelsHidden()
+                DatePicker("Time", selection: t.time, displayedComponents: .hourAndMinute).labelsHidden()
+                Spacer(minLength: 0)
+                Picker("Length", selection: t.minutes) {
+                    ForEach(Self.durations, id: \.self) { Text(Self.durationLabel($0)).tag($0) }
                 }
+                .labelsHidden()
+                .fixedSize()
             }
-            .font(.subheadline)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
     private func addTime(_ label: String) {
-        // Rehearsals default to two days before; soundcheck and prayer to the same day.
+        // Rehearsals and practices default to two days before; anything else to the same day.
         let before = ["Rehearsal", "Practice", "Run-Thru"].contains(label) ? -2 : 0
         let d = Calendar.current.date(byAdding: .day, value: before, to: date) ?? date
         let t = Calendar.current.date(bySettingHour: before == 0 ? 8 : 19, minute: 0, second: 0, of: .now) ?? .now
         times.append(EditableTime(label: label, date: d, hasTime: true, time: t, minutes: before == 0 ? 60 : 90))
     }
 
-    private var monthlyLabel: String {
+    private static let ordinals = ["1st", "2nd", "3rd", "4th", "Last"]
+    private var weekdayName: String { date.formatted(.dateTime.weekday(.wide)) }
+
+    /// 0–3 for the 1st–4th weekday of its month, 4 for a 5th (counted as "last") — as on the web.
+    static func weekOfMonth(_ d: Date) -> Int { min((Calendar.current.component(.day, from: d) - 1) / 7, 4) }
+
+    /// Choosing "1st Sunday" (etc.) moves the first set to that day — this month if it's still
+    /// ahead, otherwise next month — so the series starts on the right day.
+    private func moveDate(to choice: String) {
+        guard choice.hasPrefix("w"), let n = Int(choice.dropFirst()) else { return }
         let cal = Calendar.current
-        let day = cal.component(.day, from: date)
-        let n = min((day - 1) / 7, 4)
-        let ord = ["1st", "2nd", "3rd", "4th", "last"][n]
-        let weekday = date.formatted(.dateTime.weekday(.wide))
-        return "Monthly (\(ord) \(weekday))"
+        let weekday = cal.component(.weekday, from: date)
+        func match(inMonthOf base: Date) -> Date? {
+            guard let first = cal.date(from: cal.dateComponents([.year, .month], from: base)),
+                  let days = cal.range(of: .day, in: .month, for: first) else { return nil }
+            let all = days.compactMap { cal.date(byAdding: .day, value: $0 - 1, to: first) }
+                .filter { cal.component(.weekday, from: $0) == weekday }
+            return n == 4 ? all.last : (all.indices.contains(n) ? all[n] : nil)
+        }
+        let today = cal.startOfDay(for: .now)
+        if let d = match(inMonthOf: date), d >= today { date = d }
+        else if let next = cal.date(byAdding: .month, value: 1, to: date), let d = match(inMonthOf: next) { date = d }
+    }
+
+    private func addCustomTime() {
+        let name = newTimeName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        addTime(name)
     }
 
     // MARK: Saving
@@ -219,14 +267,18 @@ struct SetDetailsSheet: View {
         error = nil
         defer { saving = false }
         let day = ServiceSet.dayFormatter
-        let rule: RepeatRule? = freq.isEmpty ? nil
+        var rule: RepeatRule? = freq.isEmpty ? nil
             : RepeatRule(freq: freq, count: endsOn ? nil : count, until: endsOn ? day.string(from: until) : nil)
+        if freq == "monthly" {
+            if monthlyDay == "date" { rule?.by = "date" }
+            else { rule?.by = "weekday"; rule?.week = Int(monthlyDay.dropFirst()) ?? Self.weekOfMonth(date) }
+        }
         let request = SetSaveRequest(
             id: set?.id,
             church_id: set == nil ? session.currentTeam?.id : nil,
             name: name.trimmingCharacters(in: .whitespaces),
             date: day.string(from: date),
-            time: hasTime ? hm(time) : nil,
+            time: hm(time),
             duration: duration,
             venue: venue, address: address, room: room,
             times: times.map { ExtraTime(label: $0.label, date: day.string(from: $0.date), time: $0.hasTime ? hm($0.time) : nil, minutes: $0.minutes) },

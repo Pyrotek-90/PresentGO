@@ -276,7 +276,7 @@ struct ExtraTime: Codable, Hashable, Sendable, Identifiable {
         minutes = (try? c.decodeIfPresent(Int.self, forKey: .minutes)) ?? nil
     }
 
-    static let names = ["Rehearsal", "Practice", "Run-Thru", "Soundcheck", "Prayer"]
+    static let names = ["Rehearsal", "Practice", "Run-Thru", "Soundcheck"]
 }
 
 /// A repeating set's rule (src/lib/recurrence.js): weekly, every 2 weeks or monthly (same
@@ -285,6 +285,9 @@ struct RepeatRule: Codable, Hashable, Sendable {
     var freq: String
     var count: Int?
     var until: String?
+    /// Monthly only: "weekday" (with `week` 0–3 = 1st–4th, 4 = last) or "date" (same date each month).
+    var by: String?
+    var week: Int?
 }
 
 /// Body for /api/v1/sets/save (api/_handlers/set-save.js).

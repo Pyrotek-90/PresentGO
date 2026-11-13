@@ -1,4 +1,7 @@
 // Repeating sets. A rule looks like { freq: 'weekly' | 'biweekly' | 'monthly', count?: n, until?: 'YYYY-MM-DD' }.
+// Monthly rules may also say which day of the month: { by: 'weekday', week: 0-4 } (1st-4th or last
+// weekday, the weekday of the first set) or { by: 'date' } (the same date each month). Without
+// them a monthly rule uses the first set's position (e.g. its 3rd Sunday) — older rules keep working.
 // `count` includes the first set. Every set in a series shares `series_id` and stores the rule in `recurrence`.
 
 export const MAX_OCCURRENCES = 104
@@ -27,13 +30,21 @@ const nthWeekday = (y, m, dow, n) => {
   return d.getMonth() === month ? d : null
 }
 
-export function freqLabel(freq, startDate) {
+// The same date in another month, or null when that month is too short (e.g. the 31st).
+const sameDate = (y, m, day) => {
+  const d = new Date(y, m, day, 12)
+  return d.getDate() === day ? d : null
+}
+
+export function freqLabel(freq, startDate, rule) {
   if (freq === 'weekly') return 'Weekly'
   if (freq === 'biweekly') return 'Every 2 weeks'
   if (freq === 'monthly') {
     if (!startDate) return 'Monthly'
     const d = parse(startDate)
-    return `Monthly (${ORD[weekOfMonth(d)]} ${DOW[d.getDay()]})`
+    if (rule?.by === 'date') return `Monthly (day ${d.getDate()})`
+    const n = Number.isInteger(rule?.week) ? rule.week : weekOfMonth(d)
+    return `Monthly (${ORD[n]} ${DOW[d.getDay()]})`
   }
   return 'Does not repeat'
 }
@@ -43,7 +54,7 @@ export function ruleSummary(rule, startDate) {
   const end = rule.until
     ? `until ${parse(rule.until).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
     : `${rule.count || DEFAULT_COUNT} sets`
-  return `${freqLabel(rule.freq, startDate)} · ${end}`
+  return `${freqLabel(rule.freq, startDate, rule)} · ${end}`
 }
 
 // Dates in the series after `startDate` (the start itself is not included).
@@ -53,9 +64,12 @@ export function nextDates(startDate, rule) {
   const limit = rule.until ? MAX_OCCURRENCES : Math.min(Math.max(Number(rule.count) || DEFAULT_COUNT, 1), MAX_OCCURRENCES)
   const out = []
   if (rule.freq === 'monthly') {
-    const dow = start.getDay(), n = weekOfMonth(start)
+    const dow = start.getDay()
+    const n = Number.isInteger(rule.week) && rule.week >= 0 && rule.week <= 4 ? rule.week : weekOfMonth(start)
     for (let m = 1; out.length + 1 < limit && m <= MAX_OCCURRENCES * 2; m++) {
-      const d = nthWeekday(start.getFullYear(), start.getMonth() + m, dow, n)
+      const d = rule.by === 'date'
+        ? sameDate(start.getFullYear(), start.getMonth() + m, start.getDate())
+        : nthWeekday(start.getFullYear(), start.getMonth() + m, dow, n)
       if (!d) continue
       if (rule.until && iso(d) > rule.until) break
       out.push(iso(d))
@@ -73,4 +87,5 @@ export function nextDates(startDate, rule) {
 
 export const sameRule = (a, b) =>
   (a?.freq || '') === (b?.freq || '') && (a?.until || '') === (b?.until || '') &&
+  (a?.by || '') === (b?.by || '') && (a?.week ?? null) === (b?.week ?? null) &&
   (a?.until ? true : (Number(a?.count) || 0) === (Number(b?.count) || 0))
