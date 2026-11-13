@@ -282,60 +282,57 @@ struct SetDetailView: View {
         await add(type: "welcome", content: content)
     }
 
-    /// A compact summary of the set at the top — name, when, where, extra times, repeat — with Edit
-    /// beside it (Admins and Leaders), which opens the full form.
+    /// A slim strip above the program: when and where, plus extra times and repeat on one small
+    /// line, with a pencil to edit (Admins and Leaders). The set's name is in the title bar —
+    /// the details were entered when the set was created, so the screen is about the program.
     private var detailsSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(set.name)
-                        .font(.title3.weight(.bold))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
-                    if canEdit {
-                        Button { sheet = .details } label: {
-                            Label("Edit", systemImage: "pencil")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(whenLine).font(.subheadline.weight(.medium))
+                    if let more = moreLine {
+                        Text(more).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                    if let notice {
+                        Text(notice).font(.caption).foregroundStyle(.tint)
                     }
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    summaryLine(whenLine, icon: "calendar")
-                    if let venue = set.venueText { summaryLine(venue, icon: "mappin.and.ellipse") }
-                    ForEach(set.extraTimes ?? []) { t in
-                        summaryLine("\(t.label) · \(Self.extraTimeText(t))", icon: "clock")
+                Spacer(minLength: 8)
+                if canEdit {
+                    Button { sheet = .details } label: {
+                        Image(systemName: "pencil")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 32, height: 32)
+                            .background(Color.secondary.opacity(0.15), in: Circle())
                     }
-                    if set.seriesId != nil, let rule = set.recurrence {
-                        summaryLine(Self.repeatText(rule, from: set.date), icon: "repeat")
-                    }
-                }
-                if let notice {
-                    Text(notice).font(.footnote).foregroundStyle(.tint)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit set details")
                 }
             }
-            .padding(.vertical, 4)
         }
+    }
+
+    /// "Main Sanctuary · Rehearsal Fri 7:00 PM · Repeats weekly"
+    private var moreLine: String? {
+        var parts: [String] = []
+        if let venue = set.venueText { parts.append(venue) }
+        for t in set.extraTimes ?? [] {
+            var p = t.label
+            if let d = ServiceSet.dayFormatter.date(from: t.date) { p += " " + d.formatted(.dateTime.weekday(.abbreviated)) }
+            if let c = SetDetailsSheet.clock(t.time) { p += " " + c.formatted(date: .omitted, time: .shortened) }
+            parts.append(p)
+        }
+        if set.seriesId != nil, let rule = set.recurrence { parts.append(Self.repeatText(rule, from: set.date)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// "Sunday, November 16, 2026 · 10:00 AM · 1 hr 30 min"
     private var whenLine: String {
         var parts: [String] = []
-        if let d = set.date { parts.append(d.formatted(.dateTime.weekday(.wide).month(.wide).day().year())) }
+        if let d = set.date { parts.append(d.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year())) }
         if let t = set.timeValue { parts.append(t.formatted(date: .omitted, time: .shortened)) }
         if set.timeValue != nil, let m = set.durationMin { parts.append(SetDetailsSheet.durationLabel(m)) }
         return parts.isEmpty ? "No date yet" : parts.joined(separator: " · ")
-    }
-
-    private func summaryLine(_ text: String, icon: String) -> some View {
-        Label {
-            Text(text).fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: icon).foregroundStyle(.secondary)
-        }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
     }
 
     static func extraTimeText(_ t: ExtraTime) -> String {
