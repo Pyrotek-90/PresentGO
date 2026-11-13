@@ -72,7 +72,7 @@ struct TVSlideScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            SlideView(slide: model.current, blank: model.blank)
+            SlideView(slide: model.current, blank: model.blank, fit: model.fit(for: model.current))
         }
         .animation(.easeInOut(duration: 0.2), value: model.index)
         .animation(.easeInOut(duration: 0.2), value: model.blank)

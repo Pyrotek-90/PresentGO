@@ -31,15 +31,58 @@ final class PresentationModel {
     var current: PresentSlide? { slides.indices.contains(index) ? slides[index] : nil }
     var next: PresentSlide? { slides.indices.contains(index + 1) ? slides[index + 1] : nil }
 
-    /// Slides grouped by set item, for the presenter's list.
-    var groups: [(title: String, range: Range<Int>)] {
-        var out: [(String, Range<Int>)] = []
+    /// One run-order entry: a set item and the slides it produced.
+    struct Group: Identifiable, Hashable {
+        let id: String          // item id
+        let title: String
+        let type: String
+        let range: Range<Int>
+        var firstIndex: Int { range.lowerBound }
+    }
+
+    private(set) var groups: [Group] = []
+    private var fits: [String: SlideFit] = [:]
+    /// Loop: cycle the current item's slides every `loopSeconds` (paused while blanked).
+    var looping = false { didSet { restartLoop() } }
+    static let loopSeconds: Double = 6
+    private var loopTask: Task<Void, Never>?
+
+    func fit(for slide: PresentSlide?) -> SlideFit? {
+        slide.flatMap { fits[$0.itemId ?? ""] }
+    }
+
+    var currentGroup: Group? { groups.first { $0.range.contains(index) } }
+
+    /// The current song's sections in order, with repeats (V1 C V2 C B C): label and slide index.
+    var currentSections: [(label: String, index: Int)] {
+        guard let g = currentGroup else { return [] }
+        return g.range.compactMap { i in slides[i].label.map { ($0, i) } }
+    }
+
+    private func buildGroups() {
+        var out: [Group] = []
         var start = 0
         for i in slides.indices where i == slides.count - 1 || slides[i + 1].itemId != slides[i].itemId {
-            out.append((slides[start].itemTitle ?? slides[start].type.capitalized, start..<(i + 1)))
+            let first = slides[start]
+            out.append(Group(id: first.itemId ?? "item-\(start)", title: first.itemTitle ?? first.type.capitalized,
+                             type: first.type, range: start..<(i + 1)))
             start = i + 1
         }
-        return out
+        groups = out
+        fits = Dictionary(uniqueKeysWithValues: out.map { g in (g.id, SlideFit(Array(slides[g.range]))) })
+    }
+
+    private func restartLoop() {
+        loopTask?.cancel()
+        guard looping else { return }
+        loopTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.loopSeconds))
+                guard !Task.isCancelled, let self else { return }
+                guard !self.blank, let g = self.currentGroup, g.range.count > 1 else { continue }
+                self.go(to: self.index + 1 < g.range.upperBound ? self.index + 1 : g.range.lowerBound, fromLoop: true)
+            }
+        }
     }
 
     // MARK: Start and stop
@@ -49,6 +92,8 @@ final class PresentationModel {
         setID = presentation.set.id
         title = presentation.set.name
         slides = presentation.slides
+        buildGroups()
+        looping = false
         index = 0
         blank = false
         self.offline = offline
@@ -58,6 +103,7 @@ final class PresentationModel {
     }
 
     func stop() async {
+        looping = false
         listeners.forEach { $0.cancel() }
         listeners = []
         if let channel { await supabase.removeChannel(channel) }
@@ -69,9 +115,10 @@ final class PresentationModel {
 
     // MARK: Moving (from this iPad)
 
-    func go(to i: Int) {
+    func go(to i: Int, fromLoop: Bool = false) {
         guard !slides.isEmpty else { return }
         index = min(max(i, 0), slides.count - 1)
+        if !fromLoop && looping { restartLoop() }   // moving by hand carries on looping from here
         send(event: "control", ["type": .string("GOTO"), "index": .integer(index)])
         sendStatus()
     }
@@ -83,6 +130,13 @@ final class PresentationModel {
         blank.toggle()
         send(event: "control", ["type": .string("SYNC"), "index": .integer(index), "blank": .bool(blank)])
         sendStatus()
+    }
+
+    /// End: tells the web Present screen to close, like the web Controller's End.
+    func end() async {
+        send(event: "control", ["type": .string("EXIT")])
+        try? await Task.sleep(for: .milliseconds(200))
+        await stop()
     }
 
     // MARK: Realtime
