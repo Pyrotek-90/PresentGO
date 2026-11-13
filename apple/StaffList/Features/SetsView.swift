@@ -177,9 +177,16 @@ struct SetDetailView: View {
         .navigationTitle(set.name)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button("Charts", systemImage: "music.quarternote.3") { showingCharts = true }
+                Button { showingCharts = true } label: {
+                    Label("Song Viewer", systemImage: "book")
+                }
+                .help("Song Viewer: step through the songs in order")
+                .disabled(!items.contains { $0.type == "song" })
                 if session.currentTeam?.canPresent ?? false {
-                    Button("Present", systemImage: "play.rectangle.fill") { presenting = true }
+                    Button { presenting = true } label: {
+                        Label("Present", systemImage: "play.display")
+                    }
+                    .disabled(items.isEmpty)
                 }
                 if canEdit {
                     addMenu
@@ -292,7 +299,8 @@ struct SetDetailView: View {
             NavigationLink {
                 SongView(song: song, setKey: item.key)
             } label: {
-                HStack {
+                HStack(spacing: 12) {
+                    ItemIcon(type: "song")
                     SongRow(song: song)
                     if let key = item.key {
                         Text(Song.shortKey(key)).font(.caption.bold()).foregroundStyle(.tint)
@@ -316,11 +324,10 @@ struct SetDetailView: View {
             NavigationLink {
                 NoteView(content: item.content)
             } label: {
-                Label(item.displayTitle, systemImage: item.systemImage)
+                ItemLabel(item: item)
             }
         } else {
-            Label(item.displayTitle, systemImage: item.systemImage)
-                .foregroundStyle(item.type == "song" ? .secondary : .primary)
+            ItemLabel(item: item)
         }
     }
 
@@ -731,6 +738,54 @@ struct NoteView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased()).font(.caption.bold()).foregroundStyle(.secondary)
             body()
+        }
+    }
+}
+
+/// The web Program list's item icon: a tinted rounded square (src/pages/SetEditor.jsx ITEM_ICONS / ITEM_COLORS).
+struct ItemIcon: View {
+    let type: String
+
+    var body: some View {
+        Image(systemName: Self.symbol(type))
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Self.color(type))
+            .frame(width: 30, height: 30)
+            .background(Self.color(type).opacity(type == "song" ? 0.2 : 0.12), in: RoundedRectangle(cornerRadius: 7))
+    }
+
+    static func symbol(_ type: String) -> String {
+        switch type {
+        case "song": return "music.note"
+        case "welcome": return "star"
+        case "announcement": return "megaphone"
+        case "blank": return "square"
+        case "media": return "folder"
+        case "note": return "square.and.pencil"
+        default: return "square.stack"
+        }
+    }
+
+    static func color(_ type: String) -> Color {
+        switch type {
+        case "song": return Theme.accentLight
+        case "welcome": return Color(red: 0.98, green: 0.80, blue: 0.08)       // yellow-400
+        case "announcement": return Color(red: 0.98, green: 0.57, blue: 0.24)  // orange-400
+        case "media": return Color(red: 0.75, green: 0.52, blue: 0.99)         // purple-400
+        case "note": return Color(red: 0.98, green: 0.57, blue: 0.24)
+        default: return .secondary
+        }
+    }
+}
+
+struct ItemLabel: View {
+    let item: SetItem
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ItemIcon(type: item.type)
+            Text(item.displayTitle)
+                .foregroundStyle(item.type == "song" ? .secondary : .primary)
         }
     }
 }

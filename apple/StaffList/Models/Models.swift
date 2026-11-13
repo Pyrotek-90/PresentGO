@@ -193,11 +193,11 @@ struct SetItem: Codable, Identifiable, Hashable, Sendable {
     var systemImage: String {
         switch type {
         case "song": return "music.note"
-        case "welcome": return "hand.wave"
+        case "welcome": return "star"
         case "announcement": return "megaphone"
-        case "blank": return "rectangle"
-        case "note": return "text.quote"
-        case "media": return "photo.on.rectangle"
+        case "blank": return "square"
+        case "note": return "square.and.pencil"
+        case "media": return "folder"
         default: return "square"
         }
     }

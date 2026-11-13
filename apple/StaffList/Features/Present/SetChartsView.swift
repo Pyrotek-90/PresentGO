@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// For the band: every song in the set as a chord chart, in order and in the set's key.
+/// Song Viewer — for the band: every song in the set as a chord chart, in order and in the set's key.
 /// Swipe, or use a Bluetooth foot pedal (arrow keys / Page Up / Page Down), to turn the page.
 /// Works offline from the saved copy of the set.
 struct SetChartsView: View {
@@ -31,7 +31,7 @@ struct SetChartsView: View {
                     .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             }
-            .navigationTitle(pages.isEmpty ? set.name : "\(page + 1) of \(pages.count) · \(set.name)")
+            .navigationTitle(pages.isEmpty ? "Song Viewer" : "\(page + 1) of \(pages.count) · \(set.name)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
