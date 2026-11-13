@@ -164,16 +164,6 @@ struct SetDetailView: View {
 
     var body: some View {
         itemList
-        .overlay {
-            if loading && items.isEmpty { ProgressView() }
-            else if !loading && items.isEmpty {
-                ContentUnavailableView {
-                    Label("Nothing in this set yet", systemImage: "music.note.list")
-                } actions: {
-                    if canEdit { Button("Add Song") { sheet = .addSong }.buttonStyle(.borderedProminent) }
-                }
-            }
-        }
         .navigationTitle(set.name)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -214,6 +204,20 @@ struct SetDetailView: View {
     private var itemList: some View {
         List {
             Section {
+                if items.isEmpty {
+                    if loading {
+                        HStack { Spacer(); ProgressView(); Spacer() }
+                    } else {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.stack").foregroundStyle(.secondary).frame(width: 30)
+                            Text(canEdit ? "Nothing in this set yet — add songs, a welcome, announcements or media." : "The leader hasn't added the program yet.")
+                                .foregroundStyle(.secondary)
+                        }
+                        if canEdit {
+                            Button { sheet = .addSong } label: { Label("Add Song", systemImage: "plus") }
+                        }
+                    }
+                }
                 ForEach(items) { item in
                     row(item)
                 }
