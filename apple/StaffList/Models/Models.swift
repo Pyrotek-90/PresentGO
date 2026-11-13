@@ -61,9 +61,13 @@ struct SongMetadata: Codable, Hashable, Sendable {
     var youtubeURL: String?
     var themes: [String]?
     var slideTranslation: String?
+    var occasions: [String]?
+    var rotation: Bool?
+    var keyNotes: [String: String]?
 
     enum CodingKeys: String, CodingKey {
-        case key, bpm, author, copyright, translations, language, themes
+        case key, bpm, author, copyright, translations, language, themes, occasions, rotation
+        case keyNotes = "key_notes"
         case slideTranslation = "slide_translation"
         case originalKey = "original_key"
         case chordChart = "chord_chart"
@@ -87,6 +91,9 @@ struct SongMetadata: Codable, Hashable, Sendable {
         language = try? c.decodeIfPresent(String.self, forKey: .language)
         youtubeURL = try? c.decodeIfPresent(String.self, forKey: .youtubeURL)
         slideTranslation = try? c.decodeIfPresent(String.self, forKey: .slideTranslation)
+        occasions = try? c.decodeIfPresent([String].self, forKey: .occasions)
+        rotation = try? c.decodeIfPresent(Bool.self, forKey: .rotation)
+        keyNotes = try? c.decodeIfPresent([String: String].self, forKey: .keyNotes)
         if let list = try? c.decodeIfPresent([String].self, forKey: .themes) {
             themes = list
         } else if let text = try? c.decodeIfPresent(String.self, forKey: .themes) {
@@ -135,15 +142,52 @@ struct ServiceSet: Codable, Identifiable, Hashable, Sendable {
     var serviceDate: String?   // "2026-11-15"
     var serviceTime: String?   // "10:30:00"
     var churchId: UUID?
+    var durationMin: Int?
+    var venueName: String?
+    var locationAddress: String?
+    var locationDetails: String?
+    var extraTimes: [ExtraTime]?
+    var seriesId: UUID?
+    var recurrence: RepeatRule?
 
     enum CodingKeys: String, CodingKey {
-        case id, name
+        case id, name, recurrence
         case serviceDate = "service_date"
         case serviceTime = "service_time"
         case churchId = "church_id"
+        case durationMin = "duration_min"
+        case venueName = "venue_name"
+        case locationAddress = "location_address"
+        case locationDetails = "location_details"
+        case extraTimes = "extra_times"
+        case seriesId = "series_id"
     }
 
-    static let columns = "id,name,service_date,service_time,church_id"
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = (try? c.decode(String.self, forKey: .name)) ?? "Set"
+        serviceDate = try? c.decodeIfPresent(String.self, forKey: .serviceDate)
+        serviceTime = try? c.decodeIfPresent(String.self, forKey: .serviceTime)
+        churchId = try? c.decodeIfPresent(UUID.self, forKey: .churchId)
+        durationMin = try? c.decodeIfPresent(Int.self, forKey: .durationMin)
+        venueName = try? c.decodeIfPresent(String.self, forKey: .venueName)
+        locationAddress = try? c.decodeIfPresent(String.self, forKey: .locationAddress)
+        locationDetails = try? c.decodeIfPresent(String.self, forKey: .locationDetails)
+        extraTimes = try? c.decodeIfPresent([ExtraTime].self, forKey: .extraTimes)
+        seriesId = try? c.decodeIfPresent(UUID.self, forKey: .seriesId)
+        recurrence = try? c.decodeIfPresent(RepeatRule.self, forKey: .recurrence)
+    }
+
+    /// Every column, so sets keep working whichever optional columns the database has.
+    static let columns = "*"
+
+    var venueText: String? {
+        let parts = [venueName, locationAddress].compactMap { $0 }.filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        let room = (locationDetails ?? "").isEmpty ? "" : " · \(locationDetails!)"
+        return parts.joined(separator: ", ") + room
+    }
 
     var date: Date? {
         guard let serviceDate else { return nil }
@@ -210,26 +254,60 @@ struct NewSetItem: Encodable {
     let position: Int
 }
 
-struct NewSet: Encodable {
-    let name: String
-    let service_date: String
-    let service_time: String?
-    let user_id: UUID
-    let church_id: UUID
+/// Rehearsal, practice, run-thru, soundcheck… (sets.extra_times, src/lib/setTimes.js).
+struct ExtraTime: Codable, Hashable, Sendable, Identifiable {
+    var id = UUID()
+    var label: String
+    var date: String
+    var time: String?
+    var minutes: Int?
+
+    enum CodingKeys: String, CodingKey { case label, date, time, minutes }
+
+    init(label: String, date: String, time: String?, minutes: Int?) {
+        self.label = label; self.date = date; self.time = time; self.minutes = minutes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = (try? c.decode(String.self, forKey: .label)) ?? "Rehearsal"
+        date = (try? c.decode(String.self, forKey: .date)) ?? ""
+        time = try? c.decodeIfPresent(String.self, forKey: .time)
+        minutes = (try? c.decodeIfPresent(Int.self, forKey: .minutes)) ?? nil
+    }
+
+    static let names = ["Rehearsal", "Practice", "Run-Thru", "Soundcheck", "Prayer"]
 }
 
-struct SetDetailsPatch: Encodable {
-    let name: String
-    let service_date: String
-    let service_time: String?
+/// A repeating set's rule (src/lib/recurrence.js): weekly, every 2 weeks or monthly (same
+/// weekday of the month), for a number of sets or until a date.
+struct RepeatRule: Codable, Hashable, Sendable {
+    var freq: String
+    var count: Int?
+    var until: String?
+}
 
-    enum CodingKeys: String, CodingKey { case name, service_date, service_time }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(name, forKey: .name)
-        try c.encode(service_date, forKey: .service_date)
-        try c.encode(service_time, forKey: .service_time)   // null clears the time
-    }
+/// Body for /api/v1/sets/save (api/_handlers/set-save.js).
+struct SetSaveRequest: Encodable {
+    var id: UUID?
+    var church_id: UUID?
+    var name: String
+    var date: String
+    var time: String?
+    var duration: Int
+    var venue: String
+    var address: String
+    var room: String
+    var times: [ExtraTime]
+    var `repeat`: RepeatRule?
+    var copy_program: Bool
+    var scope: String
+    var time_zone: String
+}
+
+struct SetSaveReply: Decodable {
+    let set: ServiceSet
+    let message: String?
 }
 
 /// Some older rows store numbers (bpm) as numbers, newer ones as text. Accept both.

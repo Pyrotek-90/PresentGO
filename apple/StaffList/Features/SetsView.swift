@@ -64,7 +64,7 @@ struct SetsView: View {
             }
             .sheet(isPresented: $showingInbox) { InboxView() }
             .sheet(isPresented: $creating) {
-                SetDetailsSheet(set: nil, onSaved: { created in
+                SetDetailsSheet(set: nil, onSaved: { created, _ in
                     sets.insert(created, at: 0)
                     path.append(created)
                 })
@@ -154,6 +154,7 @@ struct SetDetailView: View {
     @State private var showingCharts = false
 
     @State private var arranging: SetItem?
+    @State private var notice: String?
 
     enum SheetKind: String, Identifiable {
         case addSong, announcement, details, media
@@ -226,7 +227,7 @@ struct SetDetailView: View {
                 .moveDisabled(!canEdit)
                 .deleteDisabled(!canEdit)
             } header: {
-                Text(set.whenText ?? "")
+                setHeader
             }
             SetTeamSection(set: set)
         }
@@ -239,7 +240,10 @@ struct SetDetailView: View {
         case .announcement:
             AnnouncementSheet { title, slides in Task { await addAnnouncement(title: title, slides: slides) } }
         case .details:
-            SetDetailsSheet(set: set, onSaved: { set = $0 }, onDeleted: { dismiss() })
+            SetDetailsSheet(set: set, hasProgram: !items.isEmpty, onSaved: { saved, message in
+                set = saved
+                notice = message
+            }, onDeleted: { dismiss() })
         case .media:
             MediaLibraryView(onPick: { media in Task { await add(type: "media", content: media.setItemContent) } })
         }
@@ -271,6 +275,37 @@ struct SetDetailView: View {
         content["title"] = .string("Welcome")
         content["subtitle"] = .string("Glad you're here!")
         await add(type: "welcome", content: content)
+    }
+
+    private var setHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let when = set.whenText { Text(when) }
+            if let venue = set.venueText { Label(venue, systemImage: "mappin.and.ellipse").lineLimit(1) }
+            ForEach(set.extraTimes ?? []) { t in
+                Label("\(t.label): \(Self.extraTimeText(t))", systemImage: "clock")
+            }
+            if let rule = set.recurrence, set.seriesId != nil {
+                Label(Self.repeatText(rule), systemImage: "repeat")
+            }
+            if let notice { Text(notice).foregroundStyle(.tint).textCase(nil) }
+        }
+        .textCase(nil)
+        .font(.footnote)
+        .padding(.bottom, 4)
+    }
+
+    static func extraTimeText(_ t: ExtraTime) -> String {
+        var parts: [String] = []
+        if let d = ServiceSet.dayFormatter.date(from: t.date) { parts.append(d.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())) }
+        if let clock = SetDetailsSheet.clock(t.time) { parts.append(clock.formatted(date: .omitted, time: .shortened)) }
+        if t.time != nil, let m = t.minutes { parts.append(SetDetailsSheet.durationLabel(m)) }
+        return parts.joined(separator: " · ")
+    }
+
+    static func repeatText(_ r: RepeatRule) -> String {
+        let f = ["weekly": "Repeats weekly", "biweekly": "Repeats every 2 weeks", "monthly": "Repeats monthly"][r.freq] ?? "Repeats"
+        if let u = r.until, let d = ServiceSet.dayFormatter.date(from: u) { return "\(f) until \(d.formatted(date: .abbreviated, time: .omitted))" }
+        return "\(f) · \(r.count ?? 12) sets"
     }
 
     private var addMenu: some View {
@@ -464,124 +499,6 @@ struct SetDetailView: View {
 }
 
 // MARK: - Sheets
-
-/// New set, or edit an existing set's name, date and time (and delete it).
-struct SetDetailsSheet: View {
-    @Environment(SessionStore.self) private var session
-    @Environment(\.dismiss) private var dismiss
-    let set: ServiceSet?
-    var onSaved: (ServiceSet) -> Void
-    var onDeleted: () -> Void
-
-    @State private var name: String
-    @State private var date: Date
-    @State private var hasTime: Bool
-    @State private var time: Date
-    @State private var saving = false
-    @State private var confirmDelete = false
-    @State private var error: String?
-
-    init(set: ServiceSet?, onSaved: @escaping (ServiceSet) -> Void = { _ in }, onDeleted: @escaping () -> Void = {}) {
-        self.set = set
-        self.onSaved = onSaved
-        self.onDeleted = onDeleted
-        _name = State(initialValue: set?.name ?? "Sunday Service")
-        _date = State(initialValue: set?.date ?? SetDetailsSheet.nextSunday())
-        _hasTime = State(initialValue: set?.timeValue != nil)
-        _time = State(initialValue: set?.timeValue ?? Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: .now) ?? .now)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $name)
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
-                    Toggle("Service time", isOn: $hasTime.animation())
-                    if hasTime {
-                        DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
-                    }
-                }
-                if set != nil {
-                    Section {
-                        Button("Delete Set", role: .destructive) { confirmDelete = true }
-                    }
-                }
-                if let error {
-                    Section { Text(error).foregroundStyle(.red).font(.footnote) }
-                }
-            }
-            .navigationTitle(set == nil ? "New Set" : "Set Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if saving { ProgressView() } else {
-                        Button(set == nil ? "Create" : "Save") { Task { await save() } }
-                            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-                }
-            }
-            .confirmationDialog("Delete \"\(set?.name ?? "")\"?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Delete Set", role: .destructive) { Task { await delete() } }
-            } message: {
-                Text("The set and its order of service are deleted for everyone on the team. Songs stay in the library.")
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private var dateString: String { ServiceSet.dayFormatter.string(from: date) }
-    private var timeString: String? {
-        guard hasTime else { return nil }
-        let c = Calendar.current.dateComponents([.hour, .minute], from: time)
-        return String(format: "%02d:%02d:00", c.hour ?? 0, c.minute ?? 0)
-    }
-
-    private func save() async {
-        saving = true
-        defer { saving = false }
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        do {
-            let saved: ServiceSet
-            if let set {
-                saved = try await supabase.from("sets")
-                    .update(SetDetailsPatch(name: trimmed, service_date: dateString, service_time: timeString))
-                    .eq("id", value: set.id)
-                    .select(ServiceSet.columns).single().execute().value
-            } else {
-                guard let team = session.currentTeam, let user = session.user else { return }
-                saved = try await supabase.from("sets")
-                    .insert(NewSet(name: trimmed, service_date: dateString, service_time: timeString, user_id: user.id, church_id: team.id))
-                    .select(ServiceSet.columns).single().execute().value
-            }
-            onSaved(saved)
-            NotificationCenter.default.post(name: .setsChanged, object: nil)
-            dismiss()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    private func delete() async {
-        guard let set else { return }
-        do {
-            try await supabase.from("sets").delete().eq("id", value: set.id).execute()
-            NotificationCenter.default.post(name: .setsChanged, object: nil)
-            dismiss()
-            onDeleted()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    static func nextSunday() -> Date {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
-        let weekday = cal.component(.weekday, from: today)   // 1 = Sunday
-        return cal.date(byAdding: .day, value: weekday == 1 ? 0 : 8 - weekday, to: today) ?? today
-    }
-}
 
 /// Pick a song from the team's library to add to a set.
 struct AddSongSheet: View {
