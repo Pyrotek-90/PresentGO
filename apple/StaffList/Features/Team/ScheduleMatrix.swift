@@ -44,13 +44,15 @@ struct ScheduleMatrix: View {
             .sorted { (members[$0.memberId]?.name ?? "") < (members[$1.memberId]?.name ?? "") }
     }
 
-    /// Positions anyone is scheduled in on these sets, grouped like the set's team section.
+    /// Songs, every Production role, then the positions anyone is scheduled in on these sets,
+    /// grouped like the set's team section.
     private var rows: [Row] {
         var out: [Row] = [.header, .songsTitle, .songs]
         let used = Set(assignments.filter { members[$0.memberId] != nil }.map(\.positionId))
         let order = Dictionary(uniqueKeysWithValues: positions.enumerated().map { ($1.id, $0) })
         for section in TeamSection.allCases {
-            let list = positions.filter { used.contains($0.id) && TeamSection.of($0) == section }
+            // Production always shows all its roles; other sections only the ones scheduled.
+            let list = positions.filter { (section == .production || used.contains($0.id)) && TeamSection.of($0) == section }
                 .sorted { (TeamSection.rank($0), order[$0.id] ?? 0) < (TeamSection.rank($1), order[$1.id] ?? 0) }
             guard !list.isEmpty else { continue }
             out.append(.section(section))
