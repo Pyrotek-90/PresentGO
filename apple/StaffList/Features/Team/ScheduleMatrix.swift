@@ -27,15 +27,38 @@ struct ScheduleMatrix: View {
     // MARK: Rows
 
     private enum Row: Identifiable, Hashable {
-        case header, songsTitle, songs, section(TeamSection), position(Position)
+        case header, songsTitle, songs, section(MatrixGroup), position(Position)
         var id: String {
             switch self {
             case .header: return "header"
             case .songsTitle: return "songsTitle"
             case .songs: return "songs"
-            case .section(let s): return "section-\(s.rawValue)"
+            case .section(let g): return "section-\(g.rawValue)"
             case .position(let p): return p.id.uuidString
             }
+        }
+    }
+
+    /// The matrix's two groups: the behind-the-scenes roles, and everyone on stage.
+    enum MatrixGroup: String, CaseIterable {
+        case production, band
+        var label: String { self == .production ? "Production" : "Band" }
+
+        private static let productionWords = ["presenter", "audio", "sound", "light", "video", "camera",
+            "stream", "slide", "lyric", "media", "tech", "production", "stage", "broadcast", "projection",
+            "propresenter", "mix", "director", "producer", "graphics", "photo"]
+
+        static func of(_ p: Position) -> MatrixGroup {
+            if TeamSection.of(p) == .production { return .production }
+            if TeamSection.of(p) != .other { return .band }
+            let name = p.name.lowercased()
+            return productionWords.contains { name.contains($0) } ? .production : .band
+        }
+
+        /// Standard roles first in the web's order (singers before musicians), then the team's own.
+        static func rank(_ p: Position) -> Int {
+            let order = ["presenter", "audio", "singer", "keys", "acoustic", "electric", "bass", "drums"]
+            return order.firstIndex(of: p.name.lowercased()) ?? 100
         }
     }
 
@@ -44,18 +67,16 @@ struct ScheduleMatrix: View {
             .sorted { (members[$0.memberId]?.name ?? "") < (members[$1.memberId]?.name ?? "") }
     }
 
-    /// Songs, every Production role, then the positions anyone is scheduled in on these sets,
-    /// grouped like the set's team section.
+    /// Songs, then every position the team has: Production (Presenter, Audio, Lighting…) and
+    /// Band (singers, then musicians).
     private var rows: [Row] {
         var out: [Row] = [.header, .songsTitle, .songs]
-        let used = Set(assignments.filter { members[$0.memberId] != nil }.map(\.positionId))
         let order = Dictionary(uniqueKeysWithValues: positions.enumerated().map { ($1.id, $0) })
-        for section in TeamSection.allCases {
-            // Production always shows all its roles; other sections only the ones scheduled.
-            let list = positions.filter { (section == .production || used.contains($0.id)) && TeamSection.of($0) == section }
-                .sorted { (TeamSection.rank($0), order[$0.id] ?? 0) < (TeamSection.rank($1), order[$1.id] ?? 0) }
+        for group in MatrixGroup.allCases {
+            let list = positions.filter { MatrixGroup.of($0) == group }
+                .sorted { (MatrixGroup.rank($0), order[$0.id] ?? 0) < (MatrixGroup.rank($1), order[$1.id] ?? 0) }
             guard !list.isEmpty else { continue }
-            out.append(.section(section))
+            out.append(.section(group))
             out += list.map { .position($0) }
         }
         return out
