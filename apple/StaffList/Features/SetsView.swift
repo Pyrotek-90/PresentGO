@@ -13,6 +13,8 @@ struct SetsView: View {
     @State private var offline = false
     @State private var showingInbox = false
     @State private var selectedDay = Calendar.current.startOfDay(for: .now)
+    /// How many upcoming sets are listed; More adds five at a time.
+    @State private var upcomingShown = 5
 
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var today: String { ServiceSet.dayFormatter.string(from: .now) }
@@ -55,10 +57,27 @@ struct SetsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if !upcoming.isEmpty {
-                    Section("Upcoming") { ForEach(upcoming) { SetRow(set: $0) } }
+                    Section("Upcoming") {
+                        ForEach(upcoming.prefix(upcomingShown)) { SetRow(set: $0) }
+                        if upcoming.count > upcomingShown {
+                            Button {
+                                withAnimation { upcomingShown += 5 }
+                            } label: {
+                                Label("More (\(upcoming.count - upcomingShown))", systemImage: "chevron.down")
+                                    .font(.subheadline.weight(.medium))
+                            }
+                        }
+                    }
                 }
                 if !past.isEmpty {
-                    Section("Past") { ForEach(past) { SetRow(set: $0) } }
+                    // The two most recent; earlier sets are found on the calendar.
+                    Section {
+                        ForEach(past.prefix(2)) { SetRow(set: $0) }
+                    } header: {
+                        Text("Past")
+                    } footer: {
+                        if past.count > 2 { Text("For earlier sets, go back on the calendar and tap a day.") }
+                    }
                 }
             }
             .overlay {
