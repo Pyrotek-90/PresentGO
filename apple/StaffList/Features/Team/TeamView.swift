@@ -13,6 +13,9 @@ struct TeamView: View {
     @State private var messaging = false
     @State private var note: String?
     @State private var loading = true
+    @AppStorage("teamMembersCollapsed") private var membersCollapsed = false
+    @State private var reloadToken = 0
+    @State private var openSet: ServiceSet?
 
     private var filtered: [TeamMember] {
         let q = search.lowercased().trimmingCharacters(in: .whitespaces)
@@ -27,17 +30,46 @@ struct TeamView: View {
                 if let note {
                     Section { Text(note).font(.footnote) }
                 }
-                ForEach(filtered) { m in
-                    Button { editing = m } label: { row(m) }
-                        .tint(.primary)
-                        .swipeActions {
-                            Button("Remove", role: .destructive) { Task { await remove(m) } }
-                            if m.email != nil, m.joinStatus != "accepted" {
-                                Button("Invite") { Task { note = await Invites.send(members: [m.id]); await load() } }.tint(.accentColor)
-                            }
+                Section {
+                    if !membersCollapsed || !search.isEmpty {
+                        ForEach(filtered) { m in
+                            Button { editing = m } label: { row(m) }
+                                .tint(.primary)
+                                .swipeActions {
+                                    Button("Remove", role: .destructive) { Task { await remove(m) } }
+                                    if m.email != nil, m.joinStatus != "accepted" {
+                                        Button("Invite") { Task { note = await Invites.send(members: [m.id]); await load() } }.tint(.accentColor)
+                                    }
+                                }
                         }
+                    }
+                } header: {
+                    Button {
+                        withAnimation(.snappy) { membersCollapsed.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.down")
+                                .rotationEffect(.degrees(membersCollapsed && search.isEmpty ? -90 : 0))
+                            Text("Team Members")
+                            Text("\(members.count)").foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(membersCollapsed ? "Shows the team members" : "Hides the team members")
+                }
+                if !members.isEmpty {
+                    Section {
+                        ScheduleMatrix(members: Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) }),
+                                       positions: positions, reloadToken: reloadToken) { openSet = $0 }
+                            .listRowInsets(EdgeInsets())
+                    } header: {
+                        Text("Who's Serving")
+                    }
                 }
             }
+            .navigationDestination(item: $openSet) { SetDetailView(set: $0) }
             .overlay {
                 if loading && members.isEmpty { ProgressView() }
                 else if !loading && members.isEmpty {
@@ -66,7 +98,7 @@ struct TeamView: View {
             .sheet(isPresented: $messaging) {
                 MessageTeamView(members: members)
             }
-            .refreshable { await load() }
+            .refreshable { await load(); reloadToken += 1 }
             .task { await load() }
         }
     }
