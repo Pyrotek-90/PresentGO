@@ -57,6 +57,12 @@ struct TeamView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .overlay(alignment: .trailing) {
+                        Button { adding = true } label: {
+                            Label("Add", systemImage: "person.badge.plus").font(.caption.weight(.semibold)).textCase(nil)
+                        }
+                        .buttonStyle(.borderless)
+                    }
                     .accessibilityHint(membersCollapsed ? "Shows the team members" : "Hides the team members")
                 }
                 if !members.isEmpty {
@@ -76,7 +82,7 @@ struct TeamView: View {
                     ContentUnavailableView {
                         Label("No team members yet", systemImage: "person.3")
                     } actions: {
-                        Button("Add Person") { adding = true }.buttonStyle(.borderedProminent)
+                        Button("Add Member") { adding = true }.buttonStyle(.borderedProminent)
                     }
                 }
             }
@@ -86,7 +92,10 @@ struct TeamView: View {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button("Message Team", systemImage: "envelope") { messaging = true }
                         .disabled(members.isEmpty)
-                    Button("Add Person", systemImage: "person.badge.plus") { adding = true }
+                    Button { adding = true } label: {
+                        Label("Add Member", systemImage: "person.badge.plus").labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             }
             .sheet(item: $editing) { m in
@@ -137,7 +146,8 @@ struct TeamView: View {
     }
 }
 
-/// Add or edit a team member: name, email, phone and the positions they can fill.
+/// Add or edit a team member, like the web Team page: name, email, phone (or fill them in from
+/// Contacts), the positions they can fill (with + Add for a new one), and the invitation to join.
 struct MemberEditor: View {
     @Environment(SessionStore.self) private var session
     @Environment(\.dismiss) private var dismiss
@@ -149,70 +159,194 @@ struct MemberEditor: View {
     @State private var email = ""
     @State private var phone = ""
     @State private var picked: Set<UUID> = []
-    @State private var newPosition = ""
+    @State private var newPosition: String?
     @State private var inviteAfterSave = true
     @State private var saving = false
+    @State private var confirmDelete = false
+    @State private var note: String?
     @State private var error: String?
+    @FocusState private var newPositionFocused: Bool
+
+    private var first: String { name.trimmingCharacters(in: .whitespaces).split(separator: " ").first.map(String.init) ?? "them" }
+    private var teamName: String { session.currentTeam?.name ?? "the team" }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name", text: $name).textContentType(.name)
-                    TextField("Email", text: $email)
+                    TextField("Full name", text: $name).textContentType(.name)
+                    TextField("name@example.com", text: $email)
                         .keyboardType(.emailAddress).textContentType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Phone", text: $phone).keyboardType(.phonePad).textContentType(.telephoneNumber)
-                }
-                Section("Positions") {
-                    ForEach(positions) { p in
-                        Button {
-                            if picked.contains(p.id) { picked.remove(p.id) } else { picked.insert(p.id) }
-                        } label: {
-                            HStack { Text(p.name); Spacer(); if picked.contains(p.id) { Image(systemName: "checkmark").foregroundStyle(.tint) } }
+                    TextField("555.555.5555", text: $phone)
+                        .keyboardType(.phonePad).textContentType(.telephoneNumber)
+                        .onChange(of: phone) { _, v in
+                            let f = MemberEditor.formatPhone(v)
+                            if f != v { phone = f }
                         }
-                        .tint(.primary)
-                    }
+                } header: {
                     HStack {
-                        TextField("New position", text: $newPosition)
-                        Button("Add") { Task { await addPosition() } }
-                            .disabled(newPosition.trimmingCharacters(in: .whitespaces).isEmpty)
+                        Text("Name, Email, Phone")
+                        Spacer()
+                        Button {
+                            ContactPicker.present { c in
+                                name = c.name; if let e = c.email { email = e }; if let p = c.phone { phone = MemberEditor.formatPhone(p) }
+                            }
+                        } label: {
+                            Label("Import from Contacts", systemImage: "person.crop.circle.badge.plus")
+                                .font(.caption.weight(.medium)).textCase(nil)
+                        }
                     }
                 }
-                if member?.joinStatus != "accepted" {
-                    Section {
-                        Toggle("Invite to join the team", isOn: $inviteAfterSave)
-                    } footer: {
-                        Text("Sends an email invitation so they can see the sets they're scheduled on.")
+
+                Section("Positions") {
+                    FlowLayout(spacing: 6) {
+                        ForEach(MemberEditor.sorted(positions)) { p in
+                            let on = picked.contains(p.id)
+                            Button {
+                                if on { picked.remove(p.id) } else { picked.insert(p.id) }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    if on { Image(systemName: "checkmark").font(.caption2.bold()) }
+                                    Text(p.name)
+                                }
+                                .font(.footnote.weight(.medium))
+                                .padding(.horizontal, 10).frame(height: 30)
+                                .foregroundStyle(on ? Theme.accentLight : .secondary)
+                                .background(on ? Theme.accent.opacity(0.2) : .clear, in: Capsule())
+                                .overlay(Capsule().stroke(on ? Theme.accent : Color.secondary.opacity(0.35)))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                        }
+                        if let binding = Binding($newPosition) {
+                            HStack(spacing: 4) {
+                                TextField("New position", text: binding)
+                                    .font(.footnote).frame(width: 110)
+                                    .focused($newPositionFocused)
+                                    .submitLabel(.done)
+                                    .onSubmit { Task { await addPosition() } }
+                                Button { Task { await addPosition() } } label: { Image(systemName: "checkmark") }
+                                    .font(.caption.bold())
+                                    .disabled(binding.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty)
+                                Button { newPosition = nil } label: { Image(systemName: "xmark") }
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .accessibilityLabel("Cancel new position")
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.leading, 10).padding(.trailing, 6).frame(height: 30)
+                            .background(Theme.accent.opacity(0.1), in: Capsule())
+                            .overlay(Capsule().stroke(Theme.accent))
+                        } else {
+                            Button {
+                                newPosition = ""
+                                newPositionFocused = true
+                            } label: {
+                                Label("Add", systemImage: "plus")
+                                    .font(.footnote.weight(.medium))
+                                    .padding(.horizontal, 10).frame(height: 30)
+                                    .foregroundStyle(Theme.accentLight)
+                                    .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3])))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
+
+                if !email.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Section { invitation }
+                }
+                if let note { Section { Text(note).font(.footnote) } }
                 if let error { Section { Text(error).foregroundStyle(.red).font(.footnote) } }
+                if member != nil {
+                    Section {
+                        Button("Delete Member", role: .destructive) { confirmDelete = true }
+                    }
+                }
             }
-            .navigationTitle(member == nil ? "Add Person" : "Edit Person")
+            .navigationTitle(member == nil ? "Add Team Member" : "Edit Team Member")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if saving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }
+                        Button(member == nil ? "Save" : "Update") { Task { await save() } }
                             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
             }
+            .confirmationDialog("Delete \(member?.name ?? "this member")?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { await delete() } }
+            } message: {
+                Text("They'll be removed from the team and from any sets they're scheduled on.")
+            }
             .onAppear {
                 name = member?.name ?? ""
                 email = member?.email ?? ""
-                phone = member?.phone ?? ""
+                phone = MemberEditor.formatPhone(member?.phone ?? "")
                 picked = Set(member?.positionIds ?? [])
-                inviteAfterSave = member == nil
+                inviteAfterSave = member == nil || ["declined", nil, "", "not_invited"].contains(member?.joinStatus)
             }
         }
     }
 
+    @ViewBuilder
+    private var invitation: some View {
+        switch member?.joinStatus {
+        case "accepted":
+            Label("\(first) has joined \(teamName).", systemImage: "checkmark.circle.fill")
+                .font(.footnote).foregroundStyle(.green)
+        case "invited":
+            HStack {
+                Label("Invitation to join sent; waiting for \(first).", systemImage: "clock")
+                    .font(.footnote).foregroundStyle(.orange)
+                Spacer()
+                Button("Send Again") {
+                    guard let id = member?.id else { return }
+                    Task { note = await Invites.send(members: [id]) }
+                }
+                .font(.footnote)
+            }
+        default:
+            Toggle(isOn: $inviteAfterSave) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Email \(first) an invitation to join \(teamName)\(member?.joinStatus == "declined" ? " again" : "")")
+                    Text("Once they join, they get set requests and see their sets, charts and lyrics.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// Standard positions first, in the web's order, then the team's own.
+    static func sorted(_ list: [Position]) -> [Position] {
+        let order = ["singer", "keys", "acoustic", "electric", "bass", "drums", "audio", "presenter"]
+        return list.enumerated().sorted { a, b in
+            let ia = order.firstIndex(of: a.element.name.lowercased()) ?? 1000
+            let ib = order.firstIndex(of: b.element.name.lowercased()) ?? 1000
+            return (ia, a.offset) < (ib, b.offset)
+        }.map(\.element)
+    }
+
+    /// 555.555.5555, like the web (US numbers; anything else is left as typed).
+    static func formatPhone(_ raw: String) -> String {
+        var digits = raw.filter(\.isNumber)
+        if digits.count == 11, digits.hasPrefix("1") { digits.removeFirst() }
+        guard digits.count <= 10, !raw.contains("+") || digits.count == 10 else { return raw }
+        let d = Array(digits)
+        switch d.count {
+        case 0...3: return String(d)
+        case 4...6: return "\(String(d[0..<3])).\(String(d[3...]))"
+        default: return "\(String(d[0..<3])).\(String(d[3..<6])).\(String(d[6...]))"
+        }
+    }
+
     private func addPosition() async {
-        let n = newPosition.trimmingCharacters(in: .whitespaces)
+        let n = (newPosition ?? "").trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty else { return }
         if let existing = positions.first(where: { $0.name.caseInsensitiveCompare(n) == .orderedSame }) {
-            picked.insert(existing.id); newPosition = ""; return
+            picked.insert(existing.id); newPosition = nil; return
         }
         guard let team = session.currentTeam, let user = session.user else { return }
         do {
@@ -221,7 +355,7 @@ struct MemberEditor: View {
                 .select("id,name,category").single().execute().value
             positions.append(p)
             picked.insert(p.id)
-            newPosition = ""
+            newPosition = nil
         } catch {
             self.error = "Couldn't add that position. \(error.localizedDescription)"
         }
@@ -232,9 +366,10 @@ struct MemberEditor: View {
         saving = true
         defer { saving = false }
         let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
+        let trimmedPhone = phone.trimmingCharacters(in: .whitespaces)
         var payload = MemberPayload(name: name.trimmingCharacters(in: .whitespaces),
                                     email: trimmedEmail.isEmpty ? nil : trimmedEmail,
-                                    phone: phone.isEmpty ? nil : phone,
+                                    phone: trimmedPhone.isEmpty ? nil : trimmedPhone,
                                     position_ids: Array(picked))
         do {
             let saved: TeamMember
@@ -250,6 +385,17 @@ struct MemberEditor: View {
             if inviteAfterSave, saved.email != nil, !["accepted", "invited"].contains(saved.joinStatus ?? "") {
                 _ = await Invites.send(members: [saved.id])
             }
+            await onSaved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func delete() async {
+        guard let member else { return }
+        do {
+            try await supabase.from("team_members").delete().eq("id", value: member.id).execute()
             await onSaved()
             dismiss()
         } catch {
