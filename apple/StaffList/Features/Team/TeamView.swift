@@ -16,11 +16,19 @@ struct TeamView: View {
     @AppStorage("teamMembersCollapsed") private var membersCollapsed = false
     @State private var reloadToken = 0
     @State private var openSet: ServiceSet?
+    @State private var filterPosition: UUID?
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var filtering: Bool { !search.trimmingCharacters(in: .whitespaces).isEmpty || filterPosition != nil }
+    private var showMembers: Bool { !membersCollapsed || filtering }
 
     private var filtered: [TeamMember] {
         let q = search.lowercased().trimmingCharacters(in: .whitespaces)
+        let digits = q.filter(\.isNumber)
         return members
-            .filter { q.isEmpty || $0.name.lowercased().contains(q) || ($0.email ?? "").lowercased().contains(q) }
+            .filter { q.isEmpty || $0.name.lowercased().contains(q) || ($0.email ?? "").lowercased().contains(q)
+                || (!digits.isEmpty && ($0.phone ?? "").filter(\.isNumber).contains(digits)) }
+            .filter { filterPosition == nil || ($0.positionIds ?? []).contains(filterPosition!) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -31,7 +39,12 @@ struct TeamView: View {
                     Section { Text(note).font(.footnote) }
                 }
                 Section {
-                    if !membersCollapsed || !search.isEmpty {
+                    if showMembers {
+                        filterBar
+                        if sizeClass == .regular && !filtered.isEmpty { columnHeader }
+                        if filtered.isEmpty && !members.isEmpty {
+                            Text("No members match your search.").font(.subheadline).foregroundStyle(.secondary)
+                        }
                         ForEach(filtered) { m in
                             Button { editing = m } label: { row(m) }
                                 .tint(.primary)
@@ -49,7 +62,7 @@ struct TeamView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.down")
-                                .rotationEffect(.degrees(membersCollapsed && search.isEmpty ? -90 : 0))
+                                .rotationEffect(.degrees(showMembers ? 0 : -90))
                             Text("Team Members")
                             Text("\(members.count)").foregroundStyle(.secondary)
                             Spacer()
@@ -86,7 +99,6 @@ struct TeamView: View {
                     }
                 }
             }
-            .searchable(text: $search, prompt: "Name or email")
             .navigationTitle("Team")
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -112,18 +124,136 @@ struct TeamView: View {
         }
     }
 
+    // MARK: Members table (like the web: Name, Positions, Email, Phone, Joined)
+
+    private var filterBar: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search name, email or phone", text: $search)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                if !search.isEmpty {
+                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .buttonStyle(.borderless).accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 8).frame(height: 34)
+            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            Menu {
+                Picker("Position", selection: $filterPosition) {
+                    Text("All positions").tag(UUID?.none)
+                    ForEach(MemberEditor.sorted(positions)) { p in Text(p.name).tag(Optional(p.id)) }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal.decrease.circle\(filterPosition == nil ? "" : ".fill")")
+                    Text(positions.first { $0.id == filterPosition }?.name ?? "All positions").lineLimit(1)
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 10).frame(height: 34)
+                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+            if filterPosition != nil {
+                Button("Clear") { filterPosition = nil }.font(.caption).buttonStyle(.borderless)
+            }
+        }
+        .listRowSeparator(.hidden)
+    }
+
+    private enum Col {
+        static let name: CGFloat = 150, email: CGFloat = 220, phone: CGFloat = 112, joined: CGFloat = 64
+    }
+
+    private var columnHeader: some View {
+        HStack(spacing: 12) {
+            Text("Name").frame(width: Col.name, alignment: .leading)
+            Text("Positions").frame(maxWidth: .infinity, alignment: .leading)
+            Text("Email").frame(width: Col.email, alignment: .leading)
+            Text("Phone").frame(width: Col.phone, alignment: .leading)
+            Text("Joined").frame(width: Col.joined)
+            Color.clear.frame(width: 8)
+        }
+        .font(.system(size: 10, weight: .semibold)).tracking(0.8).textCase(.uppercase)
+        .foregroundStyle(.secondary)
+        .accessibilityHidden(true)
+    }
+
+    private func memberPositions(_ m: TeamMember) -> [Position] {
+        MemberEditor.sorted(positions).filter { (m.positionIds ?? []).contains($0.id) }
+    }
+
+    @ViewBuilder
     private func row(_ m: TeamMember) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(m.name).font(.body.weight(.medium))
-                let names = positions.filter { (m.positionIds ?? []).contains($0.id) }.map(\.name)
-                if !names.isEmpty { Text(names.joined(separator: ", ")).font(.subheadline).foregroundStyle(.secondary) }
+        if sizeClass == .regular {
+            HStack(spacing: 12) {
+                Text(m.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                    .frame(width: Col.name, alignment: .leading)
+                chips(m).frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    if let e = m.email { Text(e).foregroundStyle(.secondary) } else { Text("No email").foregroundStyle(.orange.opacity(0.8)) }
+                }
+                .font(.caption).lineLimit(1).truncationMode(.middle)
+                .frame(width: Col.email, alignment: .leading)
+                Group {
+                    if let p = m.phone, !p.isEmpty { Text(MemberEditor.formatPhone(p)).foregroundStyle(.secondary) } else { Text("No phone").foregroundStyle(.orange.opacity(0.8)) }
+                }
+                .font(.caption).lineLimit(1)
+                .frame(width: Col.phone, alignment: .leading)
+                joined(m, large: true).frame(width: Col.joined)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary).frame(width: 8)
             }
-            Spacer()
-            if let label = m.joinLabel {
-                Text(label).font(.caption.bold())
-                    .foregroundStyle(m.joinStatus == "accepted" ? .green : .secondary)
+            .contentShape(Rectangle())
+        } else {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(m.name).font(.body.weight(.medium))
+                        joined(m, large: false)
+                    }
+                    chips(m)
+                    HStack(spacing: 12) {
+                        if let e = m.email { Label(e, systemImage: "envelope").foregroundStyle(.secondary) } else { Text("No email").foregroundStyle(.orange.opacity(0.8)) }
+                        if let p = m.phone, !p.isEmpty { Label(MemberEditor.formatPhone(p), systemImage: "phone").foregroundStyle(.secondary) } else { Text("No phone").foregroundStyle(.orange.opacity(0.8)) }
+                    }
+                    .font(.caption).lineLimit(1).labelStyle(CompactLabel())
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
             }
+            .contentShape(Rectangle())
+        }
+    }
+
+    @ViewBuilder
+    private func chips(_ m: TeamMember) -> some View {
+        let list = memberPositions(m)
+        if !list.isEmpty {
+            FlowLayout(spacing: 3) {
+                ForEach(list) { p in
+                    Text(p.name).font(.system(size: 10))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .foregroundStyle(.secondary)
+                        .overlay(Capsule().stroke(Color.secondary.opacity(0.35)))
+                }
+            }
+        }
+    }
+
+    /// Joined / Invited / Declined / Not invited, as on the web.
+    @ViewBuilder
+    private func joined(_ m: TeamMember, large: Bool) -> some View {
+        let size: Font = large ? .body : .subheadline
+        switch m.joinStatus {
+        case "accepted":
+            Image(systemName: "checkmark.circle.fill").font(size).foregroundStyle(.green).accessibilityLabel("Joined")
+        case _ where m.email == nil:
+            if large { Text("—").foregroundStyle(.tertiary).accessibilityLabel("No email to invite") }
+        case "invited":
+            Image(systemName: "clock").font(size).foregroundStyle(.orange).accessibilityLabel("Invited, waiting")
+        case "declined":
+            Image(systemName: "xmark.circle").font(size).foregroundStyle(.red).accessibilityLabel("Declined")
+        default:
+            if large { Text("Not invited").font(.system(size: 10)).foregroundStyle(.secondary) }
         }
     }
 
@@ -466,5 +596,12 @@ struct MessageTeamView: View {
         } catch {
             result = "Couldn't send. \(error.localizedDescription)"
         }
+    }
+}
+
+/// Icon and text close together, for the email / phone line.
+private struct CompactLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) { configuration.icon.font(.system(size: 9)); configuration.title }
     }
 }
