@@ -44,7 +44,7 @@ struct SetDetailsSheet: View {
 
     private static let durations = [30, 45, 60, 75, 90, 105, 120, 150, 180, 240]
 
-    init(set: ServiceSet?, hasProgram: Bool = false,
+    init(set: ServiceSet?, hasProgram: Bool = false, startDate: Date? = nil,
          onSaved: @escaping (ServiceSet, String?) -> Void = { _, _ in }, onDeleted: @escaping () -> Void = {}) {
         self.set = set
         self.hasProgram = hasProgram
@@ -52,7 +52,7 @@ struct SetDetailsSheet: View {
         self.onDeleted = onDeleted
         let cal = Calendar.current
         let tenAM = cal.date(bySettingHour: 10, minute: 0, second: 0, of: .now) ?? .now
-        let startDate = set?.date ?? SetDetailsSheet.nextSunday()
+        let startDate = set?.date ?? startDate ?? SetDetailsSheet.nextSunday()
         _name = State(initialValue: set?.name ?? "")
         _date = State(initialValue: startDate)
         _time = State(initialValue: set?.timeValue ?? tenAM)

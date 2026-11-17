@@ -12,6 +12,7 @@ struct SetsView: View {
     @State private var creating = false
     @State private var offline = false
     @State private var showingInbox = false
+    @State private var selectedDay = Calendar.current.startOfDay(for: .now)
 
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var today: String { ServiceSet.dayFormatter.string(from: .now) }
@@ -20,6 +21,11 @@ struct SetsView: View {
         sets.filter { ($0.serviceDate ?? today) >= today }
             .sorted { ($0.serviceDate ?? "9999") < ($1.serviceDate ?? "9999") }
     }
+    private var setsOnSelectedDay: [ServiceSet] {
+        sets.filter { $0.date.map { Calendar.current.isDate($0, inSameDayAs: selectedDay) } ?? false }
+            .sorted { ($0.serviceTime ?? "") < ($1.serviceTime ?? "") }
+    }
+
     /// Earlier sets, most recent first.
     private var past: [ServiceSet] {
         sets.filter { ($0.serviceDate ?? today) < today }
@@ -28,6 +34,22 @@ struct SetsView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                Section { WeeklyThoughtCard() }
+                Section {
+                    SetsCalendar(sets: sets, selected: $selectedDay) { path.append($0) }
+                        .listRowInsets(EdgeInsets())
+                }
+                if !setsOnSelectedDay.isEmpty || !Calendar.current.isDateInToday(selectedDay) {
+                    Section(selectedDay.formatted(.dateTime.weekday(.wide).month(.wide).day())) {
+                        if setsOnSelectedDay.isEmpty {
+                            Text("No sets on this day").foregroundStyle(.secondary)
+                            if canEdit {
+                                Button { creating = true } label: { Label("New Set", systemImage: "plus") }
+                            }
+                        }
+                        ForEach(setsOnSelectedDay) { SetRow(set: $0) }
+                    }
+                }
                 if offline {
                     Label("Offline — showing your saved sets", systemImage: "icloud.slash")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -64,7 +86,7 @@ struct SetsView: View {
             }
             .sheet(isPresented: $showingInbox) { InboxView() }
             .sheet(isPresented: $creating) {
-                SetDetailsSheet(set: nil, onSaved: { created, _ in
+                SetDetailsSheet(set: nil, startDate: selectedDay >= Calendar.current.startOfDay(for: .now) ? selectedDay : nil, onSaved: { created, _ in
                     sets.insert(created, at: 0)
                     path.append(created)
                 })

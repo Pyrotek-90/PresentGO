@@ -23,6 +23,7 @@ const ROUTES = {
   'songs/import-pdf': { load: () => import('./_handlers/import-pdf.js'), auth: true },
   'reports/ccli':     { load: () => import('./_handlers/ccli-report.js'), auth: true },
   'sets/slides':      { load: () => import('./_handlers/set-slides.js'), auth: true },
+  'thoughts/week':    { load: () => import('./_handlers/thought-week.js') },
   'sets/save':        { load: () => import('./_handlers/set-save.js'), auth: true },
   'songs/search-lyrics': { load: () => import('./_handlers/lyrics-search.js'), auth: true },
   'songs/save':       { load: () => import('./_handlers/song-save.js'), auth: true },
