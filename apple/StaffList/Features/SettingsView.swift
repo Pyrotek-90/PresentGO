@@ -84,7 +84,7 @@ struct SettingsView: View {
                             }
                         } icon: { Image(systemName: "character.bubble") }
                     }
-                    NavigationLink { CalendarSyncView() } label: { Label("Calendar Subscription", systemImage: "calendar.badge.plus") }
+                    CalendarSyncRows()
                     if !session.teams.isEmpty {
                         // Each team with its color right here; tap to change colors or switch teams.
                         NavigationLink { MyTeamsView() } label: {
@@ -385,35 +385,105 @@ struct TeamDetailsView: View {
 
 // MARK: - Calendar subscription
 
-struct CalendarSyncView: View {
+/// Calendar sync, like the web (src/components/settings/CalendarSync.jsx): a switch, and when it's
+/// on the private subscription link with Copy, Add to Apple Calendar, Add to Google Calendar and
+/// Reset Link, plus one calendar per team when there's more than one. Shown inline in Settings.
+struct CalendarSyncRows: View {
     @Environment(SessionStore.self) private var session
     @State private var token: String?
     @State private var loading = true
+    @State private var busy = false
     @State private var error: String?
+    @State private var copied = false
+    @State private var confirmReset = false
 
     private struct Row: Codable { let token: String }
 
-    private var httpsURL: URL? { token.flatMap { URL(string: "https://stafflist.app/api/calendar/\($0).ics") } }
-    private var webcalURL: URL? { token.flatMap { URL(string: "webcal://stafflist.app/api/calendar/\($0).ics") } }
+    private var pro: Bool { session.currentTeam?.isPaid ?? false }
+    private var httpsLink: String { token.map { "https://stafflist.app/api/calendar/\($0).ics" } ?? "" }
+    private func webcal(_ https: String) -> URL? { URL(string: https.replacingOccurrences(of: "https://", with: "webcal://")) }
+    private func google(_ https: String) -> URL? {
+        let cid = (webcal(https)?.absoluteString ?? "").addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        return URL(string: "https://calendar.google.com/calendar/r?cid=\(cid)")
+    }
 
     var body: some View {
-        Form {
-            Section {
-                if loading { ProgressView() }
-                else if let webcalURL, let httpsURL {
-                    Link(destination: webcalURL) { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
-                    ShareLink(item: httpsURL) { Label("Share Link", systemImage: "square.and.arrow.up") }
-                    Button("Turn Off", role: .destructive) { Task { await turnOff() } }
-                } else {
-                    Button("Turn On Calendar Subscription") { Task { await turnOn() } }
+        Toggle(isOn: Binding(get: { token != nil }, set: { on in Task { await set(on) } })) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Calendar Sync")
+                    Text(pro || token != nil
+                         ? "Show your sets (name, date, time, location) in Apple or Google Calendar."
+                         : "Show your sets in Apple or Google Calendar. Part of Pro.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-            } footer: {
-                Text("Your sets — and the ones you're scheduled on — appear in Calendar on your iPhone, iPad or Mac and stay up to date.")
-            }
-            if let error { Section { Text(error).foregroundStyle(.red).font(.footnote) } }
+            } icon: { Image(systemName: "calendar.badge.plus") }
         }
-        .navigationTitle("Calendar Subscription")
+        .disabled(loading || busy || (!pro && token == nil))
         .task { await load() }
+
+        if let error { Text(error).font(.caption).foregroundStyle(.red) }
+
+        if token != nil && !pro {
+            Text("Calendar sync is part of Pro. Your calendar stops updating while your team isn't on Pro.")
+                .font(.caption).foregroundStyle(.orange)
+        }
+        if token != nil && pro {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Your private subscription link").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(httpsLink)
+                        .font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    Button {
+                        UIPasteboard.general.string = httpsLink
+                        copied = true
+                        Task { try? await Task.sleep(for: .seconds(1.8)); copied = false }
+                    } label: {
+                        Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc").font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered).controlSize(.small)
+                }
+                HStack(spacing: 8) {
+                    if let url = webcal(httpsLink) {
+                        Link(destination: url) { Label("Add to Apple Calendar", systemImage: "calendar") }
+                            .buttonStyle(.borderedProminent).controlSize(.small)
+                    }
+                    if let url = google(httpsLink) {
+                        Link(destination: url) { Label("Google Calendar", systemImage: "arrow.up.right.square") }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
+                    Spacer(minLength: 0)
+                    Button { confirmReset = true } label: { Label("Reset Link", systemImage: "arrow.clockwise").font(.caption) }
+                        .buttonStyle(.borderless).foregroundStyle(.secondary)
+                }
+                .font(.caption.weight(.semibold))
+                if session.teams.count > 1 {
+                    Text("Or one calendar per team, so each shows in its own color:").font(.caption).foregroundStyle(.secondary)
+                    ForEach(session.teams) { t in
+                        let link = "\(httpsLink)?team=\(t.id.uuidString.lowercased())"
+                        HStack(spacing: 10) {
+                            Circle().fill(session.teamColor(t.id)).frame(width: 10, height: 10)
+                            Text(t.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                            Spacer()
+                            if let url = webcal(link) { Link("Apple", destination: url) }
+                            if let url = google(link) { Link("Google", destination: url) }
+                        }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+            .confirmationDialog("Reset the calendar link?", isPresented: $confirmReset, titleVisibility: .visible) {
+                Button("Reset Link", role: .destructive) { Task { await reset() } }
+            } message: {
+                Text("The old link stops working. Calendars subscribed with it need the new link.")
+            }
+        }
     }
 
     private func load() async {
@@ -423,20 +493,37 @@ struct CalendarSyncView: View {
         token = rows.first?.token
     }
 
-    private func turnOn() async {
+    private func set(_ on: Bool) async {
         guard let user = session.user else { return }
+        busy = true
+        error = nil
+        defer { busy = false }
         do {
-            let row: Row = try await supabase.from("calendar_tokens").insert(["user_id": user.id.uuidString.lowercased()]).select("token").single().execute().value
-            token = row.token
-        } catch { self.error = error.localizedDescription }
+            if on {
+                let row: Row = try await supabase.from("calendar_tokens").insert(["user_id": user.id.uuidString.lowercased()])
+                    .select("token").single().execute().value
+                token = row.token
+            } else {
+                try await supabase.from("calendar_tokens").delete().eq("user_id", value: user.id).execute()
+                token = nil
+            }
+        } catch {
+            self.error = on ? "Couldn't turn on calendar sync." : "Couldn't turn off calendar sync."
+        }
     }
 
-    private func turnOff() async {
+    private func reset() async {
         guard let user = session.user else { return }
+        busy = true
+        defer { busy = false }
+        let fresh = (UUID().uuidString + UUID().uuidString).replacingOccurrences(of: "-", with: "").lowercased()
         do {
-            try await supabase.from("calendar_tokens").delete().eq("user_id", value: user.id).execute()
-            token = nil
-        } catch { self.error = error.localizedDescription }
+            let row: Row = try await supabase.from("calendar_tokens").update(["token": fresh])
+                .eq("user_id", value: user.id).select("token").single().execute().value
+            token = row.token
+        } catch {
+            self.error = "Couldn't reset the link."
+        }
     }
 }
 
