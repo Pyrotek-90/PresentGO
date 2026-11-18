@@ -19,6 +19,7 @@ struct TeamView: View {
     @State private var filterPosition: UUID?
     @Environment(\.horizontalSizeClass) private var sizeClass
 
+    private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var filtering: Bool { !search.trimmingCharacters(in: .whitespaces).isEmpty || filterPosition != nil }
     private var showMembers: Bool { !membersCollapsed || filtering }
 
@@ -35,6 +36,7 @@ struct TeamView: View {
     var body: some View {
         NavigationStack {
             List {
+                if canEdit { TeamDetailsSection() }
                 if let note {
                     Section { Text(note).font(.footnote) }
                 }
