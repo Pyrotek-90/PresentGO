@@ -30,15 +30,19 @@ enum ContactPicker {
         top.present(picker, animated: true)
     }
 
-    @MainActor private final class Delegate: NSObject, CNContactPickerDelegate {
-        let onPick: (CNContact) -> Void
-        init(onPick: @escaping (CNContact) -> Void) { self.onPick = onPick }
-        func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
-            onPick(contact)
-            ContactPicker.delegate = nil
+    /// The picker calls back on the main thread; the methods hop to the main actor explicitly so the
+    /// conformance doesn't cross actor isolation (an error in Swift 6 mode).
+    private final class Delegate: NSObject, CNContactPickerDelegate, @unchecked Sendable {
+        let onPick: @MainActor (CNContact) -> Void
+        init(onPick: @escaping @MainActor (CNContact) -> Void) { self.onPick = onPick }
+        nonisolated func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
+            Task { @MainActor in
+                self.onPick(contact)
+                ContactPicker.delegate = nil
+            }
         }
-        func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
-            ContactPicker.delegate = nil
+        nonisolated func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+            Task { @MainActor in ContactPicker.delegate = nil }
         }
     }
 }
