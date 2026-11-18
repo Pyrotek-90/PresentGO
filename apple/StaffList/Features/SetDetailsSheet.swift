@@ -82,17 +82,17 @@ struct SetDetailsSheet: View {
                         TextField("Required", text: $name)
                             .multilineTextAlignment(.trailing)
                     }
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
-                    HStack {
-                        Text("Time")
-                        Spacer()
-                        DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
-                        Picker("Length", selection: $duration) {
-                            ForEach(Self.durations, id: \.self) { Text(Self.durationLabel($0)).tag($0) }
+                    // Date, time and length on one line (the label moves above them if it won't fit).
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            Text("When")
+                            Spacer(minLength: 4)
+                            whenPickers
                         }
-                        .labelsHidden()
-                        .fixedSize()
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("When")
+                            HStack(spacing: 6) { whenPickers; Spacer(minLength: 0) }
+                        }
                     }
                 }
 
@@ -198,6 +198,24 @@ struct SetDetailsSheet: View {
             }
             .interactiveDismissDisabled(saving)
         }
+    }
+
+    @ViewBuilder
+    private var whenPickers: some View {
+        DatePicker("Date", selection: $date, displayedComponents: .date).labelsHidden().fixedSize()
+        DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute).labelsHidden().fixedSize()
+        Menu {
+            Picker("Length", selection: $duration) {
+                ForEach(Self.durations, id: \.self) { Text(Self.durationLabel($0)).tag($0) }
+            }
+        } label: {
+            Text(Self.shortDuration(duration))
+                .font(.subheadline)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .fixedSize()
+        .accessibilityLabel("Length, \(Self.durationLabel(duration))")
     }
 
     private func timeRow(_ t: Binding<EditableTime>) -> some View {
@@ -323,6 +341,12 @@ struct SetDetailsSheet: View {
         let p = hm.split(separator: ":").compactMap { Int($0) }
         guard p.count >= 2 else { return nil }
         return Calendar.current.date(bySettingHour: p[0], minute: p[1], second: 0, of: .now)
+    }
+
+    /// "1h 30m", for the compact When row.
+    static func shortDuration(_ m: Int) -> String {
+        if m < 60 { return "\(m)m" }
+        return m % 60 == 0 ? "\(m / 60)h" : "\(m / 60)h \(m % 60)m"
     }
 
     static func durationLabel(_ m: Int) -> String {
