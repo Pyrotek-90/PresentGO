@@ -187,7 +187,7 @@ struct SongViewer: View {
     var startIndex = 0
     var onClose: (() -> Void)? = nil
 
-    @AppStorage("viewerMode") private var modeRaw = "chords"
+    @AppStorage("viewerMode") private var modeRaw = "lyrics"
     @AppStorage("viewerSizeChords") private var sizeChords: Double = 0   // 0 = fit automatically
     @AppStorage("viewerSizeLyrics") private var sizeLyrics: Double = 0
     @AppStorage("viewerColumns") private var columnsPref = 0              // 0 = auto

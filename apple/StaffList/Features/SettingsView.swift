@@ -3,48 +3,96 @@ import Supabase
 
 struct SettingsView: View {
     @Environment(SessionStore.self) private var session
+    @AppStorage("appearance") private var appearance = "dark"
+    @AppStorage("viewerMode") private var viewerMode = "lyrics"
     @State private var exporting = false
     @State private var exportURL: URL?
     @State private var note: String?
+    @AppStorage("libraryLanguage") private var libraryLanguage = "English"
+    @State private var languages: [String] = []
+    @State private var languageState: String?
+    @State private var confirmSignOut = false
+
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        let v = info?["CFBundleShortVersionString"] as? String ?? ""
+        let b = info?["CFBundleVersion"] as? String ?? ""
+        return b.isEmpty ? v : "\(v) (\(b))"
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Team") {
-                    if session.teams.count > 1 {
-                        Picker("Current team", selection: Binding(
-                            get: { session.currentTeam?.id },
-                            set: { session.currentTeamID = $0 }
-                        )) {
-                            ForEach(session.teams) { Text($0.name).tag(Optional($0.id)) }
-                        }
-                    } else if let team = session.currentTeam {
-                        LabeledContent("Team", value: team.name)
+                // MARK: Account
+                Section("Account") {
+                    if let email = session.user?.email {
+                        LabeledContent("Signed in as", value: email)
                     }
                     if let team = session.currentTeam {
-                        LabeledContent("Plan", value: (team.plan ?? "free").capitalized)
-                        LabeledContent("Your role", value: (team.role ?? "member").capitalized)
-                        if team.role == "admin" {
-                            NavigationLink("Team Details") { TeamDetailsView(team: team) }
+                        LabeledContent("Plan") {
+                            Text(planName(team.plan)).foregroundStyle(team.isPaid ? Theme.accentLight : .secondary)
                         }
+                    }
+                    Button("Sign Out") { confirmSignOut = true }
+                    NavigationLink { DeleteAccountView() } label: { Text("Delete Account").foregroundStyle(.red) }
+                }
+
+                // MARK: Appearance
+                Section("Appearance") {
+                    Picker(selection: $appearance) {
+                        Text("Dark").tag("dark")
+                        Text("Light").tag("light")
+                        Text("System").tag("system")
+                    } label: {
+                        Label("Theme", systemImage: appearance == "light" ? "sun.max" : "moon")
                     }
                 }
 
+                // MARK: Preferences
                 Section {
-                    NavigationLink("Calendar Subscription") { CalendarSyncView() }
-                    NavigationLink("Offline Copies") { OfflineSettingsView() }
+                    Toggle(isOn: Binding(get: { viewerMode == "chords" }, set: { viewerMode = $0 ? "chords" : "lyrics" })) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Open songs in Chord Chart")
+                                Text("Otherwise the Song Viewer opens in Lyrics.").font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: { Image(systemName: "music.note") }
+                    }
+                    Picker(selection: Binding(get: { libraryLanguage }, set: { l in Task { await saveLanguage(l) } })) {
+                        ForEach(languageOptions, id: \.self) { Text($0).tag($0) }
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Song Library language")
+                                Text(languageState ?? "Songs in other languages are hidden from the main list.")
+                                    .font(.caption).foregroundStyle(languageState == "Couldn't save. Try again." ? .red : .secondary)
+                            }
+                        } icon: { Image(systemName: "character.bubble") }
+                    }
+                    NavigationLink { OfflineSettingsView() } label: { Label("Offline Copies", systemImage: "arrow.down.circle") }
+                    NavigationLink { CalendarSyncView() } label: { Label("Calendar Subscription", systemImage: "calendar.badge.plus") }
+                    if !session.teams.isEmpty {
+                        NavigationLink { MyTeamsView() } label: {
+                            LabeledContent {
+                                Text(session.currentTeam?.name ?? "")
+                            } label: {
+                                Label("My Teams", systemImage: "person.3")
+                            }
+                        }
+                    }
                 } header: {
-                    Text("Sync")
+                    Text("Preferences")
                 }
 
+                // MARK: Library (Admins and Leaders)
                 if session.currentTeam?.canEdit ?? false {
-                    Section {
-                        NavigationLink("CCLI Report") { CcliReportView() }
+                    Section("Library") {
+                        NavigationLink { CcliReportView() } label: { Label("CCLI Report", systemImage: "doc.text.magnifyingglass") }
                         Button {
                             Task { await exportSongbook() }
                         } label: {
                             HStack {
-                                Text("Export Song Library (PDF)")
+                                Label("Export Song Library (PDF)", systemImage: "square.and.arrow.up")
                                 if exporting { Spacer(); ProgressView() }
                             }
                         }
@@ -53,25 +101,91 @@ struct SettingsView: View {
                             ShareLink("Share Songbook PDF", item: exportURL)
                         }
                         if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
-                    } header: {
-                        Text("Reports")
                     }
                 }
 
-                Section("Account") {
-                    if let email = session.user?.email { LabeledContent("Signed in as", value: email) }
-                    Button("Sign Out") { Task { await session.signOut() } }
-                    NavigationLink("Delete Account") { DeleteAccountView() }
-                        .foregroundStyle(.red)
+                // MARK: Licensing & Copyright
+                Section("Licensing & Copyright") {
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Song lyrics are protected by copyright regardless of the context in which they are used. Displaying lyrics publicly — in a church service, event, or otherwise — requires a valid license.")
+                                .foregroundStyle(.secondary)
+                            licenseLine("Personal / private use", "Generally permitted without a license.")
+                            licenseLine("Churches", "Verify coverage via [CCLI](https://ccli.com). CCLI API integration is a planned premium feature.")
+                            licenseLine("Other public or commercial use", "A performance license is required — ASCAP, BMI, or SESAC depending on your region.")
+                            licenseLine("Public domain songs", "No license required. Generally applies to works published before 1928.")
+                        }
+                        .font(.footnote)
+                        .padding(.vertical, 4)
+                    } label: {
+                        Label("Copyright Notice", systemImage: "checkmark.shield")
+                    }
                 }
 
+                // MARK: Footer — links and version on a line or two
                 Section {
-                    Link("Help & Support", destination: AppConfig.supportURL)
-                    Link("Privacy Policy", destination: AppConfig.privacyURL)
-                    LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
+                } footer: {
+                    VStack(spacing: 6) {
+                        Text("[Help & Support](https://stafflist.app/support)  ·  [Privacy Policy](https://stafflist.app/privacy)  ·  [Terms of Use](https://stafflist.app/terms)")
+                        Text("StaffList \(version)").foregroundStyle(.secondary)
+                    }
+                    .font(.footnote)
+                    .tint(Theme.accentLight)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 4)
                 }
             }
             .navigationTitle("Settings")
+            .confirmationDialog("Sign out of StaffList?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("Sign Out", role: .destructive) { Task { await session.signOut() } }
+            }
+            .task { await loadLanguages() }
+        }
+    }
+
+    private func planName(_ plan: String?) -> String {
+        switch plan ?? "free" {
+        case "pro": return "Pro"
+        case "ultimate": return "Ultimate"
+        case "solo": return "Solo"
+        default: return (plan ?? "Free").capitalized
+        }
+    }
+
+    private func licenseLine(_ title: String, _ detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("•").foregroundStyle(Theme.accentLight)
+            Text(.init("**\(title)** — \(detail)")).foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Song Library language (saved to the account, so the web uses it too)
+
+    private var languageOptions: [String] { Array(Set(languages + [libraryLanguage])).sorted() }
+
+    private struct LangRow: Decodable { let language: String? }
+
+    private func loadLanguages() async {
+        if let saved = session.user?.userMetadata["library_language"]?.stringValue, !saved.isEmpty { libraryLanguage = saved }
+        guard let team = session.currentTeam else { return }
+        if let rows: [LangRow] = try? await supabase.from("songs").select("language:metadata->>language")
+            .eq("church_id", value: team.id).execute().value {
+            languages = Array(Set(rows.map { $0.language ?? "" }.filter { !$0.isEmpty } + ["English"]))
+        }
+    }
+
+    private func saveLanguage(_ l: String) async {
+        let before = libraryLanguage
+        libraryLanguage = l
+        languageState = "Saving…"
+        do {
+            try await supabase.auth.update(user: UserAttributes(data: ["library_language": .string(l)]))
+            languageState = "Saved."
+            NotificationCenter.default.post(name: .songsChanged, object: nil)
+        } catch {
+            libraryLanguage = before
+            languageState = "Couldn't save. Try again."
         }
     }
 
@@ -88,6 +202,49 @@ struct SettingsView: View {
         } catch {
             note = AITools.message(for: error)
         }
+    }
+}
+
+/// Every team I'm on with my role; tap one to make it the current team.
+struct MyTeamsView: View {
+    @Environment(SessionStore.self) private var session
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(session.teams) { t in
+                    Button {
+                        session.currentTeamID = t.id
+                    } label: {
+                        HStack(spacing: 12) {
+                            Circle().fill(Color(hex: t.color) ?? Theme.accent).frame(width: 14, height: 14)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(t.name).foregroundStyle(.primary)
+                                Text(t.role == "admin" ? "Admin" : t.canEdit ? "Leader" : "Member")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if t.id == session.currentTeam?.id {
+                                Image(systemName: "checkmark").foregroundStyle(Theme.accentLight)
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("The checked team is the one the app shows. Sets from each team show in its color on the web calendar.")
+            }
+        }
+        .navigationTitle("My Teams")
+    }
+}
+
+private extension Color {
+    /// "#0e7490" → Color.
+    init?(hex: String?) {
+        guard var h = hex?.trimmingCharacters(in: .whitespaces), !h.isEmpty else { return nil }
+        if h.hasPrefix("#") { h.removeFirst() }
+        guard h.count == 6, let v = UInt32(h, radix: 16) else { return nil }
+        self.init(red: Double((v >> 16) & 0xff) / 255, green: Double((v >> 8) & 0xff) / 255, blue: Double(v & 0xff) / 255)
     }
 }
 

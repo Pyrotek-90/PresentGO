@@ -12,10 +12,21 @@ struct LibraryView: View {
     @State private var importing = false
     @State private var offline = false
     @State private var adding = AddToSetModel()
+    /// Settings → Song Library language: songs in other languages are hidden from the main list.
+    @AppStorage("libraryLanguage") private var libraryLanguage = "English"
+    @State private var showAllLanguages = false
+
+    private func language(_ s: Song) -> String {
+        let l = s.metadata?.language ?? ""
+        return l.isEmpty ? "English" : l
+    }
+    private var hiddenCount: Int { songs.filter { language($0) != libraryLanguage }.count }
 
     private var filtered: [Song] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return songs }
+        guard !q.isEmpty else {
+            return showAllLanguages ? songs : songs.filter { language($0) == libraryLanguage }
+        }
         return songs.filter {
             $0.title.lowercased().contains(q)
                 || ($0.artist ?? "").lowercased().contains(q)
@@ -52,6 +63,15 @@ struct LibraryView: View {
             .navigationDestination(for: Song.self) { SongView(song: $0) }
             .searchable(text: $search, prompt: "Title, artist or CCLI #")
             .toolbar {
+                if hiddenCount > 0 {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Toggle("Show Other Languages (\(hiddenCount))", isOn: $showAllLanguages)
+                        } label: {
+                            Label("Languages", systemImage: showAllLanguages ? "globe.americas.fill" : "globe.americas")
+                        }
+                    }
+                }
                 if session.currentTeam?.canEdit ?? false {
                     ToolbarItem(placement: .primaryAction) {
                         if adding.active {

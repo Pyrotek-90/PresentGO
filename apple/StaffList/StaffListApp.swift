@@ -4,6 +4,7 @@ import SwiftUI
 struct StaffListApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate   // TV output (Present/TVScene.swift)
     @State private var session = SessionStore()
+    @AppStorage("appearance") private var appearance = "dark"
 
     var body: some Scene {
         WindowGroup {
@@ -11,7 +12,7 @@ struct StaffListApp: App {
                 .environment(session)
                 .task { await session.observeAuth() }
                 .tint(.staffTeal)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(appearance == "light" ? .light : appearance == "system" ? nil : .dark)
         }
     }
 }
