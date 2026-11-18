@@ -57,6 +57,14 @@ struct SettingsView: View {
 
                 // MARK: Preferences
                 Section {
+                    Toggle(isOn: Binding(get: { offlineEnabled }, set: { setOffline($0) })) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Offline Copies")
+                                Text(offlineNote).font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: { Image(systemName: "arrow.down.circle") }
+                    }
                     Toggle(isOn: Binding(get: { viewerMode == "chords" }, set: { viewerMode = $0 ? "chords" : "lyrics" })) {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
@@ -75,14 +83,6 @@ struct SettingsView: View {
                                     .font(.caption).foregroundStyle(languageState == "Couldn't save. Try again." ? .red : .secondary)
                             }
                         } icon: { Image(systemName: "character.bubble") }
-                    }
-                    Toggle(isOn: Binding(get: { offlineEnabled }, set: { setOffline($0) })) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Offline Copies")
-                                Text(offlineNote).font(.caption).foregroundStyle(.secondary)
-                            }
-                        } icon: { Image(systemName: "arrow.down.circle") }
                     }
                     NavigationLink { CalendarSyncView() } label: { Label("Calendar Subscription", systemImage: "calendar.badge.plus") }
                     if !session.teams.isEmpty {
