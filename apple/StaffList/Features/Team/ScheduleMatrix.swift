@@ -1,5 +1,17 @@
 import SwiftUI
 import Supabase
+import UniformTypeIdentifiers
+
+/// What is dragged from a person in the matrix. Dropped on another set's cell, it puts them on
+/// that set in that row's position (a copy: they stay on the set they came from).
+struct AssignmentDrag: Codable, Transferable {
+    let memberId: UUID
+    let positionId: UUID
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
+    }
+}
 
 /// Who's serving across sets at a glance: one column per set (the last one, then the upcoming
 /// ones), with its songs and the people in each position. The row labels stay put while the
@@ -18,6 +30,9 @@ struct ScheduleMatrix: View {
     @State private var songs: [UUID: [String]] = [:]
     @State private var loaded = false
     @State private var failed: String?
+    /// The cell a person is being dragged over ("setId-positionId"), and the result of the last drop.
+    @State private var dropTarget: String?
+    @State private var note: String?
 
     private var columnWidth: CGFloat { sizeClass == .regular ? 168 : 136 }
     private var labelWidth: CGFloat { sizeClass == .regular ? 108 : 84 }
@@ -117,6 +132,10 @@ struct ScheduleMatrix: View {
                 VStack(alignment: .leading, spacing: 0) {
                     matrix
                     legend
+                    if let note {
+                        Text(note).font(.caption2).foregroundStyle(.secondary)
+                            .padding(.horizontal, 10).padding(.bottom, 8)
+                    }
                 }
             }
         }
@@ -147,10 +166,12 @@ struct ScheduleMatrix: View {
                         Button { onOpen(s) } label: {
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(rows) { row in
-                                    cell(row, s)
-                                        .frame(width: columnWidth, height: height(row), alignment: .topLeading)
-                                        .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
-                                        .overlay(alignment: .bottom) { rule }
+                                    droppable(row, s) {
+                                        cell(row, s)
+                                            .frame(width: columnWidth, height: height(row), alignment: .topLeading)
+                                            .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
+                                            .overlay(alignment: .bottom) { rule }
+                                    }
                                 }
                             }
                             .background(isNext(s) ? Theme.accent.opacity(0.07) : .clear)
@@ -167,6 +188,42 @@ struct ScheduleMatrix: View {
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollIndicators(.visible)
+        }
+    }
+
+    /// A position cell accepts a dragged person: they're added to this set in this row's position.
+    @ViewBuilder
+    private func droppable<V: View>(_ row: Row, _ s: ServiceSet, @ViewBuilder _ content: () -> V) -> some View {
+        if case .position(let p) = row {
+            let key = "\(s.id)-\(p.id)"
+            content()
+                .background(dropTarget == key ? Theme.accent.opacity(0.3) : Color.clear)
+                .dropDestination(for: AssignmentDrag.self) { items, _ in
+                    guard let item = items.first else { return false }
+                    Task { await drop(item, onto: s, position: p) }
+                    return true
+                } isTargeted: { on in
+                    if on { dropTarget = key } else if dropTarget == key { dropTarget = nil }
+                }
+        } else {
+            content()
+        }
+    }
+
+    private func drop(_ item: AssignmentDrag, onto s: ServiceSet, position p: Position) async {
+        guard let m = members[item.memberId] else { return }
+        if assignments.contains(where: { $0.setId == s.id && $0.positionId == p.id && $0.memberId == m.id }) {
+            note = "\(m.name) is already on \(s.name) as \(p.name)."
+            return
+        }
+        do {
+            let a: Assignment = try await supabase.from("set_assignments")
+                .insert(NewAssignment(set_id: s.id, position_id: p.id, member_id: m.id))
+                .select("id,set_id,position_id,member_id,status").single().execute().value
+            assignments.append(a)
+            note = "\(m.name) added to \(s.name) as \(p.name). Not sent yet; open the set to send requests."
+        } catch {
+            note = "Couldn't add \(m.name). \(error.localizedDescription)"
         }
     }
 
@@ -253,6 +310,7 @@ struct ScheduleMatrix: View {
                         Text(members[a.memberId]?.name ?? "").lineLimit(1)
                     }
                     .frame(height: line)
+                    .draggable(AssignmentDrag(memberId: a.memberId, positionId: p.id))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(p.name): \(members[a.memberId]?.name ?? ""), \(a.statusLabel)")
                 }
@@ -278,7 +336,7 @@ struct ScheduleMatrix: View {
                 }
             }
             Spacer()
-            Text("Tap a set to edit its team").foregroundStyle(.tertiary)
+            Text("Tap a set to edit its team · drag a person to another set").foregroundStyle(.tertiary)
         }
         .font(.caption2).foregroundStyle(.secondary)
         .padding(.horizontal, 10).padding(.vertical, 8)
