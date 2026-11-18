@@ -16,9 +16,14 @@ struct TeamView: View {
     @AppStorage("teamMembersCollapsed") private var membersCollapsed = false
     @State private var reloadToken = 0
     @State private var openSet: ServiceSet?
+    @State private var expanded = false      // Who's Serving full screen
+    @State private var assigning = false     // Assign Team (from the Who's Serving header)
+    @State private var assigningFull = false // Assign Team (from the full-screen view)
+    @State private var coverSet: ServiceSet?
     @State private var filterPosition: UUID?
     @Environment(\.horizontalSizeClass) private var sizeClass
 
+    private var membersByID: [UUID: TeamMember] { Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) }) }
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var filtering: Bool { !search.trimmingCharacters(in: .whitespaces).isEmpty || filterPosition != nil }
     private var showMembers: Bool { !membersCollapsed || filtering }
@@ -82,11 +87,30 @@ struct TeamView: View {
                 }
                 if !members.isEmpty {
                     Section {
-                        ScheduleMatrix(members: Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) }),
+                        ScheduleMatrix(members: membersByID,
                                        positions: positions, reloadToken: reloadToken) { openSet = $0 }
                             .listRowInsets(EdgeInsets())
                     } header: {
-                        Text("Who's Serving")
+                        HStack(spacing: 10) {
+                            Text("Who's Serving")
+                            Spacer()
+                            if canEdit {
+                                Button { assigning = true } label: {
+                                    Label("Assign", systemImage: "person.2.badge.plus")
+                                        .font(.caption.weight(.semibold)).textCase(nil)
+                                        .padding(.horizontal, 10).padding(.vertical, 4)
+                                        .foregroundStyle(Theme.accentLight)
+                                        .background(Theme.accent.opacity(0.2), in: Capsule())
+                                        .overlay(Capsule().stroke(Theme.accent.opacity(0.7)))
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            Button { expanded = true } label: {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Expand Who's Serving to full screen")
+                        }
                     }
                 }
             }
@@ -120,6 +144,30 @@ struct TeamView: View {
             }
             .sheet(isPresented: $messaging) {
                 MessageTeamView(members: members)
+            }
+            .sheet(isPresented: $assigning, onDismiss: { reloadToken += 1 }) {
+                TeamAssignSheet(members: membersByID, positions: positions)
+            }
+            .fullScreenCover(isPresented: $expanded, onDismiss: { reloadToken += 1 }) {
+                NavigationStack {
+                    ScrollView {
+                        ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken) { coverSet = $0 }
+                    }
+                    .navigationTitle("Who's Serving")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationDestination(item: $coverSet) { SetDetailView(set: $0) }
+                    .toolbar {
+                        if canEdit {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button { assigningFull = true } label: { Label("Assign", systemImage: "person.2.badge.plus") }
+                            }
+                        }
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { expanded = false } }
+                    }
+                    .sheet(isPresented: $assigningFull, onDismiss: { reloadToken += 1 }) {
+                        TeamAssignSheet(members: membersByID, positions: positions)
+                    }
+                }
             }
             .refreshable { await load(); reloadToken += 1 }
             .task { await load() }
