@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var languages: [String] = []
     @State private var languageState: String?
     @State private var confirmSignOut = false
+    @AppStorage(OfflineStore.enabledKey) private var offlineEnabled = true
+    @State private var offlineSaving = false
 
     private var version: String {
         let info = Bundle.main.infoDictionary
@@ -25,15 +27,20 @@ struct SettingsView: View {
             Form {
                 // MARK: Account
                 Section("Account") {
-                    if let email = session.user?.email {
-                        LabeledContent("Signed in as", value: email)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Signed in as").font(.caption).foregroundStyle(.secondary)
+                            Text(session.user?.email ?? "").lineLimit(1).truncationMode(.middle)
+                        }
+                        Spacer(minLength: 8)
+                        Button("Sign Out") { confirmSignOut = true }
+                            .buttonStyle(.bordered).controlSize(.small)
                     }
                     if let team = session.currentTeam {
                         LabeledContent("Plan") {
                             Text(planName(team.plan)).foregroundStyle(team.isPaid ? Theme.accentLight : .secondary)
                         }
                     }
-                    Button("Sign Out") { confirmSignOut = true }
                     NavigationLink { DeleteAccountView() } label: { Text("Delete Account").foregroundStyle(.red) }
                 }
 
@@ -69,7 +76,14 @@ struct SettingsView: View {
                             }
                         } icon: { Image(systemName: "character.bubble") }
                     }
-                    NavigationLink { OfflineSettingsView() } label: { Label("Offline Copies", systemImage: "arrow.down.circle") }
+                    Toggle(isOn: Binding(get: { offlineEnabled }, set: { setOffline($0) })) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Offline Copies")
+                                Text(offlineNote).font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: { Image(systemName: "arrow.down.circle") }
+                    }
                     NavigationLink { CalendarSyncView() } label: { Label("Calendar Subscription", systemImage: "calendar.badge.plus") }
                     if !session.teams.isEmpty {
                         NavigationLink { MyTeamsView() } label: {
@@ -141,6 +155,33 @@ struct SettingsView: View {
                 Button("Sign Out", role: .destructive) { Task { await session.signOut() } }
             }
             .task { await loadLanguages() }
+        }
+    }
+
+    // MARK: Offline Copies
+
+    private var offlineNote: String {
+        guard offlineEnabled else { return "Turn on to keep the Song Library and upcoming sets on this device." }
+        if offlineSaving { return "Saving the Song Library and upcoming sets…" }
+        var note = "The Song Library and the upcoming sets are saved for offline mode."
+        if let team = session.currentTeam, let date = OfflineStore.savedAt(OfflineStore.songsKey(team.id)) {
+            note += " Saved " + date.formatted(.relative(presentation: .named)) + "."
+        }
+        return note
+    }
+
+    private func setOffline(_ on: Bool) {
+        offlineEnabled = on
+        if on {
+            guard let team = session.currentTeam else { return }
+            offlineSaving = true
+            Task {
+                await OfflineStore.saveAll(team: team.id)
+                offlineSaving = false
+            }
+        } else {
+            // Off: nothing is kept on the device.
+            OfflineStore.clear()
         }
     }
 

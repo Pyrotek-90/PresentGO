@@ -138,7 +138,11 @@ struct SetsView: View {
             OfflineStore.save(sets, as: OfflineStore.setsKey(team.id))
             await loadSongCounts()
             let soon = upcoming
-            Task.detached(priority: .background) { await OfflineStore.prefetch(soon) }
+            let teamID = team.id
+            Task.detached(priority: .background) {
+                await OfflineStore.prefetch(soon)
+                await OfflineStore.saveLibrary(team: teamID)
+            }
         } catch {
             if let saved = OfflineStore.load([ServiceSet].self, from: OfflineStore.setsKey(team.id)) {
                 sets = saved
