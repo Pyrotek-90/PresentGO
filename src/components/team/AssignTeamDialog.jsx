@@ -75,7 +75,7 @@ export default function AssignTeamDialog({ set, members, positions, assignments,
           {error && <p className="text-xs text-red-400">{error}</p>}
         </div>
 
-        <ul className="overflow-y-auto px-2 py-2 mt-2 divide-y divide-border/50 border-t border-border">
+        <ul className="overflow-y-auto px-2 py-1 mt-2 divide-y divide-border/50 border-t border-border">
           {members.length === 0 && <li className="text-sm text-muted text-center py-8 px-4">No one on the team yet. Add people on the Team tab first.</li>}
           {members.length > 0 && list.length === 0 && <li className="text-sm text-muted text-center py-8">No one matches.</li>}
           {list.map(m => {
@@ -83,11 +83,11 @@ export default function AssignTeamDialog({ set, members, positions, assignments,
             const extra = sorted.filter(p => assignmentOf(m, p) && !mine.includes(p))
             const others = sorted.filter(p => inGroup(p) && !mine.includes(p) && !extra.includes(p))
             return (
-              <li key={m.id} className="px-2 py-2.5 space-y-1.5">
-                <p className="flex items-center gap-1.5 text-sm font-semibold">
-                  {m.name}{isOn(m) && <Check size={14} className="text-accent-light" aria-label="On this set" />}
+              <li key={m.id} className="px-2 py-1.5 flex items-start gap-3">
+                <p className="w-28 sm:w-36 shrink-0 flex items-center gap-1 pt-[5px] text-sm font-semibold min-w-0">
+                  <span className="truncate">{m.name}</span>{isOn(m) && <Check size={14} className="text-accent-light shrink-0" aria-label="On this set" />}
                 </p>
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
                   {[...mine, ...extra].map(p => <Chip key={p.id} m={m} p={p} />)}
                   {others.length > 0 && (
                     <span className="relative">

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Maximize2, Minimize2, UserPlus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useChurch } from '../../contexts/ChurchContext'
 import { useScheduling } from '../../lib/useScheduling'
-import { useUpgrade } from '../../contexts/UpgradeContext'
+import { useUpgrade, locked } from '../../contexts/UpgradeContext'
 import SchedulePane from '../calendar/SchedulePane'
+import AssignTeamDialog from './AssignTeamDialog'
 import { GROUPS, groupOf, rankOf, STATUS_DOT as DOT } from '../../lib/teamGroups'
 import { todayISO, formatSetTime } from '../../lib/sets'
 
@@ -31,7 +32,9 @@ export default function WhosServing({ members, setMembers, positions }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(null)
   const [schedId, setSchedId] = useState(null)
-  const { requirePro } = useUpgrade()
+  const { pro, requirePro } = useUpgrade()
+  const [expanded, setExpanded] = useState(false)   // the matrix fills the page
+  const [assigning, setAssigning] = useState(false)
   const [dropKey, setDropKey] = useState(null)   // cell a person is being dragged over
   const [dragNote, setDragNote] = useState(null) // { ok, text }
   const { assignments, error: schedError, refresh: refreshAssignments, addAssignment, removeAssignment, sendInvites, sending, sendResult, setSendResult } =
@@ -74,6 +77,15 @@ export default function WhosServing({ members, setMembers, positions }) {
     })()
     return () => { live = false }
   }, [columnKey])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!expanded) return
+    const onKey = e => { if (e.key === 'Escape' && !assigning) setExpanded(false) }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [expanded, assigning])
 
   const posById = useMemo(() => Object.fromEntries(positions.map(p => [p.id, p])), [positions])
   const memById = useMemo(() => Object.fromEntries(members.map(m => [m.id, m])), [members])
@@ -118,15 +130,25 @@ export default function WhosServing({ members, setMembers, positions }) {
 
   return (
     <>
-    <section className="rounded-xl border border-border bg-card overflow-hidden">
-      <button onClick={toggle} aria-expanded={open} className="w-full flex items-center gap-2 px-3 py-2 text-left">
-        <ChevronDown size={16} className={`text-muted transition-transform shrink-0 ${open ? '' : '-rotate-90'}`} />
-        <h2 className="font-semibold whitespace-nowrap">Who's Serving</h2>
-        {columns.length > 0 && <span className="text-xs text-muted truncate">{columns.length} set{columns.length === 1 ? '' : 's'}</span>}
-      </button>
+    <section className={expanded ? 'fixed inset-0 z-40 bg-card flex flex-col overflow-hidden' : 'rounded-xl border border-border bg-card overflow-hidden'}>
+      <div className="flex items-center gap-2 px-3 py-2 shrink-0">
+        <button onClick={toggle} aria-expanded={open || expanded} disabled={expanded} className="flex items-center gap-2 min-w-0 text-left flex-1">
+          <ChevronDown size={16} className={`text-muted transition-transform shrink-0 ${open || expanded ? '' : '-rotate-90'}`} />
+          <h2 className="font-semibold whitespace-nowrap">Who's Serving</h2>
+          {columns.length > 0 && <span className="text-xs text-muted truncate">{columns.length} set{columns.length === 1 ? '' : 's'}</span>}
+        </button>
+        {columns.length > 0 && (
+          <button onClick={() => requirePro('Scheduling your team') && setAssigning(true)} title={pro ? `Assign the team for ${schedSet?.name || 'a set'}` : 'Assign (Pro)'}
+            className={`flex items-center gap-1.5 px-3 h-7 rounded-full border border-accent/70 bg-accent/20 text-xs font-semibold text-accent-light hover:bg-accent/30 transition-colors shrink-0 ${locked(pro)}`}>
+            <UserPlus size={13} /> Assign
+          </button>
+        )}
+        <button onClick={() => setExpanded(e => !e)} aria-label={expanded ? 'Exit full page' : 'Expand to full page'} title={expanded ? 'Exit full page (Esc)' : 'Full page'}
+          className="btn-ghost p-1.5 shrink-0">{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
+      </div>
 
-      {open && (
-        <div className="border-t border-border">
+      {(open || expanded) && (
+        <div className={`border-t border-border ${expanded ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
           {(error || schedError) && <p className="px-3 py-2 text-red-400 text-xs">{error || schedError}</p>}
           {!loaded ? (
             <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
@@ -134,7 +156,7 @@ export default function WhosServing({ members, setMembers, positions }) {
             <p className="px-3 py-6 text-sm text-muted text-center">No dated sets yet. Give a set a date to see who's serving.</p>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className={expanded ? 'flex-1 min-h-0 overflow-auto' : 'overflow-x-auto'}>
                 <table className="border-collapse text-xs w-max min-w-full">
                   <thead>
                     <tr>
@@ -191,6 +213,10 @@ export default function WhosServing({ members, setMembers, positions }) {
         </div>
       )}
     </section>
+    {assigning && schedSet && (
+      <AssignTeamDialog set={schedSet} members={members} positions={positions} assignments={assignments.filter(a => a.set_id === schedSet.id)}
+        onAdd={(pid, mid) => addAssignment(schedSet.id, pid, mid)} onRemove={removeAssignment} onClose={() => setAssigning(false)} />
+    )}
     {loaded && columns.length > 0 && (
       // The set's team is its own card below the matrix, so the page scrolls past the matrix.
       <div ref={paneRef} className="scroll-mt-4">

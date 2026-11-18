@@ -326,15 +326,13 @@ struct AssignTeamSheet: View {
         // Positions they're on for this set that aren't among their usual ones.
         let extra = sortedPositions.filter { p in assignment(m, p) != nil && !mine.contains(p) }
         let others = sortedPositions.filter { p in inGroup(p) && !mine.contains(p) && !extra.contains(p) }
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text(m.name).font(.subheadline.weight(.semibold))
+        // Compact: the name on the left with their positions on the same line (wrapping if needed).
+        return HStack(alignment: .top, spacing: 8) {
+            HStack(spacing: 4) {
+                Text(m.name).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
                 if isOn(m) { Image(systemName: "checkmark.circle.fill").font(.caption).foregroundStyle(Theme.accentLight) }
-                Spacer()
-                Button { editing = m } label: { Image(systemName: "pencil").font(.caption) }
-                    .buttonStyle(.borderless).foregroundStyle(.secondary)
-                    .accessibilityLabel("Edit \(m.name)")
             }
+            .frame(width: 112, height: 28, alignment: .leading)
             FlowLayout(spacing: 6) {
                 ForEach(mine + extra) { p in chip(m, p) }
                 if !others.isEmpty {
@@ -349,8 +347,13 @@ struct AssignTeamSheet: View {
                     .accessibilityLabel("Another position for \(m.name)")
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button { editing = m } label: { Image(systemName: "pencil").font(.caption) }
+                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                .frame(height: 28)
+                .accessibilityLabel("Edit \(m.name)")
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 1)
     }
 
     private func chip(_ m: TeamMember, _ p: Position) -> some View {
@@ -438,6 +441,88 @@ struct StatusPill: View {
         case "declined": return .red
         case "invited": return .orange
         default: return .secondary
+        }
+    }
+}
+
+
+/// Assign Team opened from the Team tab's Who's Serving: choose the set (the next one by
+/// default), then assign people to it exactly as on the set's own page.
+struct TeamAssignSheet: View {
+    @Environment(SessionStore.self) private var session
+    let members: [UUID: TeamMember]
+    let positions: [Position]
+
+    @State private var sets: [ServiceSet] = []
+    @State private var selected: ServiceSet?
+    @State private var assignments: [Assignment] = []
+    @State private var assignmentsFor: UUID?   // the set `assignments` belong to
+    @State private var loaded = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if !loaded {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if sets.isEmpty {
+                ContentUnavailableView("No dated sets yet", systemImage: "calendar",
+                                       description: Text("Give a set a date to assign the team."))
+            } else {
+                HStack {
+                    Text("Set").font(.subheadline).foregroundStyle(.secondary)
+                    Picker("Set", selection: Binding(get: { selected?.id }, set: { id in
+                        selected = sets.first { $0.id == id }
+                    })) {
+                        ForEach(sets) { s in Text(label(s)).tag(Optional(s.id)) }
+                    }
+                    .labelsHidden()
+                    Spacer()
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                if let set = selected, assignmentsFor == set.id {
+                    AssignTeamSheet(set: set, assignments: assignments, members: members, positions: positions)
+                        .id(set.id)
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        .task { await load() }
+        .task(id: selected?.id) { await loadAssignments() }
+    }
+
+    private func label(_ s: ServiceSet) -> String {
+        var parts = [s.name]
+        if let d = s.date { parts.append(d.formatted(.dateTime.month(.abbreviated).day())) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func load() async {
+        defer { loaded = true }
+        guard let team = session.currentTeam else { return }
+        let today = ServiceSet.dayFormatter.string(from: .now)
+        do {
+            async let last: [ServiceSet] = supabase.from("sets").select(ServiceSet.columns)
+                .eq("church_id", value: team.id).lt("service_date", value: today)
+                .order("service_date", ascending: false).order("service_time", ascending: false)
+                .limit(1).execute().value
+            async let next: [ServiceSet] = supabase.from("sets").select(ServiceSet.columns)
+                .eq("church_id", value: team.id).gte("service_date", value: today)
+                .order("service_date").order("service_time")
+                .limit(30).execute().value
+            let list = try await last + next
+            sets = list
+            selected = list.first { ($0.serviceDate ?? today) >= today } ?? list.last
+        } catch {
+            sets = []
+        }
+    }
+
+    private func loadAssignments() async {
+        guard let set = selected else { return }
+        if let list: [Assignment] = try? await supabase.from("set_assignments")
+            .select("id,set_id,position_id,member_id,status").eq("set_id", value: set.id).execute().value {
+            assignments = list
+            assignmentsFor = set.id
         }
     }
 }
