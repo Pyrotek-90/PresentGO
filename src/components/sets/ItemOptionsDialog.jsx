@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { X, Pencil, Trash2, KeyRound, Check, ListOrdered, ChevronDown, Mic } from 'lucide-react'
 import { transposeKeyOptions, parseKey } from '../../lib/chords'
 import { songSections, sameArrangement } from '../../lib/arrangement'
@@ -143,7 +142,7 @@ export default function ItemOptionsDialog({ item, title, song, onClose, onSetKey
                 <ChevronDown size={14} className={`ml-auto text-muted transition-transform ${leadOpen ? 'rotate-180' : ''}`} />
               </button>
               {leadOpen && (team.length === 0 ? (
-                <p className="text-xs text-muted leading-relaxed">No one is assigned to this set yet. Add the team under Who's Serving on the <Link to="/team" className="text-accent-light underline">Team</Link> page, then pick a Song Leader here.</p>
+                <p className="text-xs text-muted leading-relaxed">No one is assigned to this set yet. Add the team in Who's Serving on this page, then pick a Song Leader here.</p>
               ) : (
                 <>
                   <ul className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border/60" role="radiogroup" aria-label="Song Leader">
