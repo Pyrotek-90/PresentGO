@@ -15,6 +15,8 @@ struct SetsView: View {
     @State private var selectedDay = Calendar.current.startOfDay(for: .now)
     /// How many upcoming sets are listed; More adds five at a time.
     @State private var upcomingShown = 5
+    /// Songs in each set, like the web's "4 songs".
+    @State private var songCounts: [UUID: Int] = [:]
 
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var today: String { ServiceSet.dayFormatter.string(from: .now) }
@@ -49,7 +51,7 @@ struct SetsView: View {
                                 Button { creating = true } label: { Label("New Set", systemImage: "plus") }
                             }
                         }
-                        ForEach(setsOnSelectedDay) { SetRow(set: $0) }
+                        ForEach(setsOnSelectedDay) { SetRow(set: $0, songs: songCounts[$0.id]) }
                     }
                 }
                 if offline {
@@ -58,7 +60,7 @@ struct SetsView: View {
                 }
                 if !upcoming.isEmpty {
                     Section("Upcoming") {
-                        ForEach(upcoming.prefix(upcomingShown)) { SetRow(set: $0) }
+                        ForEach(upcoming.prefix(upcomingShown)) { SetRow(set: $0, songs: songCounts[$0.id]) }
                         if upcoming.count > upcomingShown {
                             Button {
                                 withAnimation { upcomingShown += 5 }
@@ -72,7 +74,7 @@ struct SetsView: View {
                 if !past.isEmpty {
                     // The two most recent; earlier sets are found on the calendar.
                     Section {
-                        ForEach(past.prefix(2)) { SetRow(set: $0) }
+                        ForEach(past.prefix(2)) { SetRow(set: $0, songs: songCounts[$0.id]) }
                     } header: {
                         Text("Past")
                     } footer: {
@@ -134,6 +136,7 @@ struct SetsView: View {
             error = nil
             offline = false
             OfflineStore.save(sets, as: OfflineStore.setsKey(team.id))
+            await loadSongCounts()
             let soon = upcoming
             Task.detached(priority: .background) { await OfflineStore.prefetch(soon) }
         } catch {
@@ -145,17 +148,49 @@ struct SetsView: View {
             }
         }
     }
+
+    private struct ItemSet: Decodable {
+        let setId: UUID
+        enum CodingKeys: String, CodingKey { case setId = "set_id" }
+    }
+
+    /// Counts each set's songs, in batches so no single query hits the row limit.
+    private func loadSongCounts() async {
+        let ids = sets.map { $0.id.uuidString }
+        var counts: [UUID: Int] = [:]
+        await withTaskGroup(of: [ItemSet]?.self) { group in
+            for start in stride(from: 0, to: ids.count, by: 40) {
+                let chunk = Array(ids[start..<min(start + 40, ids.count)])
+                group.addTask {
+                    try? await supabase.from("set_items").select("set_id")
+                        .eq("type", value: "song").in("set_id", values: chunk)
+                        .limit(1000).execute().value
+                }
+            }
+            for await rows in group { for r in rows ?? [] { counts[r.setId, default: 0] += 1 } }
+        }
+        for s in sets where counts[s.id] == nil { counts[s.id] = 0 }
+        songCounts = counts
+    }
 }
 
 struct SetRow: View {
     let set: ServiceSet
+    var songs: Int?
 
     var body: some View {
         NavigationLink(value: set) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(set.name).font(.body.weight(.medium))
-                if let when = set.whenText {
-                    Text(when).font(.subheadline).foregroundStyle(.secondary)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(set.name).font(.body.weight(.medium))
+                    if let when = set.whenText {
+                        Text(when).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let songs {
+                    Text("\(songs) song\(songs == 1 ? "" : "s")")
+                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
         }

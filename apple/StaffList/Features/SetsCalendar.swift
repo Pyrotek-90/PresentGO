@@ -9,6 +9,7 @@ struct SetsCalendar: View {
     var onOpen: (ServiceSet) -> Void
 
     @AppStorage("setsCalendarMode") private var mode = "month"
+    @AppStorage("setsCalendarCollapsed") private var collapsed = false
     @State private var cursor = Date.now
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -25,8 +26,10 @@ struct SetsCalendar: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
-            if mode == "week" { weekView } else { monthView }
+            if !collapsed {
+                Divider()
+                if mode == "week" { weekView } else { monthView }
+            }
         }
         .onAppear { cursor = selected }
     }
@@ -47,8 +50,30 @@ struct SetsCalendar: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(title).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
-            Spacer(minLength: 8)
+            Button {
+                withAnimation(.snappy) { collapsed.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(collapsed ? -90 : 0))
+                    Text(collapsed ? "Calendar" : title).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
+                    if collapsed {
+                        Text("· \(cursor.formatted(.dateTime.month(.wide).year()))").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(collapsed ? "Shows the calendar" : "Hides the calendar")
+            if !collapsed { controls }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private var controls: some View {
             Picker("View", selection: $mode) {
                 Text("Month").tag("month")
                 Text("Week").tag("week")
@@ -61,8 +86,6 @@ struct SetsCalendar: View {
                 .buttonStyle(.borderless).accessibilityLabel(mode == "week" ? "Previous week" : "Previous month")
             Button { shift(1) } label: { Image(systemName: "chevron.right") }
                 .buttonStyle(.borderless).accessibilityLabel(mode == "week" ? "Next week" : "Next month")
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
     }
 
     private func shift(_ by: Int) {
