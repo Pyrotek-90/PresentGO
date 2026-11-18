@@ -280,32 +280,58 @@ struct AssignTeamSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
+            // Same layout as the web Assign Team: filter + search on top, then one line per person
+            // (name on the left, their positions beside it), divided like a list.
+            VStack(spacing: 0) {
+                VStack(spacing: 8) {
                     Picker("Show", selection: $group) {
                         Text("Everyone").tag(ScheduleMatrix.MatrixGroup?.none)
                         ForEach(ScheduleMatrix.MatrixGroup.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
                     }
                     .pickerStyle(.segmented)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-                }
-                if let error {
-                    Section { Text(error).font(.footnote).foregroundStyle(.red) }
-                }
-                Section {
-                    if members.isEmpty {
-                        Text("No one on the team yet. Tap Add Member to add someone.").foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass").font(.footnote).foregroundStyle(.secondary)
+                        TextField("Find a person", text: $search)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        if !search.isEmpty {
+                            Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                                .buttonStyle(.plain)
+                        }
                     }
-                    ForEach(list) { m in row(m) }
-                } footer: {
-                    Text("Tap a position to put someone on this set; tap it again to take them off. Use + for a position they don't usually fill.")
+                    .padding(.horizontal, 10).frame(height: 36)
+                    .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+                    if let error { Text(error).font(.footnote).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading) }
                 }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                Divider()
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if members.isEmpty {
+                            Text("No one on the team yet. Tap Add Member to add someone.")
+                                .foregroundStyle(.secondary).padding(32)
+                        } else if list.isEmpty {
+                            Text("No one matches.").foregroundStyle(.secondary).padding(32)
+                        }
+                        ForEach(list) { m in
+                            row(m).padding(.horizontal, 16).padding(.vertical, 6)
+                            Divider().padding(.leading, 16)
+                        }
+                    }
+                }
+                Divider()
+                Text("Tap a position to put someone on this set; tap it again to take them off. Use + for a position they don't usually fill.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
             }
-            .searchable(text: $search, prompt: "Find a person")
-            .navigationTitle("Assign Team")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text("Assign Team").font(.headline)
+                        Text(set.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button { adding = true } label: { Label("Add Member", systemImage: "person.badge.plus") }
                 }
