@@ -8,13 +8,13 @@ import Respond from './pages/Respond'
 import JoinTeam from './pages/JoinTeam'
 import ProtectedRoute from './components/ProtectedRoute'
 import Auth from './pages/Auth'
-import Dashboard from './pages/Dashboard'
+import Sets from './pages/Sets'
+import Songs from './pages/Songs'
 import SetEditor from './pages/SetEditor'
 import PresentMode from './pages/PresentMode'
 import Controller from './pages/Controller'
 import ContentLibrary from './pages/ContentLibrary'
 import Settings from './pages/Settings'
-import Calendar from './pages/Calendar'
 import Team from './pages/Team'
 import GetStarted from './pages/GetStarted'
 import CcliReport from './pages/CcliReport'
@@ -44,12 +44,13 @@ export default function App() {
 
             {/* Protected app routes */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/library" element={<Navigate to="/" replace />} />
+              <Route path="/" element={<Sets />} />
+              <Route path="/songs" element={<Songs />} />
+              <Route path="/library" element={<Navigate to="/songs" replace />} />
               <Route path="/sets/:setId" element={<SetEditor />} />
               <Route path="/sets/:setId/control" element={<Controller />} />
-              <Route path="/schedule" element={<Calendar />} />
-              <Route path="/calendar" element={<Navigate to="/schedule" replace />} />
+              <Route path="/schedule" element={<Navigate to="/" replace />} />
+              <Route path="/calendar" element={<Navigate to="/" replace />} />
               <Route path="/team" element={<Team />} />
               <Route path="/media" element={<ContentLibrary />} />
               <Route path="/settings" element={<Settings />} />

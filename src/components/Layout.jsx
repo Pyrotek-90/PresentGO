@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Home, CalendarDays, Users, LogOut, FolderOpen, Settings, ChevronDown, FileBarChart, Upload, LifeBuoy } from 'lucide-react'
+import { CalendarDays, Music, Users, LogOut, FolderOpen, Settings, ChevronDown, FileBarChart, Upload, LifeBuoy } from 'lucide-react'
 import Wordmark from './Wordmark'
 import NotificationBell from './NotificationBell'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
@@ -9,17 +9,17 @@ import { useState, useRef, useEffect } from 'react'
 import { WifiOff } from 'lucide-react'
 
 const allNavItems = [
-  { to: '/',        label: 'Home',            icon: Home       },
-  { to: '/schedule', label: 'Schedule',        icon: CalendarDays },
-  { to: '/team',     label: 'Team',            icon: Users        },
-  { to: '/media',   label: 'Content Library', icon: FolderOpen },
+  { to: '/',      label: 'Sets',  icon: CalendarDays },
+  { to: '/songs', label: 'Songs', icon: Music        },
+  { to: '/team',  label: 'Team',  icon: Users        },
+  { to: '/media', label: 'Media', icon: FolderOpen   },
 ]
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
   const { isEditor, present } = useChurch()
-  // Musicians and singers (Members) need Home (their sets, songs and charts) and their Schedule.
-  const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/' || i.to === '/schedule')
+  // Musicians and singers (Members) need Sets and Songs (their sets, songs and charts).
+  const navItems = isEditor ? allNavItems : allNavItems.filter(i => i.to === '/' || i.to === '/songs')
   const tools = [
     ...(isEditor ? [
       { to: '/get-started', label: 'Import Songs', icon: Upload },
@@ -67,7 +67,7 @@ export default function Layout({ children }) {
       {/* Top nav */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="StaffList home" title="Home"
+          <Link to="/" onClick={() => { setMenuOpen(false); setProfileOpen(false) }} aria-label="StaffList home" title="Sets"
             className="flex items-center gap-3 rounded-lg hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0">
             <Wordmark className="text-[20px] text-primary" />
           </Link>
