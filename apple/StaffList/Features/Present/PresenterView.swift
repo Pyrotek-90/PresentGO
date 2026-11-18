@@ -274,17 +274,23 @@ struct PresenterView: View {
         .padding(.vertical, 12)
     }
 
+    /// Loop / Blank: the same 32-point height and icon size as the view and arrow buttons, with a
+    /// fixed width so "Blank" and "Unblank" don't change size (icon only on narrow screens).
     private func toggleButton(_ title: String, systemImage: String, on: Bool, onColor: Color = Theme.accentLight, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.caption.weight(.semibold))
-                .labelStyle(sizeClass == .regular ? AnyLabelStyle(.titleAndIcon) : AnyLabelStyle(.iconOnly))
-                .padding(.horizontal, 10).frame(minHeight: 32)
-                .foregroundStyle(on ? onColor : Theme.muted)
-                .background(on ? (onColor == .white ? Color.white.opacity(0.1) : Theme.accent.opacity(0.25)) : .clear, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? (onColor == .white ? .white : Theme.accent) : Theme.border))
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                if sizeClass == .regular {
+                    Text(title).font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
+                }
+            }
+            .frame(width: sizeClass == .regular ? 104 : 40, height: 32)
+            .foregroundStyle(on ? onColor : Theme.muted)
+            .background(on ? (onColor == .white ? Color.white.opacity(0.1) : Theme.accent.opacity(0.25)) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? (onColor == .white ? .white : Theme.accent) : Theme.border))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 
     private func modeButton(_ mode: String, _ icon: String, _ label: String) -> some View {
