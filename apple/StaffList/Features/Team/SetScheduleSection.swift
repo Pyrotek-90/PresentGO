@@ -72,7 +72,8 @@ struct SetTeamSection: View {
             }
     }
 
-    private var positionWidth: CGFloat { 120 }
+    private var groupWidth: CGFloat { 92 }
+    private var positionWidth: CGFloat { 104 }
 
     var body: some View {
         Section {
@@ -88,12 +89,9 @@ struct SetTeamSection: View {
                 columnHeader
                 ForEach(ScheduleMatrix.MatrixGroup.allCases, id: \.self) { group in
                     let list = rows(in: group)
-                    if !list.isEmpty {
-                        Text(group.label.uppercased())
-                            .font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(Theme.accentLight)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .listRowBackground(Color.secondary.opacity(0.08))
-                        ForEach(list) { assignmentRow($0) }
+                    // The group's name sits in the first column of its first row only.
+                    ForEach(Array(list.enumerated()), id: \.element.id) { i, a in
+                        assignmentRow(a, group: i == 0 ? group : nil)
                     }
                 }
                 if canEdit { sendRow }
@@ -156,9 +154,10 @@ struct SetTeamSection: View {
         .padding(.vertical, 2)
     }
 
-    /// POSITION · NAME · STATUS, like the Who's Serving table.
+    /// TEAM · POSITION · NAME · STATUS, like the Who's Serving table.
     private var columnHeader: some View {
         HStack(spacing: 10) {
+            Text("Team").frame(width: groupWidth, alignment: .leading)
             Text("Position").frame(width: positionWidth, alignment: .leading)
             Text("Name").frame(maxWidth: .infinity, alignment: .leading)
             Text("Status")
@@ -168,10 +167,14 @@ struct SetTeamSection: View {
         .accessibilityHidden(true)
     }
 
-    private func assignmentRow(_ a: Assignment) -> some View {
+    private func assignmentRow(_ a: Assignment, group: ScheduleMatrix.MatrixGroup?) -> some View {
         let m = members[a.memberId]
         let draft = (a.status ?? "draft") == "draft"
         return HStack(spacing: 10) {
+            Text(group?.label.uppercased() ?? "")
+                .font(.caption2.weight(.bold)).tracking(0.6).foregroundStyle(Theme.accentLight)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(width: groupWidth, alignment: .leading)
             Text(posById[a.positionId]?.name ?? "")
                 .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 .frame(width: positionWidth, alignment: .leading)
