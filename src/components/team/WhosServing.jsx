@@ -4,28 +4,13 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useChurch } from '../../contexts/ChurchContext'
 import { useScheduling } from '../../lib/useScheduling'
-import SchedulePane, { sectionOf } from '../calendar/SchedulePane'
+import { useUpgrade } from '../../contexts/UpgradeContext'
+import SchedulePane from '../calendar/SchedulePane'
+import { GROUPS, groupOf, rankOf, STATUS_DOT as DOT } from '../../lib/teamGroups'
 import { todayISO, formatSetTime } from '../../lib/sets'
 
+const DRAG_TYPE = 'application/x-stafflist-assignment'
 const OPEN_KEY = 'stafflist.whosServingOpen'
-const GROUPS = [{ id: 'production', label: 'Production' }, { id: 'singers', label: 'Singers' }, { id: 'musicians', label: 'Musicians' }]
-const PRODUCTION_WORDS = ['presenter', 'audio', 'sound', 'light', 'video', 'camera', 'stream', 'slide', 'lyric', 'media', 'tech', 'production', 'stage', 'broadcast', 'projection', 'propresenter', 'mix', 'director', 'producer', 'graphics', 'photo']
-const SINGER_WORDS = ['sing', 'vocal', 'voice', 'choir', 'bgv', 'worship leader', 'lead']
-const RANK = ['presenter', 'audio', 'singer', 'keys', 'acoustic', 'electric', 'bass', 'drums']
-const lc = s => (s || '').toLowerCase()
-
-// The matrix has three groups: behind-the-scenes roles, singers and instrumentalists.
-function groupOf(p) {
-  const s = sectionOf(p)
-  if (s !== 'other') return s
-  const n = lc(p.name)
-  if (PRODUCTION_WORDS.some(w => n.includes(w))) return 'production'
-  if (SINGER_WORDS.some(w => n.includes(w))) return 'singers'
-  return 'musicians'
-}
-const rankOf = p => { const i = RANK.indexOf(lc(p.name)); return i < 0 ? 100 : i }
-
-const DOT = { accepted: 'bg-green-500', declined: 'bg-red-500', invited: 'bg-orange-400', draft: 'bg-[#8a8a8a]' }
 const LEGEND = [['accepted', 'Accepted'], ['invited', 'Waiting'], ['declined', 'Declined'], ['draft', 'Not sent']]
 
 const whenLabel = s => [
@@ -46,6 +31,9 @@ export default function WhosServing({ members, setMembers, positions }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(null)
   const [schedId, setSchedId] = useState(null)
+  const { requirePro } = useUpgrade()
+  const [dropKey, setDropKey] = useState(null)   // cell a person is being dragged over
+  const [dragNote, setDragNote] = useState(null) // { ok, text }
   const { assignments, error: schedError, refresh: refreshAssignments, addAssignment, removeAssignment, sendInvites, sending, sendResult, setSendResult } =
     useScheduling({ members, setMembers, positions, sets })
   const paneRef = useRef(null)
@@ -110,6 +98,20 @@ export default function WhosServing({ members, setMembers, positions }) {
   const showSet = s => { if (!s) return; setSchedId(s.id); setSendResult(null) }
   const pickColumn = s => { showSet(s); setTimeout(() => paneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50) }
 
+  // Drag a person onto another set (any cell in its column) to put them on that set in that row's position.
+  const dropOn = async (target, position, e) => {
+    e.preventDefault(); setDropKey(null)
+    let payload
+    try { payload = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)) } catch { return }
+    const m = members.find(x => x.id === payload.memberId)
+    if (!m || !requirePro('Scheduling your team')) return
+    if (assignments.some(a => a.set_id === target.id && a.member_id === m.id && a.position_id === position.id)) {
+      setDragNote({ ok: false, text: `${m.name} is already on ${target.name} as ${position.name}.` }); return
+    }
+    const err = await addAssignment(target.id, position.id, m.id)
+    setDragNote(err ? { ok: false, text: err } : { ok: true, text: `${m.name} added to ${target.name} as ${position.name}. Not sent yet — use Send Requests to ask them.` })
+  }
+
   const isNext = s => dated[nextIdx]?.id === s.id
   const isPast = s => s.service_date < today
   const cellBand = 'bg-[#1a1a1a]'
@@ -172,15 +174,17 @@ export default function WhosServing({ members, setMembers, positions }) {
                     </tr>
                     {rows.map(g => (
                       <GroupRows key={g.id} group={g} columns={columns} people={people} memById={memById}
-                        cellBand={cellBand} isPast={isPast} isNext={isNext} selectedId={schedSet?.id} />
+                        cellBand={cellBand} isPast={isPast} isNext={isNext} selectedId={schedSet?.id}
+                        dropKey={dropKey} setDropKey={setDropKey} onDrop={dropOn} />
                     ))}
                   </tbody>
                 </table>
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-[11px] text-muted border-t border-border/50">
                 {LEGEND.map(([k, t]) => <span key={k} className="flex items-center gap-1.5"><span className={`w-[7px] h-[7px] rounded-full ${DOT[k]}`} />{t}</span>)}
-                <span className="ml-auto text-[#6f6f6f]">Click a set to edit its team</span>
+                <span className="ml-auto text-[#6f6f6f]">Click a set to edit its team · drag a person onto another set to add them</span>
               </div>
+              {dragNote && <p className={`px-3 pb-2 text-xs ${dragNote.ok ? 'text-green-400' : 'text-amber-300'}`}>{dragNote.text}</p>}
 
             </>
           )}
@@ -203,7 +207,7 @@ export default function WhosServing({ members, setMembers, positions }) {
 }
 
 // One group's band (Production / Singers / Musicians) and a row per position.
-function GroupRows({ group, columns, people, memById, cellBand, isPast, isNext, selectedId }) {
+function GroupRows({ group, columns, people, memById, cellBand, isPast, isNext, selectedId, dropKey, setDropKey, onDrop }) {
   return (
     <>
       <tr>
@@ -215,9 +219,13 @@ function GroupRows({ group, columns, people, memById, cellBand, isPast, isNext, 
           {columns.map(s => {
             const list = people(p, s)
             return (
-              <td key={s.id} className={`align-top p-2 border-r border-border/30 border-b border-border/40 ${isPast(s) ? 'opacity-60' : ''} ${s.id === selectedId ? 'bg-accent/15' : isNext(s) ? 'bg-accent/[0.07]' : ''}`}>
+              <td key={s.id} onDragOver={e => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (dropKey !== `${s.id}-${p.id}`) setDropKey(`${s.id}-${p.id}`) } }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropKey(k => (k === `${s.id}-${p.id}` ? null : k)) }}
+                onDrop={e => onDrop(s, p, e)}
+                className={`align-top p-2 border-r border-border/30 border-b border-border/40 ${isPast(s) ? 'opacity-60' : ''} ${dropKey === `${s.id}-${p.id}` ? 'bg-accent/30 ring-1 ring-inset ring-accent' : s.id === selectedId ? 'bg-accent/15' : isNext(s) ? 'bg-accent/[0.07]' : ''}`}>
                 {list.length === 0 ? <span className="text-[#6f6f6f]">—</span> : list.map(a => (
-                  <span key={a.id} className="flex items-center gap-1.5 min-w-0 leading-5" title={`${memById[a.member_id].name}: ${a.status || 'draft'}`}>
+                  <span key={a.id} draggable onDragStart={e => { e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ memberId: a.member_id, positionId: p.id, fromSet: s.id })); e.dataTransfer.effectAllowed = 'copy' }}
+                    className="flex items-center gap-1.5 min-w-0 leading-5 cursor-grab active:cursor-grabbing" title={`${memById[a.member_id].name}: ${a.status || 'draft'}. Drag onto another set to add them there.`}>
                     <span className={`w-[7px] h-[7px] rounded-full shrink-0 ${DOT[a.status] || DOT.draft}`} />
                     <span className="truncate">{memById[a.member_id].name}</span>
                   </span>
