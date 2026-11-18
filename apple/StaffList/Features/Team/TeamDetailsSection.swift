@@ -2,12 +2,13 @@ import SwiftUI
 import Supabase
 
 /// Team Details at the top of the Team page, like the web (src/components/team/TeamDetails.jsx):
-/// the organization, location, contact and welcome note every invitation email carries.
+/// the organization, contact and welcome note every invitation email carries.
 /// Collapsible; a team with no details yet opens it so they get filled in. Admins also rename
 /// the team here.
 struct TeamDetailsSection: View {
     @Environment(SessionStore.self) private var session
     @AppStorage("teamDetailsOpen") private var open = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var name = ""
     @State private var details: [String: String] = [:]
@@ -16,7 +17,7 @@ struct TeamDetailsSection: View {
     @State private var loadedFor: UUID?
 
     private enum SaveState { case idle, saving, saved, failed }
-    private static let fields = ["church_name", "location", "contact_name", "contact_email", "contact_phone", "welcome"]
+    private static let fields = ["church_name", "contact_name", "contact_email", "contact_phone", "welcome"]
 
     private var isAdmin: Bool { session.currentTeam?.role == "admin" }
     private var dirty: Bool {
@@ -26,8 +27,8 @@ struct TeamDetailsSection: View {
     /// Example text only guides the first entry.
     private var hasSaved: Bool { Self.fields.contains { !(saved?.details[$0] ?? "").isEmpty } }
     private var summary: String {
-        let s = [details["church_name"], details["location"]].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-        return s.isEmpty ? "Add your organization, location and contact for invitation emails" : s
+        let s = [details["church_name"], details["contact_name"]].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return s.isEmpty ? "Add your organization and contact for invitation emails" : s
     }
 
     var body: some View {
@@ -36,27 +37,22 @@ struct TeamDetailsSection: View {
                 Label("These details go in every invitation email: the invitation to join the team, and each set request.",
                       systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary)
-                field("Organization", "church_name", hint: "Grace Community Church")
-                LabeledContent("Team name") {
-                    TextField("Team name", text: $name, prompt: hasSaved ? nil : Text("Grace Worship Team"))
-                        .multilineTextAlignment(.trailing)
-                        .disabled(!isAdmin)
-                        .foregroundStyle(isAdmin ? .primary : .secondary)
-                        .onChange(of: name) { state = .idle }
+                // Organization · Team name, then the contact on one line, then the welcome note.
+                rows {
+                    box("Organization", text: binding("church_name"), hint: "Grace Community Church")
+                    box("Team name", text: Binding(get: { name }, set: { name = $0; state = .idle }), hint: "Grace Worship Team", enabled: isAdmin)
                 }
-                .accessibilityHint(isAdmin ? "" : "Only Admins can rename the team")
-                field("Location", "location", hint: "123 Main St, Schaumburg, IL")
-                field("Contact name", "contact_name", hint: session.user?.email?.split(separator: "@").first.map(String.init) ?? "")
-                field("Contact phone", "contact_phone", hint: "555.555.5555", keyboard: .phonePad)
-                field("Contact email", "contact_email", hint: session.user?.email ?? "", keyboard: .emailAddress)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Welcome message")
-                    TextField("Welcome message", text: binding("welcome"),
-                              prompt: hasSaved ? nil : Text("Glad you're joining us! We prepare with StaffList: your sets, charts and lyrics will be waiting for you."),
-                              axis: .vertical)
-                        .lineLimit(2...6)
-                        .foregroundStyle(.secondary)
+                rows {
+                    box("Contact name", text: binding("contact_name"),
+                        hint: session.user?.email?.split(separator: "@").first.map(String.init) ?? "")
+                    box("Contact phone", text: Binding(get: { details["contact_phone"] ?? "" },
+                                                       set: { details["contact_phone"] = MemberEditor.formatPhone($0); state = .idle }),
+                        hint: "555.555.5555", keyboard: .phonePad)
+                    box("Contact email", text: binding("contact_email"), hint: session.user?.email ?? "", keyboard: .emailAddress)
                 }
+                box("Welcome message", text: binding("welcome"),
+                    hint: "Glad you're joining us! We prepare with StaffList: your sets, charts and lyrics will be waiting for you.",
+                    multiline: true)
                 HStack(spacing: 12) {
                     Button(state == .saving ? "Saving…" : "Save Details") { Task { await save() } }
                         .buttonStyle(.borderedProminent)
@@ -87,18 +83,39 @@ struct TeamDetailsSection: View {
         Binding(get: { details[key] ?? "" }, set: { details[key] = $0; state = .idle })
     }
 
-    private func field(_ label: String, _ key: String, hint: String, keyboard: UIKeyboardType = .default) -> some View {
-        LabeledContent(label) {
-            TextField(label, text: key == "contact_phone"
-                      ? Binding(get: { details[key] ?? "" }, set: { details[key] = MemberEditor.formatPhone($0); state = .idle })
-                      : binding(key),
-                      prompt: hasSaved || hint.isEmpty ? nil : Text(hint))
-                .multilineTextAlignment(.trailing)
-                .keyboardType(keyboard)
-                .textInputAutocapitalization(keyboard == .emailAddress ? .never : .sentences)
-                .autocorrectionDisabled(keyboard != .default)
-                .foregroundStyle(.secondary)
+    /// Side by side on the iPad, stacked on the iPhone.
+    @ViewBuilder
+    private func rows<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if sizeClass == .regular {
+            HStack(alignment: .top, spacing: 10) { content() }
+        } else {
+            VStack(spacing: 10) { content() }
         }
+    }
+
+    /// A small labeled text box, like the web form's inputs.
+    private func box(_ label: String, text: Binding<String>, hint: String,
+                     keyboard: UIKeyboardType = .default, enabled: Bool = true, multiline: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Group {
+                if multiline {
+                    TextField(label, text: text, prompt: hasSaved ? nil : Text(hint), axis: .vertical).lineLimit(2...6)
+                } else {
+                    TextField(label, text: text, prompt: hasSaved || hint.isEmpty ? nil : Text(hint))
+                }
+            }
+            .font(.subheadline)
+            .keyboardType(keyboard)
+            .textInputAutocapitalization(keyboard == .emailAddress ? .never : .sentences)
+            .autocorrectionDisabled(keyboard != .default)
+            .disabled(!enabled)
+            .foregroundStyle(enabled ? .primary : .secondary)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
     }
 
     private struct Row: Decodable { let name: String; let details: [String: String]? }

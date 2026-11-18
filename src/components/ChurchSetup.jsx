@@ -52,7 +52,7 @@ export default function ChurchSetup() {
               <span className="w-8 h-8 rounded-lg bg-accent/20 text-accent-light flex items-center justify-center"><Users size={16} /></span>
               <h2 className="font-semibold">{inv.inviter || 'A worship leader'} invited you to join {inv.team}</h2>
             </div>
-            {(inv.details?.church_name || inv.details?.location) && <p className="text-sm text-muted">{[inv.details.church_name, inv.details.location].filter(Boolean).join(' · ')}</p>}
+            {inv.details?.church_name && <p className="text-sm text-muted">{inv.details.church_name}</p>}
             {inv.details?.welcome && <p className="text-sm whitespace-pre-line">{inv.details.welcome}</p>}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => answer(inv, 'accepted')} disabled={busy === inv.member_id} className="btn-primary flex items-center justify-center gap-1.5"><Check size={15} /> Join the team</button>

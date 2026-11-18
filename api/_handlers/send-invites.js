@@ -5,7 +5,7 @@
 //    the team yet gets the join invitation instead, listing the sets they've been asked to serve;
 //    they answer those on the join page once they've joined.
 //
-// Every email carries the team's details (organization, location, contact, welcome) and each
+// Every email carries the team's details (organization, contact, welcome) and each
 // set's extra times (rehearsal, practice… as the leader named them).
 // The caller's own Supabase login is used for every read and write, so row-level security
 // limits it to their own team. Needs RESEND_API_KEY and EMAIL_FROM in Vercel.
@@ -36,7 +36,6 @@ function teamInfo(team = {}, inviter) {
   return {
     name: team.name || 'the worship team',
     church: d.church_name || '',
-    location: d.location || '',
     welcome: d.welcome || '',
     contact,
     replyTo: d.contact_email || '',
@@ -49,12 +48,12 @@ function timeText(t) {
   const [h, m] = t.slice(0, 5).split(':').map(Number)
   return new Date(2000, 0, 1, h, m).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
-// Venue name, address and room, or the team's location when the set has none.
-const venueText = (set, team) => [set.venue_name, set.location_address, set.location_details].filter(Boolean).join(', ') || team?.location || ''
+// The set's venue name, address and room.
+const venueText = set => [set.venue_name, set.location_address, set.location_details].filter(Boolean).join(', ')
 // The set's details, one per line: Set, Date, Time, each extra time (Rehearsal…), Venue, Position.
 const setRows = (set, team, position) => [
   ['Set', set.name], ['Date', dateText(set.service_date)], ['Time', timeText(set.service_time)],
-  ...extraTimes(set).map(t => [t.label, extraTimeText(t)]), ['Venue', venueText(set, team)], ['Position', position],
+  ...extraTimes(set).map(t => [t.label, extraTimeText(t)]), ['Venue', venueText(set)], ['Position', position],
 ].filter(([, v]) => v)
 
 function setRequestEmail({ member, position, set, link, inviter, team }) {
@@ -92,7 +91,7 @@ function joinEmail({ member, link, inviter, team, requests }) {
     <p style="margin:0 0 16px;font-size:16px;line-height:1.5">${esc(inviter)} has invited you to join <b>${esc(team.name)}</b>${team.church ? ` at <b>${esc(team.church)}</b>` : ''} on StaffList.</p>
     ${team.welcome ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.5;padding:12px 14px;background:#f4f4f5;border-radius:8px;white-space:pre-line">${esc(team.welcome)}</p>` : ''}
     <table style="margin:0 0 20px;font-size:15px;line-height:1.6">
-      ${row('Team', team.name)}${row('Organization', team.church)}${row('Location', team.location)}${row('Contact', team.contact)}
+      ${row('Team', team.name)}${row('Organization', team.church)}${row('Contact', team.contact)}
     </table>
     ${reqHtml}
     ${btn(`${link}?r=accepted`, 'Join the team', '#0e7490')}${btn(`${link}?r=declined`, 'No thanks', '#71717a')}
@@ -101,7 +100,7 @@ function joinEmail({ member, link, inviter, team, requests }) {
   const text = [
     `Hi ${first},`, '', `${inviter} has invited you to join ${team.name}${team.church ? ` at ${team.church}` : ''} on StaffList.`,
     team.welcome ? `\n${team.welcome}\n` : '',
-    team.church ? `Organization: ${team.church}` : null, team.location ? `Location: ${team.location}` : null,
+    team.church ? `Organization: ${team.church}` : null,
     team.contact ? `Contact: ${team.contact}` : null,
     requests.length ? `\nYou've also been asked to serve:\n${requests.map(r => setRows(r.set, team, r.position).map(([k, v], i) => (i === 0 ? `- ${v}` : `  ${k}: ${v}`)).join('\n')).join('\n')}` : null,
     '', `Join the team: ${link}?r=accepted`, `No thanks: ${link}?r=declined`,

@@ -6,10 +6,10 @@ import { useChurch } from '../../contexts/ChurchContext'
 import { formatPhone, formatPhoneTyping } from '../../lib/phone'
 
 // church_name is shown as Organization. (Rehearsals now live on each set.)
-const FIELDS = ['church_name', 'location', 'contact_name', 'contact_email', 'contact_phone', 'welcome']
+const FIELDS = ['church_name', 'contact_name', 'contact_email', 'contact_phone', 'welcome']
 const KEY = 'stafflist.teamDetailsOpen'
 
-// Team page: the details every invitation email carries (organization, location, contact, a
+// Team page: the details every invitation email carries (organization, contact, a
 // welcome note). Admins also rename the team here.
 export default function TeamDetails() {
   const { user } = useAuth()
@@ -49,7 +49,7 @@ export default function TeamDetails() {
     if (isAdmin && name.trim() !== saved.name) refresh()
   }
 
-  const summary = [d.church_name, d.location].filter(Boolean).join(' · ') || 'Add your organization, location and contact for invitation emails'
+  const summary = [d.church_name, d.contact_name].filter(Boolean).join(' · ') || 'Add your organization and contact for invitation emails'
   const label = unitLabel.toLowerCase()
 
   return (
@@ -62,36 +62,32 @@ export default function TeamDetails() {
       {open && (
         <div className="px-4 pb-4 pt-1 border-t border-border space-y-3">
           <p className="text-xs text-muted flex items-start gap-1.5 pt-2"><Info size={13} className="shrink-0 mt-0.5" /> These details go in every invitation email: the invitation to join the {label}, and each set request.</p>
-          {/* Organization · Team name · Location, then the contact, then the welcome note */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="block">
+          {/* Organization · Team name, then the contact on one line, then the welcome note */}
+          <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+            <label className="block sm:col-span-3">
               <span className="label !mb-1">Organization</span>
               <input className="input !h-10" value={d.church_name} onChange={set('church_name')} placeholder={hint("Grace Community Church")} />
             </label>
-            <label className="block">
+            <label className="block sm:col-span-3">
               <span className="label !mb-1">{unitLabel} name</span>
               <input className="input !h-10" value={name} onChange={e => { setName(e.target.value); setState(null) }} disabled={!isAdmin}
                 placeholder={hint("Grace Worship Team")} title={isAdmin ? undefined : 'Only Admins can rename the team'} />
             </label>
-            <label className="block">
-              <span className="label !mb-1">Location</span>
-              <input className="input !h-10" value={d.location} onChange={set('location')} placeholder={hint("123 Main St, Schaumburg, IL")} />
-            </label>
-            <label className="block">
+            <label className="block sm:col-span-2">
               <span className="label !mb-1">Contact name</span>
               <input className="input !h-10" value={d.contact_name} onChange={set('contact_name')} placeholder={hint(me)} />
             </label>
-            <label className="block">
+            <label className="block sm:col-span-2">
               <span className="label !mb-1">Contact phone</span>
               <input className="input !h-10" type="tel" inputMode="tel" value={d.contact_phone} placeholder={hint("555.555.5555")}
                 onChange={e => { setD(x => ({ ...x, contact_phone: formatPhoneTyping(e.target.value) })); setState(null) }}
                 onBlur={() => setD(x => ({ ...x, contact_phone: formatPhone(x.contact_phone || '') }))} />
             </label>
-            <label className="block">
+            <label className="block sm:col-span-2">
               <span className="label !mb-1">Contact email</span>
               <input className="input !h-10" type="email" value={d.contact_email} onChange={set('contact_email')} placeholder={hint(user?.email || '')} title="Replies to invitation emails go here" />
             </label>
-            <label className="block sm:col-span-3">
+            <label className="block sm:col-span-6">
               <span className="label !mb-1">Welcome message</span>
               <textarea className="input !h-auto py-2 min-h-[3.5rem]" rows={2} value={d.welcome} onChange={set('welcome')} maxLength={1000}
                 placeholder={hint("Glad you're joining us! We prepare with StaffList: your sets, charts and lyrics will be waiting for you.")} />
