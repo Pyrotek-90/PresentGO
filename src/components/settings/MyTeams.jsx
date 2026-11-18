@@ -13,7 +13,7 @@ export default function MyTeams() {
         <Palette size={18} className="text-accent-light shrink-0 mt-0.5" />
         <div className="min-w-0">
           <p className="text-sm font-medium text-primary">My teams &amp; colors</p>
-          <p className="text-xs text-muted">Sets from each team show in its color on Home, the Schedule calendar and that team's calendar subscription. Tap a color to change it; only you see your colors.</p>
+          <p className="text-xs text-muted">Sets from each team show in its color on the Sets calendar and list and in that team's calendar subscription. Tap a color to change it; only you see your colors.</p>
         </div>
       </div>
       <ul className="divide-y divide-border rounded-lg border border-border">

@@ -262,6 +262,8 @@ export default function Settings() {
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Preferences</h2>
 
+          <OfflineMode />
+
           <div className="card flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <Music size={18} className="text-accent-light shrink-0" />
@@ -292,8 +294,6 @@ export default function Settings() {
               {libLangOptions.map(l => <option key={l}>{l}</option>)}
             </select>
           </div>
-
-          <OfflineMode />
 
           <CalendarSync />
 

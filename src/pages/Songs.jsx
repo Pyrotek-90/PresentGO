@@ -1,27 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
 import Layout from '../components/Layout'
-import SetsPane from '../components/home/SetsPane'
-import WeeklyThought from '../components/home/WeeklyThought'
 import SongsPane from '../components/home/SongsPane'
 import SongEditor from '../components/songs/SongEditor'
 import SongViewer from '../components/songs/SongViewer'
-import { groupSets, createSet as insertSet, todayISO } from '../lib/sets'
+import { groupSets, createSet as insertSet } from '../lib/sets'
 import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
-import { loadServingSets, mergeServing, setHref } from '../lib/serving'
 
-export default function Dashboard() {
+// Songs tab: the Song Library (search, filters, add to a set, view, edit).
+export default function Songs() {
   const { user } = useAuth()
-  const { scope, isEditor, canEditSet, legacy } = useChurch()
-  const [serving, setServing] = useState([])   // sets I serve on in other teams (and requests)
+  const { scope, isEditor } = useChurch()
   const scopeKey = `${scope.churchId}|${scope.workspaceId}`
-  const navigate = useNavigate()
   const [sets, setSets] = useState([])
   const [songs, setSongs] = useState([])
-  const [loadingSets, setLoadingSets] = useState(true)
   const [loadingSongs, setLoadingSongs] = useState(true)
   const [targetSetId, setTargetSetId] = useState(null)
   const [editing, setEditing] = useState(null) // song, or true for new
@@ -29,12 +23,10 @@ export default function Dashboard() {
   const [justAdded, setJustAdded] = useState([])   // new songs stay in view even if they'd normally be hidden
 
   useEffect(() => {
-    setLoadingSets(true); setLoadingSongs(true)
+    setLoadingSongs(true)
     scope.sets(supabase.from('sets').select('*, set_items(type, content)'))
       .then(({ data }) => setSets(data || []))
       .catch(() => {})
-      .finally(() => setLoadingSets(false))
-    if (!legacy) loadServingSets().then(setServing)
     scope.church(supabase.from('songs').select('*'))
       .then(({ data }) => setSongs(data || []))
       .catch(() => {})
@@ -62,14 +54,6 @@ export default function Dashboard() {
     const { upcoming, past } = groupSets(sets)
     setTargetSetId((upcoming[0] || past[0])?.id || null)
   }, [sets, targetSetId])
-
-  // "+ New Set": create the set right away and open it with Edit details showing.
-  const createSet = async () => {
-    const { data, error } = await insertSet(supabase, scope, { name: 'New Set', date: todayISO() })
-    if (error) return 'Could not create set. Please try again.'
-    navigate(`/sets/${data.id}`, { state: { newSet: true } })
-    return null
-  }
 
   // "+ New Set" from the Song Library: create the set, make it the add-to target, stay here.
   const createTargetSet = async fields => {
@@ -101,9 +85,6 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto p-4 md:p-6 flex flex-col gap-3 h-[calc(100dvh-4.5rem)]">
-        <WeeklyThought />
-        <SetsPane readOnly={!isEditor} sets={legacy ? sets : mergeServing(sets, serving, canEditSet)} loading={loadingSets} targetSetId={targetSetId}
-          onOpen={(id, set) => navigate(set ? setHref(set) : `/sets/${id}`)} onCreate={createSet} />
         <SongsPane readOnly={!isEditor} songs={songs} loading={loadingSongs} sets={sets} targetSetId={targetSetId}
           onTargetChange={setTargetSetId} onCreateSet={createTargetSet} onAdd={addToSet} onEdit={setEditing}
           onView={setViewing} onNew={() => setEditing(true)}

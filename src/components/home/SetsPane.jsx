@@ -1,19 +1,17 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Plus, ChevronRight, ChevronDown, CalendarDays, Repeat } from 'lucide-react'
+import { Plus, ChevronRight, ChevronDown, Repeat } from 'lucide-react'
 import { groupSets, formatSetWhen, songCount } from '../../lib/sets'
 import { useChurch } from '../../contexts/ChurchContext'
-import TeamColorKey from '../TeamColorKey'
 import { dotStyle } from '../../lib/teamColors'
 
-// Home shows a short list so the Song Library gets the room; the Schedule page has every set.
-const UPCOMING_SHOWN = 4   // phones show 3
+// Upcoming shows a few sets at a time (More shows more); Past shows the two most recent, earlier ones are on the calendar.
+const UPCOMING_SHOWN = 5
 const PAST_SHOWN = 2
 const COLLAPSE_KEY = 'presentgo.setsCollapsed'
 
 // Sets from teams I serve on show in that team's color, with my position; a request waiting
 // for my answer says so.
-function SetRow({ set, isTarget, onOpen, className = '' }) {
+export function SetRow({ set, isTarget, onOpen, className = '' }) {
   const { teamColor, churches } = useChurch()
   const n = songCount(set)
   const sv = set.serving
@@ -44,11 +42,11 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate,
     try { return localStorage.getItem(COLLAPSE_KEY) === '1' } catch { return false }
   })
   const [creating, setCreating] = useState(false)
+  const [upcomingShown, setUpcomingShown] = useState(UPCOMING_SHOWN)
   const [error, setError] = useState(null)
   const { upcoming, past } = groupSets(sets)
-  const shownUpcoming = upcoming.slice(0, UPCOMING_SHOWN)
+  const shownUpcoming = upcoming.slice(0, upcomingShown)
   const shownPast = past.slice(0, PAST_SHOWN)
-  const more = upcoming.length > 3 || past.length > PAST_SHOWN
 
   const toggle = () => setCollapsed(c => {
     try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1') } catch { /* ignore */ }
@@ -68,7 +66,7 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate,
       <div className="flex items-center justify-between gap-3 px-3 py-2 shrink-0">
         <button onClick={toggle} className="flex items-center gap-2 min-w-0 text-left" aria-expanded={!collapsed}>
           <ChevronDown size={16} className={`text-muted transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-          <h2 className="font-semibold">{readOnly ? 'My Sets' : 'Set Lists'}</h2>
+          <h2 className="font-semibold">{readOnly ? 'My Sets' : 'Sets'}</h2>
           <span className="text-xs text-muted">{sets.length}</span>
         </button>
         {!readOnly && (
@@ -91,26 +89,21 @@ export default function SetsPane({ sets, loading, targetSetId, onOpen, onCreate,
                 {upcoming.length > 0 && (
                   <div>
                     <p className="px-3 pt-1 text-[10px] uppercase tracking-widest text-muted">Upcoming</p>
-                    {shownUpcoming.map((s, i) => (
-                      <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} className={i >= 3 ? 'hidden sm:flex' : ''} />
-                    ))}
+                    {shownUpcoming.map(s => <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} />)}
+                    {upcoming.length > upcomingShown && (
+                      <button onClick={() => setUpcomingShown(n => n + 5)}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-muted hover:text-accent-light transition-colors">
+                        <ChevronDown size={12} /> More ({upcoming.length - upcomingShown})
+                      </button>
+                    )}
                   </div>
                 )}
                 {past.length > 0 && (
                   <div>
                     <p className="px-3 pt-1 text-[10px] uppercase tracking-widest text-muted">Past</p>
                     {shownPast.map(s => <SetRow key={s.id} set={s} isTarget={s.id === targetSetId} onOpen={onOpen} />)}
+                    {past.length > PAST_SHOWN && <p className="px-3 pt-1 pb-0.5 text-[11px] text-muted">For earlier sets, go back on the calendar and pick a day.</p>}
                   </div>
-                )}
-                {(() => {
-                  const ids = [...new Set(sets.filter(s => s.serving).map(s => s.serving.churchId))]
-                  return ids.length > 0 && <TeamColorKey ids={ids} label="Teams you serve on" className="px-3 pt-1.5" />
-                })()}
-                {more && (
-                  <Link to="/schedule"
-                    className="w-full flex items-center justify-center gap-1.5 pt-1.5 pb-0.5 text-xs text-muted hover:text-accent-light transition-colors">
-                    <CalendarDays size={12} /> See all {sets.length} sets in Schedule
-                  </Link>
                 )}
               </>
             )}

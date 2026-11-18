@@ -115,7 +115,7 @@ export default function SetEditor() {
   const { present, requirePresent } = useUpgrade()   // presenting is Solo and up
   const navigate = useNavigate()
   const location = useLocation()
-  const [isNew, setIsNew] = useState(!!location.state?.newSet)   // just created from Home's + New Set
+  const [isNew, setIsNew] = useState(!!location.state?.newSet)   // just created from the Sets tab's + New Set
   const [set, setSet]       = useState(null)
   const [items, setItems]   = useState([])
   const [songs, setSongs]   = useState({})
@@ -285,7 +285,7 @@ export default function SetEditor() {
   }
   const openDetails = () => openDetailsFor(set)
 
-  // Cancel on a brand-new, still-empty set discards it and goes back Home.
+  // Cancel on a brand-new, still-empty set discards it and goes back to Sets.
   const cancelDetails = async () => {
     if (isNew && items.length === 0 && setId !== 'mock') {
       await supabase.from('sets').delete().eq('id', setId)
@@ -570,7 +570,7 @@ export default function SetEditor() {
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="btn-ghost p-1.5 rounded-lg shrink-0" aria-label="Back to Home">
+          <button onClick={() => navigate('/')} className="btn-ghost p-1.5 rounded-lg shrink-0" aria-label="Back to Sets">
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0 flex-1">

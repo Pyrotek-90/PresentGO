@@ -3,6 +3,7 @@ import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Downloa
 import { loadAccountStatus } from '../lib/notifications'
 import MessageTeamDialog from '../components/team/MessageTeamDialog'
 import TeamDetails from '../components/team/TeamDetails'
+import WhosServing from '../components/team/WhosServing'
 import { postInvites, mailJoinInvite, inviteSummary } from '../lib/invites'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -424,6 +425,7 @@ export default function Team() {
             )}
           </div>
         </section>
+        {!loading && positions.length > 0 && <WhosServing members={members} setMembers={setMembers} positions={positions} />}
       </div>
       {messaging && <MessageTeamDialog scope={scope} members={members} positions={positions} accounts={accounts} onClose={() => setMessaging(false)} />}
     </Layout>

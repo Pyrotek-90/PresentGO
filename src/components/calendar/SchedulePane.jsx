@@ -21,9 +21,9 @@ const SECTIONS = [
   { id: 'other', label: 'Other', names: [], categories: [] },
 ]
 const lc = s => (s || '').toLowerCase()
-const sectionOf = p => (SECTIONS.find(sec => sec.names.some(n => lc(n) === lc(p.name)))
+export const sectionOf = p => (SECTIONS.find(sec => sec.names.some(n => lc(n) === lc(p.name)))
   || SECTIONS.find(sec => sec.categories.includes(p.category)) || SECTIONS[3]).id
-const rankInSection = p => {
+export const rankInSection = p => {
   const sec = SECTIONS.find(x => x.id === sectionOf(p))
   const i = sec.names.findIndex(n => lc(n) === lc(p.name))
   return i < 0 ? 100 : i
