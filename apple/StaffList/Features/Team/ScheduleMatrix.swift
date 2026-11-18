@@ -39,23 +39,30 @@ struct ScheduleMatrix: View {
         }
     }
 
-    /// The matrix's two groups: the behind-the-scenes roles, and everyone on stage.
+    /// The matrix's groups: the behind-the-scenes roles, the singers, and the instrumentalists.
     enum MatrixGroup: String, CaseIterable {
-        case production, band
-        var label: String { self == .production ? "Production" : "Band" }
+        case production, singers, musicians
+        var label: String { rawValue.capitalized }
 
         private static let productionWords = ["presenter", "audio", "sound", "light", "video", "camera",
             "stream", "slide", "lyric", "media", "tech", "production", "stage", "broadcast", "projection",
             "propresenter", "mix", "director", "producer", "graphics", "photo"]
+        private static let singerWords = ["sing", "vocal", "voice", "choir", "bgv", "worship leader", "lead"]
 
         static func of(_ p: Position) -> MatrixGroup {
-            if TeamSection.of(p) == .production { return .production }
-            if TeamSection.of(p) != .other { return .band }
-            let name = p.name.lowercased()
-            return productionWords.contains { name.contains($0) } ? .production : .band
+            switch TeamSection.of(p) {
+            case .production: return .production
+            case .singers: return .singers
+            case .musicians: return .musicians
+            case .other:
+                let name = p.name.lowercased()
+                if productionWords.contains(where: { name.contains($0) }) { return .production }
+                if singerWords.contains(where: { name.contains($0) }) { return .singers }
+                return .musicians
+            }
         }
 
-        /// Standard roles first in the web's order (singers before musicians), then the team's own.
+        /// Standard roles first in the web's order, then the team's own.
         static func rank(_ p: Position) -> Int {
             let order = ["presenter", "audio", "singer", "keys", "acoustic", "electric", "bass", "drums"]
             return order.firstIndex(of: p.name.lowercased()) ?? 100
@@ -67,8 +74,8 @@ struct ScheduleMatrix: View {
             .sorted { (members[$0.memberId]?.name ?? "") < (members[$1.memberId]?.name ?? "") }
     }
 
-    /// Songs, then every position the team has: Production (Presenter, Audio, Lighting…) and
-    /// Band (singers, then musicians).
+    /// Songs, then every position the team has: Production (Presenter, Audio, Lighting…),
+    /// Singers, and Musicians (every instrument).
     private var rows: [Row] {
         var out: [Row] = [.header, .songsTitle, .songs]
         let order = Dictionary(uniqueKeysWithValues: positions.enumerated().map { ($1.id, $0) })
