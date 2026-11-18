@@ -115,6 +115,7 @@ export default function WhosServing({ members, setMembers, positions }) {
   const cellBand = 'bg-[#1a1a1a]'
 
   return (
+    <>
     <section className="rounded-xl border border-border bg-card overflow-hidden">
       <button onClick={toggle} aria-expanded={open} className="w-full flex items-center gap-2 px-3 py-2 text-left">
         <ChevronDown size={16} className={`text-muted transition-transform shrink-0 ${open ? '' : '-rotate-90'}`} />
@@ -181,19 +182,23 @@ export default function WhosServing({ members, setMembers, positions }) {
                 <span className="ml-auto text-[#6f6f6f]">Click a set to edit its team</span>
               </div>
 
-              <div ref={paneRef} className="p-3 border-t border-border scroll-mt-4">
-                <SchedulePane key={schedSet?.id || 'none'} set={schedSet} index={schedIndex} total={dated.length} active multi={false}
-                  onPrev={() => showSet(dated[schedIndex - 1])} onNext={() => showSet(dated[schedIndex + 1])}
-                  positions={positions} members={members}
-                  assignments={schedSet ? assignments.filter(a => a.set_id === schedSet.id) : []}
-                  onAdd={(pid, mid) => addAssignment(schedSet.id, pid, mid)} onRemove={removeAssignment}
-                  onSend={sendInvites} sending={sending} sendResult={schedSet && sendResult?.setId === schedSet.id ? sendResult : null} onRefresh={refreshAssignments} />
-              </div>
             </>
           )}
         </div>
       )}
     </section>
+    {loaded && columns.length > 0 && (
+      // The set's team is its own card below the matrix, so the page scrolls past the matrix.
+      <div ref={paneRef} className="scroll-mt-4">
+        <SchedulePane key={schedSet?.id || 'none'} set={schedSet} index={schedIndex} total={dated.length} active multi={false}
+          onPrev={() => showSet(dated[schedIndex - 1])} onNext={() => showSet(dated[schedIndex + 1])}
+          positions={positions} members={members}
+          assignments={schedSet ? assignments.filter(a => a.set_id === schedSet.id) : []}
+          onAdd={(pid, mid) => addAssignment(schedSet.id, pid, mid)} onRemove={removeAssignment}
+          onSend={sendInvites} sending={sending} sendResult={schedSet && sendResult?.setId === schedSet.id ? sendResult : null} onRefresh={refreshAssignments} />
+      </div>
+    )}
+    </>
   )
 }
 
