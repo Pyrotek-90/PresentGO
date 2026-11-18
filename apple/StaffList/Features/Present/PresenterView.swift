@@ -19,6 +19,9 @@ struct PresenterView: View {
     @State private var selectedGroupID: String?
     @AppStorage("controllerGridMode") private var gridMode = "tiles"
     @State private var showSlideFullScreen = false
+    /// Width of the control row; Loop and Blank show their names only when there's room (landscape).
+    @State private var controlWidth: CGFloat = 0
+    private var roomyControls: Bool { sizeClass == .regular && controlWidth >= 1000 }
     @FocusState private var focused: Bool
 
     init(set: ServiceSet) { self.set = set }
@@ -234,7 +237,7 @@ struct PresenterView: View {
             }
             .frame(maxWidth: .infinity)
 
-            if sizeClass == .regular, let title = groupForGrid?.title {
+            if roomyControls, let title = groupForGrid?.title {
                 Text(title).font(.subheadline.weight(.semibold)).lineLimit(1).frame(maxWidth: 260)
             }
 
@@ -272,19 +275,25 @@ struct PresenterView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background(GeometryReader { g in
+            Color.clear
+                .onAppear { controlWidth = g.size.width }
+                .onChange(of: g.size.width) { _, w in controlWidth = w }
+        })
     }
 
     /// Loop / Blank: the same 32-point height and icon size as the view and arrow buttons, with a
-    /// fixed width so "Blank" and "Unblank" don't change size (icon only on narrow screens).
+    /// fixed width so "Blank" and "Unblank" don't change size. In portrait (and on iPhone) they're
+    /// icon-only, exactly the size of the arrow buttons.
     private func toggleButton(_ title: String, systemImage: String, on: Bool, onColor: Color = Theme.accentLight, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: systemImage)
-                if sizeClass == .regular {
+                if roomyControls {
                     Text(title).font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
                 }
             }
-            .frame(width: sizeClass == .regular ? 104 : 40, height: 32)
+            .frame(width: roomyControls ? 104 : 40, height: 32)
             .foregroundStyle(on ? onColor : Theme.muted)
             .background(on ? (onColor == .white ? Color.white.opacity(0.1) : Theme.accent.opacity(0.25)) : .clear, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? (onColor == .white ? .white : Theme.accent) : Theme.border))
