@@ -59,28 +59,20 @@ struct SetTeamSection: View {
         assignments.filter { ($0.status ?? "draft") == "draft" && members[$0.memberId]?.email != nil }
     }
 
-    /// One row per person: their assignments on this set, in position order.
-    private struct Person: Identifiable {
-        let member: TeamMember
-        let assignments: [Assignment]
-        var id: UUID { member.id }
-    }
-
-    private func people(in group: ScheduleMatrix.MatrixGroup) -> [Person] {
+    /// This group's assignments, in position order (Presenter, Audio… Singer… Keys, Acoustic…), then name.
+    private func rows(in group: ScheduleMatrix.MatrixGroup) -> [Assignment] {
         let pos = posById
         let order = Dictionary(uniqueKeysWithValues: positions.enumerated().map { ($1.id, $0) })
-        let rank: (Assignment) -> (Int, Int) = { a in
-            guard let p = pos[a.positionId] else { return (999, 999) }
-            return (ScheduleMatrix.MatrixGroup.rank(p), order[p.id] ?? 0)
-        }
-        let mine = assignments.filter { a in pos[a.positionId].map { ScheduleMatrix.MatrixGroup.of($0) == group } ?? false }
-        return Dictionary(grouping: mine, by: \.memberId)
-            .compactMap { id, list in members[id].map { Person(member: $0, assignments: list.sorted { rank($0) < rank($1) }) } }
+        return assignments
+            .filter { a in members[a.memberId] != nil && (pos[a.positionId].map { ScheduleMatrix.MatrixGroup.of($0) == group } ?? false) }
             .sorted { a, b in
-                let ra = rank(a.assignments[0]), rb = rank(b.assignments[0])
-                return ra != rb ? ra < rb : a.member.name < b.member.name
+                let pa = pos[a.positionId]!, pb = pos[b.positionId]!
+                let ra = (ScheduleMatrix.MatrixGroup.rank(pa), order[pa.id] ?? 0), rb = (ScheduleMatrix.MatrixGroup.rank(pb), order[pb.id] ?? 0)
+                return ra != rb ? ra < rb : (members[a.memberId]?.name ?? "") < (members[b.memberId]?.name ?? "")
             }
     }
+
+    private var positionWidth: CGFloat { 120 }
 
     var body: some View {
         Section {
@@ -93,14 +85,15 @@ struct SetTeamSection: View {
                     if canEdit { assignButton }
                 }
             } else {
+                columnHeader
                 ForEach(ScheduleMatrix.MatrixGroup.allCases, id: \.self) { group in
-                    let list = people(in: group)
+                    let list = rows(in: group)
                     if !list.isEmpty {
                         Text(group.label.uppercased())
-                            .font(.caption2.weight(.semibold)).tracking(0.8).foregroundStyle(.secondary)
-                            .listRowSeparator(.hidden)
-                            .padding(.bottom, -4)
-                        ForEach(list) { personRow($0) }
+                            .font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(Theme.accentLight)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .listRowBackground(Color.secondary.opacity(0.08))
+                        ForEach(list) { assignmentRow($0) }
                     }
                 }
                 if canEdit { sendRow }
@@ -117,8 +110,10 @@ struct SetTeamSection: View {
                 if canEdit && !assignments.isEmpty { assignButton.textCase(nil) }
             }
         }
+        // The sheet keeps its own copy while open, so changes here don't redraw (and close) it.
         .sheet(isPresented: $assigning, onDismiss: { Task { await load() } }) {
-            AssignTeamSheet(set: set, assignments: $assignments, members: $members, positions: $positions)
+            AssignTeamSheet(set: set, assignments: assignments, members: members, positions: positions)
+                .interactiveDismissDisabled(false)
         }
         .task(id: set.id) { await load() }
     }
@@ -161,25 +156,39 @@ struct SetTeamSection: View {
         .padding(.vertical, 2)
     }
 
-    /// "Ana Smith   Keys, Singer   ● Accepted"
-    private func personRow(_ person: Person) -> some View {
-        let m = person.member
-        let names = person.assignments.compactMap { posById[$0.positionId]?.name }.joined(separator: ", ")
-        // The least settled answer: Declined, then Not sent, Waiting, Accepted.
-        let order = ["declined", "draft", "invited", "accepted"]
-        let status = person.assignments.map { $0.status ?? "draft" }.min { (order.firstIndex(of: $0) ?? 1) < (order.firstIndex(of: $1) ?? 1) }
+    /// POSITION · NAME · STATUS, like the Who's Serving table.
+    private var columnHeader: some View {
+        HStack(spacing: 10) {
+            Text("Position").frame(width: positionWidth, alignment: .leading)
+            Text("Name").frame(maxWidth: .infinity, alignment: .leading)
+            Text("Status")
+        }
+        .font(.system(size: 10, weight: .semibold)).tracking(0.8).textCase(.uppercase)
+        .foregroundStyle(.secondary)
+        .accessibilityHidden(true)
+    }
+
+    private func assignmentRow(_ a: Assignment) -> some View {
+        let m = members[a.memberId]
+        let draft = (a.status ?? "draft") == "draft"
         return HStack(spacing: 10) {
-            Text(m.name).font(.subheadline.weight(.medium)).lineLimit(1)
-            Text(names + (m.email == nil && status == "draft" ? " · no email" : ""))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            Spacer(minLength: 6)
-            StatusPill(status: status)
+            Text(posById[a.positionId]?.name ?? "")
+                .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                .frame(width: positionWidth, alignment: .leading)
+            HStack(spacing: 4) {
+                Text(m?.name ?? "Someone").font(.subheadline.weight(.medium)).lineLimit(1)
+                if m?.email == nil && draft {
+                    Text("· no email").font(.caption).foregroundStyle(.orange.opacity(0.8)).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            StatusPill(status: a.status)
         }
         .swipeActions {
             if canEdit {
-                Button("Remove", role: .destructive) { Task { await remove(person.assignments) } }
-                if person.assignments.contains(where: { $0.status == "invited" || $0.status == "declined" }), m.email != nil {
-                    Button("Resend") { Task { await resend(person.assignments) } }.tint(Theme.accent)
+                Button("Remove", role: .destructive) { Task { await remove([a]) } }
+                if a.status == "invited" || a.status == "declined", m?.email != nil {
+                    Button("Resend") { Task { await resend([a]) } }.tint(Theme.accent)
                 }
             }
         }
@@ -226,9 +235,16 @@ struct SetTeamSection: View {
 struct AssignTeamSheet: View {
     @Environment(\.dismiss) private var dismiss
     let set: ServiceSet
-    @Binding var assignments: [Assignment]
-    @Binding var members: [UUID: TeamMember]
-    @Binding var positions: [Position]
+    @State private var assignments: [Assignment]
+    @State private var members: [UUID: TeamMember]
+    @State private var positions: [Position]
+
+    init(set: ServiceSet, assignments: [Assignment], members: [UUID: TeamMember], positions: [Position]) {
+        self.set = set
+        _assignments = State(initialValue: assignments)
+        _members = State(initialValue: members)
+        _positions = State(initialValue: positions)
+    }
 
     @State private var search = ""
     @State private var group: ScheduleMatrix.MatrixGroup?
