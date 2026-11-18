@@ -40,7 +40,7 @@ enum TeamSection: String, CaseIterable, Identifiable {
 }
 
 /// Who's serving on a set, right in the set's list: one compact row per person with their
-/// position(s) and answer, grouped Production and Band. One Assign button opens the whole team
+/// position(s) and answer, grouped Production, Singers and Musicians. One Assign button opens the whole team
 /// to pick positions from; Send Requests asks everyone not asked yet.
 struct SetTeamSection: View {
     @Environment(SessionStore.self) private var session
