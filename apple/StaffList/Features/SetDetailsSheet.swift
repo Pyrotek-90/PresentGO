@@ -97,7 +97,7 @@ struct SetDetailsSheet: View {
                 }
 
                 Section("Location") {
-                    TextField("Venue (e.g. Main Sanctuary)", text: $venue)
+                    TextField("Venue", text: $venue)
                     TextField("Address", text: $address, axis: .vertical).textContentType(.fullStreetAddress)
                     TextField("Room or details", text: $room)
                 }
