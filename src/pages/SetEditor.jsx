@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,6 +15,7 @@ import AddItemModal from '../components/sets/AddItemModal'
 import SongEditor from '../components/songs/SongEditor'
 import SetSongViewer from '../components/songs/SetSongViewer'
 import ItemOptionsDialog from '../components/sets/ItemOptionsDialog'
+import SetTeamPane from '../components/team/SetTeamPane'
 import { formatLyrics } from '../lib/lyricFormatter'
 import { arrangedSlides } from '../lib/arrangement'
 import { stripRepeat } from '../lib/repeat'
@@ -134,6 +135,29 @@ export default function SetEditor() {
   const [confirmDeleteSet, setConfirmDeleteSet] = useState(false)
   const [loading, setLoading]   = useState(true)
 
+  // Team assigned to this set (for choosing a lead singer per song); quietly empty if the team tables aren't set up.
+  const loadTeam = useCallback(() => Promise.all([
+    supabase.from('set_assignments').select('*').eq('set_id', setId),
+    supabase.from('team_members').select('id, name'),
+    supabase.from('positions').select('id, name, category'),
+  ]).then(([a, m, p]) => {
+    if (a.error) { console.warn('set team:', a.error.message); return }
+    const memberBy = Object.fromEntries((m.data || []).map(x => [x.id, x]))
+    const posBy = Object.fromEntries((p.data || []).map(x => [x.id, x]))
+    const byId = {}
+    for (const row of a.data || []) {
+      const mem = memberBy[row.member_id]
+      if (!mem) continue
+      const pos = posBy[row.position_id]
+      const t = byId[mem.id] || (byId[mem.id] = { id: mem.id, name: mem.name, positions: [], singer: false, status: row.status })
+      if (pos?.name && !t.positions.includes(pos.name)) t.positions.push(pos.name)
+      if (pos?.category === 'Singers' || /sing|vocal|lead|worship leader/i.test(pos?.name || '')) t.singer = true
+      if (row.status === 'accepted') t.status = 'accepted'
+    }
+    setTeam(Object.values(byId).sort((x, y) => (y.singer - x.singer) || x.name.localeCompare(y.name)))
+  }).catch(e => console.warn('set team:', e))
+  , [setId])
+
   useEffect(() => {
     async function load() {
       // Mock data for preview
@@ -164,28 +188,7 @@ export default function SetEditor() {
       if (!setData) { navigate('/'); return }
       setSet(setData)
       setItems(itemsData || [])
-      // Team assigned to this set (for choosing a lead singer per song). Same three reads as the
-      // Schedule page, joined here; quietly empty if the team tables aren't set up.
-      Promise.all([
-        supabase.from('set_assignments').select('*').eq('set_id', setId),
-        supabase.from('team_members').select('id, name'),
-        supabase.from('positions').select('id, name, category'),
-      ]).then(([a, m, p]) => {
-        if (a.error) { console.warn('set team:', a.error.message); return }
-        const memberBy = Object.fromEntries((m.data || []).map(x => [x.id, x]))
-        const posBy = Object.fromEntries((p.data || []).map(x => [x.id, x]))
-        const byId = {}
-        for (const row of a.data || []) {
-          const mem = memberBy[row.member_id]
-          if (!mem) continue
-          const pos = posBy[row.position_id]
-          const t = byId[mem.id] || (byId[mem.id] = { id: mem.id, name: mem.name, positions: [], singer: false, status: row.status })
-          if (pos?.name && !t.positions.includes(pos.name)) t.positions.push(pos.name)
-          if (pos?.category === 'Singers' || /sing|vocal|lead|worship leader/i.test(pos?.name || '')) t.singer = true
-          if (row.status === 'accepted') t.status = 'accepted'
-        }
-        setTeam(Object.values(byId).sort((x, y) => (y.singer - x.singer) || x.name.localeCompare(y.name)))
-      }).catch(e => console.warn('set team:', e))
+      loadTeam()
       if (location.state?.newSet) {
         openDetailsFor(setData, { name: '' })
         navigate(location.pathname, { replace: true, state: null })   // a refresh shouldn't reopen it
@@ -846,6 +849,8 @@ export default function SetEditor() {
             )}
           </div>
         </section>
+
+        {editable && set && setId !== 'mock' && <SetTeamPane set={set} onChanged={loadTeam} />}
 
         {items.length > 0 && editable && present && (
           <p className="text-xs text-muted text-center">When your program is ready, tap <strong className="text-[#f5f5f5]">Present</strong> (<MonitorPlay size={12} className="inline -mt-0.5" />) to connect a TV and run the slides.</p>

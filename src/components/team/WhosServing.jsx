@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useChurch } from '../../contexts/ChurchContext'
+import { useScheduling } from '../../lib/useScheduling'
 import SchedulePane, { sectionOf } from '../calendar/SchedulePane'
 import { todayISO, formatSetTime } from '../../lib/sets'
-import { extraTimes, timeText } from '../../lib/setTimes'
-import { postInvites, mailJoinInvite, inviteSummary } from '../../lib/invites'
 
 const OPEN_KEY = 'stafflist.whosServingOpen'
 const GROUPS = [{ id: 'production', label: 'Production' }, { id: 'singers', label: 'Singers' }, { id: 'musicians', label: 'Musicians' }]
@@ -39,17 +38,16 @@ const whenLabel = s => [
 // and send invites below the matrix.
 export default function WhosServing({ members, setMembers, positions }) {
   const { user } = useAuth()
-  const { scope, church } = useChurch()
+  const { scope } = useChurch()
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch { /* ignore */ } return !o })
   const [sets, setSets] = useState([])
-  const [assignments, setAssignments] = useState([])
   const [songs, setSongs] = useState({})   // setId -> [titles]
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(null)
   const [schedId, setSchedId] = useState(null)
-  const [sending, setSending] = useState(false)
-  const [sendResult, setSendResult] = useState(null)   // { setId, ok, text }
+  const { assignments, error: schedError, refresh: refreshAssignments, addAssignment, removeAssignment, sendInvites, sending, sendResult, setSendResult } =
+    useScheduling({ members, setMembers, positions, sets })
   const paneRef = useRef(null)
   const today = todayISO()
 
@@ -66,10 +64,6 @@ export default function WhosServing({ members, setMembers, positions }) {
       .then(({ data, error: e }) => { if (e) setError('Could not load sets.'); setSets(data || []) })
       .catch(() => setError('Could not load sets.'))
       .finally(() => setLoaded(true))
-    supabase.from('set_assignments').select('*').then(({ data, error: e }) => {
-      if (e) setError('Team features are not set up yet. Run the latest Supabase migration.')
-      setAssignments(data || [])
-    })
   }, [user.id, scope.churchId, scope.workspaceId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Song titles for the sets in the matrix.
@@ -92,18 +86,6 @@ export default function WhosServing({ members, setMembers, positions }) {
     })()
     return () => { live = false }
   }, [columnKey])   // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Replies arrive from the invite page; pick them up when you come back to the app and every 30s.
-  const refreshAssignments = useCallback(() => {
-    supabase.from('set_assignments').select('*').then(({ data, error: e }) => { if (!e && data) setAssignments(data) })
-  }, [])
-  useEffect(() => {
-    const onFocus = () => { if (document.visibilityState === 'visible') refreshAssignments() }
-    document.addEventListener('visibilitychange', onFocus)
-    window.addEventListener('focus', onFocus)
-    const t = setInterval(onFocus, 30000)
-    return () => { document.removeEventListener('visibilitychange', onFocus); window.removeEventListener('focus', onFocus); clearInterval(t) }
-  }, [refreshAssignments])
 
   const posById = useMemo(() => Object.fromEntries(positions.map(p => [p.id, p])), [positions])
   const memById = useMemo(() => Object.fromEntries(members.map(m => [m.id, m])), [members])
@@ -128,77 +110,6 @@ export default function WhosServing({ members, setMembers, positions }) {
   const showSet = s => { if (!s) return; setSchedId(s.id); setSendResult(null) }
   const pickColumn = s => { showSet(s); setTimeout(() => paneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50) }
 
-  // ── Assigning and inviting (the set's team) ──────────────────────────────
-  const addAssignment = async (setId, positionId, memberId) => {
-    const { data, error: e } = await supabase.from('set_assignments')
-      .insert({ set_id: setId, position_id: positionId, member_id: memberId }).select().single()
-    if (e) return e.code === '23505' ? 'That person is already in this set for that position.' : 'Could not add. Please try again.'
-    setAssignments(prev => [...prev, data])
-    setSendResult(null)
-    return null
-  }
-  const removeAssignment = async a => {
-    await supabase.from('set_assignments').delete().eq('id', a.id)
-    setAssignments(prev => prev.filter(x => x.id !== a.id))
-  }
-  const markInvited = async ids => {
-    const now = new Date().toISOString()
-    await supabase.from('set_assignments').update({ status: 'invited', invited_at: now }).in('id', ids).in('status', ['draft', 'invited'])
-    setAssignments(prev => prev.map(a => (ids.includes(a.id) && (a.status || 'draft') !== 'accepted' ? { ...a, status: 'invited', invited_at: now } : a)))
-  }
-
-  // Before automatic email is set up: open a ready-written email in the mail app, one person per tap.
-  const mailAppFallback = async ids => {
-    const a = assignments.find(x => x.id === ids[0])
-    const sendSetId = a?.set_id
-    const m = members.find(x => x.id === a?.member_id), p = positions.find(x => x.id === a?.position_id)
-    const set = sets.find(x => x.id === a?.set_id)
-    if (!a?.invite_token || !m?.email) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
-    if (m.join_token && m.join_status && m.join_status !== 'accepted') {
-      // They haven't joined the team yet: the first email is the invitation to join.
-      mailJoinInvite(m, church?.name || 'the team')
-      const now = new Date().toISOString()
-      await supabase.from('team_members').update({ join_status: 'invited', join_invited_at: now }).eq('id', m.id).neq('join_status', 'accepted')
-      setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, join_status: 'invited', join_invited_at: now } : x)))
-      await markInvited([a.id])
-      setSendResult({ setId: sendSetId, ok: true, text: `${m.name} hasn't joined the team yet, so this opened an invitation to join in your mail app. They can answer the set request after joining.` })
-      return
-    }
-    const link = `${window.location.origin}/respond/${a.invite_token}`
-    const when = set?.service_date ? new Date(set.service_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : ''
-    const subject = `Can you serve as ${p?.name || 'part of the team'}${when ? ` on ${when}` : ''}?`
-    const lines = [
-      ['Set', set?.name], ['Date', when], ['Time', set?.service_time && formatSetTime(set.service_time)],
-      ...extraTimes(set).map(t => [t.label, timeText(t)]),
-      ['Venue', [set?.venue_name, set?.location_address, set?.location_details].filter(Boolean).join(', ')], ['Position', p?.name],
-    ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
-    const body = `Hi ${m.name.split(' ')[0]},\n\nCan you serve as ${p?.name} for ${set?.name}?\n\n${lines}\n\nPlease tap to answer:\n${link}\n\nThank you!`
-    window.location.href = `mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    await markInvited([a.id])
-    const left = ids.length - 1
-    setSendResult({ setId: sendSetId, ok: true, text: `Opened an email to ${m.name} in your mail app.${left ? ` Tap Email invites again for the next person (${left} left).` : ''}` })
-  }
-
-  const sendInvites = async ids => {
-    if (!ids.length) return
-    const sendSetId = assignments.find(a => a.id === ids[0])?.set_id
-    setSending(true); setSendResult(null)
-    try {
-      const { status, ok, out } = await postInvites({ ids })
-      if (status === 501) { await mailAppFallback(ids); return }
-      if (status === 402) { setSendResult({ setId: sendSetId, ok: false, text: 'Email invites are part of Pro. Upgrade your team in Settings → Subscription Plans.' }); return }
-      if (status === 409) { setSendResult({ setId: sendSetId, ok: false, text: 'Run the team-invites database update first (see setup notes).' }); return }
-      if (!ok) { setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Please try again.' }); return }
-      const now = new Date().toISOString()
-      const asked = [...(out.sent || []), ...(out.held || [])]
-      setAssignments(prev => prev.map(a => (asked.includes(a.id) && (a.status || 'draft') !== 'accepted' ? { ...a, status: 'invited', invited_at: now } : a)))
-      if (out.teamInvites?.length) setMembers(prev => prev.map(m => (out.teamInvites.includes(m.id) && m.join_status !== 'accepted' ? { ...m, join_status: 'invited', join_invited_at: now } : m)))
-      setSendResult({ setId: sendSetId, ok: !out.failed?.length, text: inviteSummary(out) })
-    } catch {
-      setSendResult({ setId: sendSetId, ok: false, text: 'Could not send the emails. Check your connection and try again.' })
-    } finally { setSending(false) }
-  }
-
   const isNext = s => dated[nextIdx]?.id === s.id
   const isPast = s => s.service_date < today
   const cellBand = 'bg-[#1a1a1a]'
@@ -213,7 +124,7 @@ export default function WhosServing({ members, setMembers, positions }) {
 
       {open && (
         <div className="border-t border-border">
-          {error && <p className="px-3 py-2 text-red-400 text-xs">{error}</p>}
+          {(error || schedError) && <p className="px-3 py-2 text-red-400 text-xs">{error || schedError}</p>}
           {!loaded ? (
             <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>
           ) : columns.length === 0 ? (

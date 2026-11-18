@@ -36,7 +36,7 @@ const dateLabel = s => s.service_date
 // One set at a time: who's serving, in which position, and whether they've said yes.
 // `set` is the set shown; `onPrev` / `onNext` step through sets by date.
 export default function SchedulePane({ set, index, total, onPrev, onNext, positions, members, assignments,
-  onAdd, onRemove, onSend, sending, sendResult, onRefresh, active = true, multi = false, onSelect, showPrev = true, showNext = true }) {
+  onAdd, onRemove, onSend, sending, sendResult, onRefresh, active = true, multi = false, onSelect, showPrev = true, showNext = true, bare = false }) {
   const { pro, requirePro } = useUpgrade()   // scheduling people is Pro
   const [memberId, setMemberId] = useState('')
   const [positionId, setPositionId] = useState('')
@@ -82,8 +82,8 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
   const noEmail = toSend.filter(a => !memById[a.member_id]?.email)
 
   return (
-    <section className={`rounded-xl border bg-card overflow-hidden min-w-0 ${active && multi ? 'border-accent/60 ring-1 ring-accent/30' : 'border-border'}`}>
-      <div onClick={!active && onSelect ? onSelect : undefined} title={!active && onSelect ? 'Select this set' : undefined}
+    <section className={bare ? 'min-w-0' : `rounded-xl border bg-card overflow-hidden min-w-0 ${active && multi ? 'border-accent/60 ring-1 ring-accent/30' : 'border-border'}`}>
+      {!bare && <div onClick={!active && onSelect ? onSelect : undefined} title={!active && onSelect ? 'Select this set' : undefined}
         className={`flex items-center gap-1 px-2 py-2 border-b border-border ${active && multi ? 'bg-accent/10' : ''} ${!active && onSelect ? 'cursor-pointer hover:bg-[#1a1a1a]' : ''}`}>
         {showPrev
           ? <button onClick={e => { e.stopPropagation(); onPrev() }} disabled={!set || index <= 0} className="btn-ghost p-1.5 disabled:opacity-30 shrink-0" aria-label="Previous set"><ChevronLeft size={16} /></button>
@@ -102,7 +102,7 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
         {showNext
           ? <button onClick={e => { e.stopPropagation(); onNext() }} disabled={!set || index >= total - 1} className="btn-ghost p-1.5 disabled:opacity-30 shrink-0" aria-label="Next set"><ChevronRight size={16} /></button>
           : <span className="w-7 shrink-0" />}
-      </div>
+      </div>}
 
       {!set ? (
         <p className="px-3 py-6 text-sm text-muted text-center">No dated sets yet. Create a set with a date to schedule your team.</p>

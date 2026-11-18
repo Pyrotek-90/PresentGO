@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, CheckCircle2, XCircle, MessageSquare, Clock, Send } from 'lucide-react'
+import { ChevronDown, Plus, Search, Trash2, Mail, Phone, X, Check, Contact, UserPlus, Download, ChevronRight, CheckCircle2, XCircle, MessageSquare, Clock, Send } from 'lucide-react'
 import { loadAccountStatus } from '../lib/notifications'
 import MessageTeamDialog from '../components/team/MessageTeamDialog'
 import TeamDetails from '../components/team/TeamDetails'
@@ -53,6 +53,8 @@ export default function Team() {
   const [contactHelp, setContactHelp] = useState(false)
   const [newPos, setNewPos] = useState(null)
   const [swipedId, setSwipedId] = useState(null)   // member row swiped open on a phone
+  const [teamOpen, setTeamOpen] = useState(() => { try { return localStorage.getItem('stafflist.manageTeamOpen') !== '0' } catch { return true } })
+  const toggleTeam = () => setTeamOpen(o => { try { localStorage.setItem('stafflist.manageTeamOpen', o ? '0' : '1') } catch { /* ignore */ } return !o })
 
   useEffect(() => {
     if (!swipedId) return
@@ -195,14 +197,15 @@ export default function Team() {
       <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-3">
         <TeamDetails />
         <section className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border">
-            <div className="flex items-baseline gap-2">
+          <div className={`flex items-center justify-between gap-3 px-3 py-2 ${teamOpen ? 'border-b border-border' : ''}`}>
+            <button onClick={toggleTeam} aria-expanded={teamOpen} className="flex items-center gap-2 min-w-0 text-left">
+              <ChevronDown size={16} className={`text-muted transition-transform shrink-0 ${teamOpen ? '' : '-rotate-90'}`} />
               <h1 className="font-semibold whitespace-nowrap">Manage Team</h1>
               <span className="text-xs text-muted">{members.length}</span>
-            </div>
+            </button>
             <div className="flex items-center gap-2">
               {(toInvite.length > 0 || (readOnly && !legacy)) && (
-                <button onClick={() => requirePro('Inviting people to your team') && sendTeamInvites(toInvite.map(m => m.id))} disabled={inviting}
+                <button onClick={() => requirePro('Inviting people to your team') && (setTeamOpen(true), sendTeamInvites(toInvite.map(m => m.id)))} disabled={inviting}
                   title={readOnly ? 'Invite (Pro)' : `Email an invitation to join ${teamName} to everyone not invited yet`} aria-label="Invite to join"
                   className={`flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
                   <Send size={14} /> <span className="hidden sm:inline">{inviting ? 'Sending…' : 'Invite to join'}</span>{toInvite.length > 0 && <span className="sm:ml-0">{`(${toInvite.length})`}</span>}
@@ -212,13 +215,14 @@ export default function Team() {
                 aria-label="Message Team" className={`flex items-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-accent/50 text-accent-light text-sm font-medium hover:bg-accent/10 disabled:opacity-40 ${locked(pro)}`}>
                 <MessageSquare size={14} /> <span className="hidden sm:inline">Message Team</span>
               </button>
-              <button onClick={() => { if (!requirePro('Adding team members')) return; setForm({ ...EMPTY }); setError(null) }} title={readOnly ? 'Add Member (Pro)' : undefined}
+              <button onClick={() => { if (!requirePro('Adding team members')) return; setTeamOpen(true); setForm({ ...EMPTY }); setError(null) }} title={readOnly ? 'Add Member (Pro)' : undefined}
                 aria-label="Add Member" className={`btn-primary flex items-center gap-1.5 !py-1 !px-2.5 sm:!px-3 text-sm whitespace-nowrap ${locked(pro)}`}>
                 <UserPlus size={14} /> <span className="hidden sm:inline">Add Member</span>
               </button>
             </div>
           </div>
 
+          {teamOpen && <>
           {loadError && <p className="px-3 py-2 text-red-400 text-xs">{loadError}</p>}
           {inviteNote && <p className={`px-3 py-2 text-xs border-b border-border ${inviteNote.ok ? 'text-green-400' : 'text-amber-300'}`}>{inviteNote.text}</p>}
 
@@ -424,6 +428,7 @@ export default function Team() {
               </ul>
             )}
           </div>
+          </>}
         </section>
         {!loading && positions.length > 0 && <WhosServing members={members} setMembers={setMembers} positions={positions} />}
       </div>
