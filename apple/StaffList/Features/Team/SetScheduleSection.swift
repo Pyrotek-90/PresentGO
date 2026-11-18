@@ -53,7 +53,7 @@ struct SetTeamSection: View {
     @State private var sending = false
     @State private var note: String?
 
-    private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
+    private var canEdit: Bool { session.team(for: set)?.canEdit ?? false }
     private var posById: [UUID: Position] { Dictionary(uniqueKeysWithValues: positions.map { ($0.id, $0) }) }
     private var drafts: [Assignment] {
         assignments.filter { ($0.status ?? "draft") == "draft" && members[$0.memberId]?.email != nil }
@@ -200,7 +200,7 @@ struct SetTeamSection: View {
 
     func load() async {
         defer { loaded = true }
-        guard let team = session.currentTeam else { return }
+        guard let team = session.team(for: set) else { return }
         async let a: [Assignment] = supabase.from("set_assignments").select("id,set_id,position_id,member_id,status").eq("set_id", value: set.id).execute().value
         async let m: [TeamMember] = supabase.from("team_members").select(TeamMember.columns).eq("church_id", value: team.id).order("name").execute().value
         async let p: [Position] = supabase.from("positions").select("id,name,category").eq("church_id", value: team.id).order("created_at").execute().value

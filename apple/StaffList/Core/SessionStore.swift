@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Observation
 import Supabase
 import AuthenticationServices
@@ -21,6 +22,39 @@ final class SessionStore {
 
     var currentTeam: Team? {
         teams.first { $0.id == currentTeamID } ?? teams.first { $0.canEdit } ?? teams.first
+    }
+
+    /// The team a set belongs to (it may not be the current team when it's a set I serve on).
+    func team(for set: ServiceSet) -> Team? {
+        teams.first { $0.id == set.churchId } ?? currentTeam
+    }
+
+    // MARK: Team colors (src/lib/teamColors.js): chosen per person, shown on the Sets page.
+
+    static let teamColors = ["#22d3ee", "#a78bfa", "#fbbf24", "#f472b6", "#4ade80", "#fb923c", "#60a5fa", "#f87171"]
+
+    /// My color for each team: my own pick, else teal for teams I lead, else the next color in line.
+    var teamColorHex: [UUID: String] {
+        var out: [UUID: String] = [:]
+        var k = 0
+        for t in teams {
+            if let c = t.color, !c.isEmpty { out[t.id] = c }
+            else if t.canEdit { out[t.id] = Self.teamColors[0] }
+            else { out[t.id] = Self.teamColors[1 + k % (Self.teamColors.count - 1)]; k += 1 }
+        }
+        return out
+    }
+
+    func teamColor(_ id: UUID?) -> Color {
+        Color(hex: id.flatMap { teamColorHex[$0] } ?? Self.teamColors[0]) ?? .cyan
+    }
+
+    func setTeamColor(_ id: UUID, _ hex: String) async {
+        if let i = teams.firstIndex(where: { $0.id == id }) { teams[i].color = hex }
+        var params: JSONObject = [:]
+        params["p_church"] = .string(id.uuidString.lowercased())
+        params["p_color"] = .string(hex)
+        if (try? await supabase.rpc("set_my_team_color", params: params).execute()) == nil { await loadTeams() }
     }
 
     private var currentNonce: String?

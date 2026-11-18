@@ -7,6 +7,8 @@ struct SetsCalendar: View {
     let sets: [ServiceSet]
     @Binding var selected: Date
     var onOpen: (ServiceSet) -> Void
+    /// Each set's team color (Settings → My Teams).
+    var color: (ServiceSet) -> Color = { _ in Theme.accentLight }
 
     @AppStorage("setsCalendarMode") private var mode = "month"
     @AppStorage("setsCalendarCollapsed") private var collapsed = false
@@ -143,7 +145,7 @@ struct SetsCalendar: View {
                 } else if !daySets.isEmpty {
                     HStack(spacing: 3) {
                         ForEach(daySets.prefix(3)) { s in
-                            Circle().fill(isUpcoming(s) ? Theme.accentLight : Color.secondary).frame(width: 6, height: 6)
+                            Circle().fill(isUpcoming(s) ? color(s) : Color.secondary).frame(width: 6, height: 6)
                         }
                     }
                     .padding(.leading, 2)
@@ -179,8 +181,8 @@ struct SetsCalendar: View {
             .lineLimit(1)
             .padding(.horizontal, 4).padding(.vertical, 2)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .foregroundStyle(upcoming ? Theme.accentLight : .secondary)
-            .background((upcoming ? Theme.accent.opacity(0.25) : Color.secondary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 4))
+            .foregroundStyle(upcoming ? color(s) : .secondary)
+            .background((upcoming ? color(s).opacity(0.2) : Color.secondary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 4))
     }
 
     // MARK: Week
@@ -269,9 +271,9 @@ struct SetsCalendar: View {
         }
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .foregroundStyle(upcoming ? Theme.accentLight : .secondary)
-        .background(upcoming ? Theme.accent.opacity(0.22) : Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(upcoming ? Theme.accent.opacity(0.5) : .clear))
+        .foregroundStyle(upcoming ? color(s) : .secondary)
+        .background(upcoming ? color(s).opacity(0.18) : Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(upcoming ? color(s).opacity(0.5) : .clear))
     }
 
     private func isUpcoming(_ s: ServiceSet) -> Bool {

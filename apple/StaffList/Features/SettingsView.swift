@@ -246,7 +246,8 @@ struct SettingsView: View {
     }
 }
 
-/// Every team I'm on with my role; tap one to make it the current team.
+/// Every team I'm on, my role, and the color its sets show in on the Sets page (only I see my
+/// colors; saved to my account, so the web uses them too). Tap a team to make it the current one.
 struct MyTeamsView: View {
     @Environment(SessionStore.self) private var session
 
@@ -254,38 +255,56 @@ struct MyTeamsView: View {
         List {
             Section {
                 ForEach(session.teams) { t in
-                    Button {
-                        session.currentTeamID = t.id
-                    } label: {
-                        HStack(spacing: 12) {
-                            Circle().fill(Color(hex: t.color) ?? Theme.accent).frame(width: 14, height: 14)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(t.name).foregroundStyle(.primary)
-                                Text(t.role == "admin" ? "Admin" : t.canEdit ? "Leader" : "Member")
-                                    .font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button {
+                            session.currentTeamID = t.id
+                        } label: {
+                            HStack(spacing: 12) {
+                                Circle().fill(session.teamColor(t.id)).frame(width: 14, height: 14)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(t.name).foregroundStyle(.primary)
+                                    Text(t.role == "admin" ? "Admin" : t.canEdit ? "Leader" : "Member")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if t.id == session.currentTeam?.id {
+                                    Text("Showing").font(.caption.weight(.semibold)).foregroundStyle(Theme.accentLight)
+                                }
                             }
-                            Spacer()
-                            if t.id == session.currentTeam?.id {
-                                Image(systemName: "checkmark").foregroundStyle(Theme.accentLight)
-                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        swatches(t)
                     }
+                    .padding(.vertical, 4)
                 }
             } footer: {
-                Text("The checked team is the one the app shows. Sets from each team show in its color on the web calendar.")
+                Text("Sets from each team show in its color on the Sets calendar and in Upcoming. Tap a color to change it; only you see your colors. Tap a team to manage its sets.")
             }
         }
         .navigationTitle("My Teams")
     }
-}
 
-private extension Color {
-    /// "#0e7490" → Color.
-    init?(hex: String?) {
-        guard var h = hex?.trimmingCharacters(in: .whitespaces), !h.isEmpty else { return nil }
-        if h.hasPrefix("#") { h.removeFirst() }
-        guard h.count == 6, let v = UInt32(h, radix: 16) else { return nil }
-        self.init(red: Double((v >> 16) & 0xff) / 255, green: Double((v >> 8) & 0xff) / 255, blue: Double(v & 0xff) / 255)
+    private func swatches(_ t: Team) -> some View {
+        let current = session.teamColorHex[t.id]?.lowercased()
+        return HStack(spacing: 10) {
+            ForEach(SessionStore.teamColors, id: \.self) { hex in
+                Button {
+                    Task { await session.setTeamColor(t.id, hex) }
+                } label: {
+                    Circle().fill(Color(hex: hex) ?? .gray)
+                        .frame(width: 26, height: 26)
+                        .overlay {
+                            if current == hex { Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(.black.opacity(0.7)) }
+                        }
+                        .overlay(Circle().stroke(Color.white.opacity(current == hex ? 0.8 : 0.15), lineWidth: current == hex ? 2 : 1))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Color \(SessionStore.teamColors.firstIndex(of: hex).map { $0 + 1 } ?? 0) for \(t.name)")
+                .accessibilityAddTraits(current == hex ? .isSelected : [])
+            }
+        }
+        .padding(.leading, 26)
     }
 }
 

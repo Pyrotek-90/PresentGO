@@ -8,7 +8,7 @@ struct Team: Codable, Identifiable, Hashable, Sendable {
     let name: String
     let plan: String?
     let role: String?
-    let color: String?
+    var color: String?
     let editor: Bool?
     let workspaces: [Workspace]?
 

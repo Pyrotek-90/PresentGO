@@ -17,6 +17,15 @@ struct SetsView: View {
     @State private var upcomingShown = 5
     /// Songs in each set, like the web's "4 songs".
     @State private var songCounts: [UUID: Int] = [:]
+    /// Sets I serve on in my other teams: set id → "invited" (waiting for my answer) or "accepted".
+    @State private var serving: [UUID: String] = [:]
+
+    private func color(_ s: ServiceSet) -> Color { session.teamColor(s.churchId ?? session.currentTeam?.id) }
+    /// The teams whose sets are on this page, for the color key (only when there's more than one).
+    private var teamsShown: [Team] {
+        let ids = Set(sets.compactMap(\.churchId))
+        return ids.count > 1 ? session.teams.filter { ids.contains($0.id) } : []
+    }
 
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var today: String { ServiceSet.dayFormatter.string(from: .now) }
@@ -40,8 +49,9 @@ struct SetsView: View {
             List {
                 Section { WeeklyThoughtCard() }
                 Section {
-                    SetsCalendar(sets: sets, selected: $selectedDay) { path.append($0) }
+                    SetsCalendar(sets: sets, selected: $selectedDay, onOpen: { path.append($0) }, color: color)
                         .listRowInsets(EdgeInsets())
+                    if !teamsShown.isEmpty { colorKey }
                 }
                 if !setsOnSelectedDay.isEmpty || !Calendar.current.isDateInToday(selectedDay) {
                     Section(selectedDay.formatted(.dateTime.weekday(.wide).month(.wide).day())) {
@@ -51,7 +61,7 @@ struct SetsView: View {
                                 Button { creating = true } label: { Label("New Set", systemImage: "plus") }
                             }
                         }
-                        ForEach(setsOnSelectedDay) { SetRow(set: $0, songs: songCounts[$0.id]) }
+                        ForEach(setsOnSelectedDay) { SetRow(set: $0, songs: songCounts[$0.id], color: color($0), reply: serving[$0.id] == "invited", team: teamName($0)) }
                     }
                 }
                 if offline {
@@ -60,7 +70,7 @@ struct SetsView: View {
                 }
                 if !upcoming.isEmpty {
                     Section("Upcoming") {
-                        ForEach(upcoming.prefix(upcomingShown)) { SetRow(set: $0, songs: songCounts[$0.id]) }
+                        ForEach(upcoming.prefix(upcomingShown)) { SetRow(set: $0, songs: songCounts[$0.id], color: color($0), reply: serving[$0.id] == "invited", team: teamName($0)) }
                         if upcoming.count > upcomingShown {
                             Button {
                                 withAnimation { upcomingShown += 5 }
@@ -74,7 +84,7 @@ struct SetsView: View {
                 if !past.isEmpty {
                     // The two most recent; earlier sets are found on the calendar.
                     Section {
-                        ForEach(past.prefix(2)) { SetRow(set: $0, songs: songCounts[$0.id]) }
+                        ForEach(past.prefix(2)) { SetRow(set: $0, songs: songCounts[$0.id], color: color($0), reply: serving[$0.id] == "invited", team: teamName($0)) }
                     } header: {
                         Text("Past")
                     } footer: {
@@ -95,6 +105,7 @@ struct SetsView: View {
             }
             .navigationTitle(session.currentTeam?.name ?? "Sets")
             .navigationDestination(for: ServiceSet.self) { SetDetailView(set: $0) }
+            .navigationDestination(for: String.self) { _ in MyTeamsView() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Notifications", systemImage: "bell") { showingInbox = true }
@@ -133,6 +144,9 @@ struct SetsView: View {
                 .limit(200)
                 .execute()
                 .value
+            let own = Set(sets.map(\.id))
+            sets += await loadServing(team: team.id).filter { !own.contains($0.id) }
+            sets.sort { ($0.serviceDate ?? "") > ($1.serviceDate ?? "") }
             error = nil
             offline = false
             OfflineStore.save(sets, as: OfflineStore.setsKey(team.id))
@@ -151,6 +165,44 @@ struct SetsView: View {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    private func teamName(_ s: ServiceSet) -> String? {
+        guard let id = s.churchId, id != session.currentTeam?.id else { return nil }
+        return session.teams.first { $0.id == id }?.name
+    }
+
+    private var colorKey: some View {
+        HStack(spacing: 14) {
+            ForEach(teamsShown) { t in
+                HStack(spacing: 5) {
+                    Circle().fill(session.teamColor(t.id)).frame(width: 8, height: 8)
+                    Text(t.name).lineLimit(1)
+                }
+            }
+            Spacer()
+            NavigationLink(value: "myTeams") { Text("Colors").foregroundStyle(Theme.accentLight) }
+                .fixedSize()
+        }
+        .font(.caption).foregroundStyle(.secondary)
+    }
+
+    private struct ServingRow: Decodable {
+        let set_id: UUID
+        let church_id: UUID?
+        let status: String?
+        let song_count: Int?
+    }
+
+    /// Sets I serve on in my other teams (accepted, or waiting for my answer), like the web.
+    private func loadServing(team: UUID) async -> [ServiceSet] {
+        guard let rows: [ServingRow] = try? await supabase.rpc("my_serving_sets").execute().value else { return [] }
+        let others = rows.filter { $0.church_id != team }
+        guard !others.isEmpty else { serving = [:]; return [] }
+        serving = Dictionary(others.map { ($0.set_id, $0.status ?? "accepted") }, uniquingKeysWith: { a, _ in a })
+        for r in others { if let n = r.song_count { songCounts[r.set_id] = n } }
+        return (try? await supabase.from("sets").select(ServiceSet.columns)
+            .in("id", values: others.map { $0.set_id.uuidString }).execute().value) ?? []
     }
 
     private struct ItemSet: Decodable {
@@ -173,7 +225,7 @@ struct SetsView: View {
             }
             for await rows in group { for r in rows ?? [] { counts[r.setId, default: 0] += 1 } }
         }
-        for s in sets where counts[s.id] == nil { counts[s.id] = 0 }
+        for s in sets where counts[s.id] == nil { counts[s.id] = songCounts[s.id] ?? 0 }
         songCounts = counts
     }
 }
@@ -181,14 +233,31 @@ struct SetsView: View {
 struct SetRow: View {
     let set: ServiceSet
     var songs: Int?
+    var color: Color? = nil
+    /// A request from another team waiting for my answer.
+    var reply = false
+    /// Shown for sets from another team.
+    var team: String? = nil
 
     var body: some View {
         NavigationLink(value: set) {
-            HStack {
+            HStack(spacing: 10) {
+                if let color {
+                    RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4, height: 34)
+                }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(set.name).font(.body.weight(.medium))
+                    HStack(spacing: 6) {
+                        Text(set.name).font(.body.weight(.medium)).lineLimit(1)
+                        if reply {
+                            Text("Reply").font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .foregroundStyle(.orange)
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(.orange.opacity(0.6)))
+                        }
+                    }
                     if let when = set.whenText {
-                        Text(when).font(.subheadline).foregroundStyle(.secondary)
+                        Text([team, when].compactMap { $0 }.joined(separator: " · "))
+                            .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 8)
@@ -241,7 +310,7 @@ struct SetDetailView: View {
         var id: String { rawValue }
     }
 
-    private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
+    private var canEdit: Bool { session.team(for: set)?.canEdit ?? false }
 
     var body: some View {
         itemList
@@ -253,7 +322,7 @@ struct SetDetailView: View {
                 }
                 .help("Song Viewer: step through the songs in order")
                 .disabled(!items.contains { $0.type == "song" })
-                if session.currentTeam?.canPresent ?? false {
+                if session.team(for: set)?.canPresent ?? false {
                     Button { presenting = true } label: {
                         Label("Present", systemImage: "play.display")
                     }
@@ -444,7 +513,7 @@ struct SetDetailView: View {
             Button("Add Welcome", systemImage: "hand.wave") { Task { await addWelcome() } }
             Button("Add Announcement", systemImage: "megaphone") { sheet = .announcement }
             Button("Add Media", systemImage: "photo.on.rectangle") { sheet = .media }
-            if session.currentTeam?.isPaid ?? false {
+            if session.team(for: set)?.isPaid ?? false {
                 Button("Add Worship Leader Notes", systemImage: "text.quote") { Task { await addNotes() } }
             }
             Button("Add Blank Slide", systemImage: "rectangle") { Task { await add(type: "blank", content: JSONObject()) } }
