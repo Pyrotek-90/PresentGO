@@ -5,7 +5,10 @@ import Supabase
 /// data (protected by the database's row-level security, exactly like the web app).
 let supabase = SupabaseClient(
     supabaseURL: AppConfig.supabaseURL,
-    supabaseKey: AppConfig.supabaseAnonKey
+    supabaseKey: AppConfig.supabaseAnonKey,
+    // Emit the stored session as the initial session (the library's new behavior), even if it has
+    // expired; SessionStore refreshes an expired one. Silences the "Initial session emitted" warning.
+    options: SupabaseClientOptions(auth: .init(emitLocalSessionAsInitialSession: true))
 )
 
 /// The StaffList API (/api/v1) for the heavy lifting the web app also uses: reading charts,

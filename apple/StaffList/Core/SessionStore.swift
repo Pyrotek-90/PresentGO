@@ -70,7 +70,12 @@ final class SessionStore {
         for await (event, session) in supabase.auth.authStateChanges {
             switch event {
             case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
-                if let session {
+                if var session {
+                    // The stored session comes through as it was saved, even when it has expired:
+                    // refresh it. Offline, keep the saved user so offline copies still open.
+                    if event == .initialSession, session.isExpired, let fresh = try? await supabase.auth.session {
+                        session = fresh
+                    }
                     let isNew = user?.id != session.user.id
                     user = session.user
                     phase = .signedIn
