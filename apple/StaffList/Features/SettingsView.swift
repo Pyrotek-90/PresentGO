@@ -86,13 +86,25 @@ struct SettingsView: View {
                     }
                     NavigationLink { CalendarSyncView() } label: { Label("Calendar Subscription", systemImage: "calendar.badge.plus") }
                     if !session.teams.isEmpty {
+                        // Each team with its color right here; tap to change colors or switch teams.
                         NavigationLink { MyTeamsView() } label: {
-                            LabeledContent {
-                                Text(session.currentTeam?.name ?? "")
-                            } label: {
+                            HStack(alignment: .firstTextBaseline) {
                                 Label("My Teams", systemImage: "person.3")
+                                Spacer(minLength: 12)
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    ForEach(session.teams) { t in
+                                        HStack(spacing: 6) {
+                                            Text(t.name).lineLimit(1)
+                                                .foregroundStyle(t.id == session.currentTeam?.id ? .primary : .secondary)
+                                            Circle().fill(session.teamColor(t.id)).frame(width: 12, height: 12)
+                                        }
+                                        .font(.subheadline)
+                                    }
+                                }
                             }
                         }
+                        .accessibilityLabel("My Teams: " + session.teams.map(\.name).joined(separator: ", "))
+                        .accessibilityHint("Change team colors or switch teams")
                     }
                 } header: {
                     Text("Preferences")
