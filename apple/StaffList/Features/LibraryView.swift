@@ -328,22 +328,21 @@ struct SongRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(song.title).font(.body.weight(.medium)).lineLimit(1)
-                    if let tag {
-                        Text(tag).font(.caption2)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .foregroundStyle(.orange.opacity(0.9))
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(.orange.opacity(0.4)))
-                            .lineLimit(1)
-                    }
-                }
+            // Title · Artist on one line, like the web list.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(song.title).font(.body.weight(.medium)).lineLimit(1).layoutPriority(1)
                 if let artist = song.artist, !artist.isEmpty {
-                    Text(artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    Text("· \(artist)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if let tag {
+                    Text(tag).font(.caption2)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .foregroundStyle(.orange.opacity(0.9))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(.orange.opacity(0.4)))
+                        .lineLimit(1).fixedSize()
                 }
             }
-            Spacer()
+            Spacer(minLength: 8)
             if !keys.isEmpty {
                 Text(keys)
                     .font(.caption.monospaced().bold())
@@ -352,6 +351,5 @@ struct SongRow: View {
                     .fixedSize()
             }
         }
-        .padding(.vertical, 2)
     }
 }
