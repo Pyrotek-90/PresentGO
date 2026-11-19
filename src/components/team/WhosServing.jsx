@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronDown, Maximize2, Minimize2, UserPlus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -25,6 +26,7 @@ const whenLabel = s => [
 export default function WhosServing({ members, setMembers, positions }) {
   const { user } = useAuth()
   const { scope } = useChurch()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch { /* ignore */ } return !o })
   const [sets, setSets] = useState([])
@@ -165,7 +167,7 @@ export default function WhosServing({ members, setMembers, positions }) {
                       </th>
                       {columns.map(s => (
                         <th key={s.id} scope="col" className={`min-w-[8.5rem] sm:min-w-[10.5rem] max-w-[10.5rem] p-0 align-top font-normal text-left border-r border-border/30 border-b border-border/50 ${isPast(s) ? 'opacity-60' : ''} ${s.id === schedSet?.id ? 'bg-accent/15' : isNext(s) ? 'bg-accent/[0.07]' : ''}`}>
-                          <button onClick={() => pickColumn(s)} title="Edit this set's team" aria-label={`Edit the team for ${s.name}`}
+                          <button onClick={() => pickColumn(s)} title="Select this set (Assign works on it)" aria-label={`Select ${s.name}`} aria-pressed={s.id === schedSet?.id}
                             className={`block w-full text-left p-2 hover:bg-white/5 ${isNext(s) ? 'border-t-2 border-accent-light' : 'border-t-2 border-transparent'}`}>
                             <span className="flex items-center gap-1 min-w-0">
                               {isNext(s) && <span className="shrink-0 text-[8px] font-bold px-1 rounded border border-accent-light/60 text-accent-light">NEXT</span>}
@@ -185,12 +187,16 @@ export default function WhosServing({ members, setMembers, positions }) {
                     <tr>
                       <td className="sticky left-0 z-10 bg-card border-r border-border/70 border-b border-border/40" />
                       {columns.map(s => (
-                        <td key={s.id} className={`align-top p-2 border-r border-border/30 border-b border-border/40 ${isPast(s) ? 'opacity-60' : ''} ${s.id === schedSet?.id ? 'bg-accent/15' : isNext(s) ? 'bg-accent/[0.07]' : ''}`}>
-                          {(songs[s.id] || []).length === 0
-                            ? <span className="text-[#6f6f6f]">No songs yet</span>
-                            : <ol className="space-y-0.5">{songs[s.id].map((t, i) => (
-                              <li key={i} className="flex gap-1 min-w-0"><span className="text-muted tabular-nums">{i + 1}</span><span className="truncate">{t}</span></li>
-                            ))}</ol>}
+                        <td key={s.id} className={`align-top p-0 border-r border-border/30 border-b border-border/40 ${isPast(s) ? 'opacity-60' : ''} ${s.id === schedSet?.id ? 'bg-accent/15' : isNext(s) ? 'bg-accent/[0.07]' : ''}`}>
+                          {/* The songs open Edit Set; the header above selects the set. */}
+                          <button onClick={() => navigate(`/sets/${s.id}`)} title={`Edit ${s.name}`} aria-label={`Edit ${s.name}`}
+                            className="block w-full h-full text-left p-2 hover:bg-white/5">
+                            {(songs[s.id] || []).length === 0
+                              ? <span className="text-[#6f6f6f]">No songs yet</span>
+                              : <ol className="space-y-0.5">{songs[s.id].map((t, i) => (
+                                <li key={i} className="flex gap-1 min-w-0"><span className="text-muted tabular-nums">{i + 1}</span><span className="truncate">{t}</span></li>
+                              ))}</ol>}
+                          </button>
                         </td>
                       ))}
                     </tr>
@@ -204,7 +210,7 @@ export default function WhosServing({ members, setMembers, positions }) {
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-[11px] text-muted border-t border-border/50">
                 {LEGEND.map(([k, t]) => <span key={k} className="flex items-center gap-1.5"><span className={`w-[7px] h-[7px] rounded-full ${DOT[k]}`} />{t}</span>)}
-                <span className="ml-auto text-[#6f6f6f]">Click a set to edit its team · drag a person onto another set to add them</span>
+                <span className="ml-auto text-[#6f6f6f]">Click a set to select it · click its songs to edit it · drag a person onto another set to add them</span>
               </div>
               {dragNote && <p className={`px-3 pb-2 text-xs ${dragNote.ok ? 'text-green-400' : 'text-amber-300'}`}>{dragNote.text}</p>}
 

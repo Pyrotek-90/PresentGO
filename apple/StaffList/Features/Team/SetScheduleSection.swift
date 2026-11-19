@@ -478,6 +478,8 @@ struct TeamAssignSheet: View {
     @Environment(SessionStore.self) private var session
     let members: [UUID: TeamMember]
     let positions: [Position]
+    /// The set selected in Who's Serving; nil = the next upcoming one.
+    var initialSetID: UUID? = nil
 
     @State private var sets: [ServiceSet] = []
     @State private var selected: ServiceSet?
@@ -537,7 +539,8 @@ struct TeamAssignSheet: View {
                 .limit(30).execute().value
             let list = try await last + next
             sets = list
-            selected = list.first { ($0.serviceDate ?? today) >= today } ?? list.last
+            selected = list.first { $0.id == initialSetID }
+                ?? list.first { ($0.serviceDate ?? today) >= today } ?? list.last
         } catch {
             sets = []
         }

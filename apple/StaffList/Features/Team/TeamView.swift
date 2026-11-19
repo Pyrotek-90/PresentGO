@@ -20,6 +20,8 @@ struct TeamView: View {
     @State private var assigning = false     // Assign Team (from the Who's Serving header)
     @State private var assigningFull = false // Assign Team (from the full-screen view)
     @State private var coverSet: ServiceSet?
+    /// The set selected in Who's Serving (shared by the pane and the full-screen view).
+    @State private var matrixSelected: UUID?
     @State private var filterPosition: UUID?
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -87,8 +89,8 @@ struct TeamView: View {
                 }
                 if !members.isEmpty {
                     Section {
-                        ScheduleMatrix(members: membersByID,
-                                       positions: positions, reloadToken: reloadToken) { openSet = $0 }
+                        ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
+                                       selectedID: matrixSelected, onSelect: { matrixSelected = $0.id }) { openSet = $0 }
                             .listRowInsets(EdgeInsets())
                     } header: {
                         HStack(spacing: 10) {
@@ -146,12 +148,13 @@ struct TeamView: View {
                 MessageTeamView(members: members)
             }
             .sheet(isPresented: $assigning, onDismiss: { reloadToken += 1 }) {
-                TeamAssignSheet(members: membersByID, positions: positions)
+                TeamAssignSheet(members: membersByID, positions: positions, initialSetID: matrixSelected)
             }
             .fullScreenCover(isPresented: $expanded, onDismiss: { reloadToken += 1 }) {
                 NavigationStack {
                     ScrollView {
-                        ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken) { coverSet = $0 }
+                        ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
+                                       selectedID: matrixSelected, onSelect: { matrixSelected = $0.id }) { coverSet = $0 }
                     }
                     .navigationTitle("Who's Serving")
                     .navigationBarTitleDisplayMode(.inline)
@@ -165,7 +168,7 @@ struct TeamView: View {
                         ToolbarItem(placement: .confirmationAction) { Button("Done") { expanded = false } }
                     }
                     .sheet(isPresented: $assigningFull, onDismiss: { reloadToken += 1 }) {
-                        TeamAssignSheet(members: membersByID, positions: positions)
+                        TeamAssignSheet(members: membersByID, positions: positions, initialSetID: matrixSelected)
                     }
                 }
             }

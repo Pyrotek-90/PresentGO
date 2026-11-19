@@ -23,6 +23,11 @@ struct ScheduleMatrix: View {
     let positions: [Position]
     /// Change this to reload (pull to refresh on the Team page).
     var reloadToken: Int = 0
+    /// The selected set (highlighted; Assign works on it). Nil = the next upcoming set, like the web.
+    var selectedID: UUID? = nil
+    /// Tap a set's header: select it.
+    var onSelect: (ServiceSet) -> Void = { _ in }
+    /// Tap a set's songs: open Edit Set.
     var onOpen: (ServiceSet) -> Void
 
     @State private var sets: [ServiceSet] = []
@@ -163,10 +168,10 @@ struct ScheduleMatrix: View {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(sets) { s in
-                        Button { onOpen(s) } label: {
-                            VStack(alignment: .leading, spacing: 0) {
-                                ForEach(rows) { row in
-                                    droppable(row, s) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(rows) { row in
+                                droppable(row, s) {
+                                    tappable(row, s) {
                                         cell(row, s)
                                             .frame(width: columnWidth, height: height(row), alignment: .topLeading)
                                             .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
@@ -174,14 +179,11 @@ struct ScheduleMatrix: View {
                                     }
                                 }
                             }
-                            .background(isNext(s) ? Theme.accent.opacity(0.07) : .clear)
-                            .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 0.5) }
-                            .opacity(isPast(s) ? 0.6 : 1)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityHint("Opens the set")
+                        .background(isSelected(s) ? Theme.accent.opacity(0.15) : isNext(s) ? Theme.accent.opacity(0.07) : .clear)
+                        .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 0.5) }
+                        .overlay { if isSelected(s) { Rectangle().stroke(Theme.accent.opacity(0.6), lineWidth: 1) } }
+                        .opacity(isPast(s) && !isSelected(s) ? 0.6 : 1)
                     }
                 }
                 .scrollTargetLayout()
@@ -190,6 +192,32 @@ struct ScheduleMatrix: View {
             .scrollIndicators(.visible)
         }
     }
+
+    /// The header selects the set; the songs open Edit Set; the people cells are left for dragging.
+    @ViewBuilder
+    private func tappable<V: View>(_ row: Row, _ s: ServiceSet, @ViewBuilder _ content: () -> V) -> some View {
+        switch row {
+        case .header:
+            Button { onSelect(s) } label: { content().contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(s.name), \(when(s))\(isSelected(s) ? ", selected" : "")")
+                .accessibilityHint("Selects this set for Assign")
+                .accessibilityAddTraits(isSelected(s) ? .isSelected : [])
+        case .songs:
+            Button { onOpen(s) } label: { content().contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Edit Set")
+        default:
+            content()
+        }
+    }
+
+    /// The selected set, or the next upcoming one (else the last), as on the web.
+    private var effectiveSelectedID: UUID? {
+        if let id = selectedID, sets.contains(where: { $0.id == id }) { return id }
+        return (sets.first { !isPast($0) } ?? sets.last)?.id
+    }
+    private func isSelected(_ s: ServiceSet) -> Bool { s.id == effectiveSelectedID }
 
     /// A position cell accepts a dragged person: they're added to this set in this row's position.
     @ViewBuilder
