@@ -117,6 +117,20 @@ final class SessionStore {
         }
     }
 
+    /// Create Account, like the web: returns true when Supabase sent a confirmation email
+    /// (the person is signed in once they click it); false if it failed or signed in right away.
+    func signUp(email: String, password: String) async -> Bool {
+        errorMessage = nil
+        do {
+            let r = try await supabase.auth.signUp(email: email.trimmingCharacters(in: .whitespaces), password: password,
+                                                   redirectTo: URL(string: "https://stafflist.app"))
+            return r.session == nil
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func signOut() async {
         try? await supabase.auth.signOut()
     }
