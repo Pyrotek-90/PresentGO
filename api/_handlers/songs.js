@@ -16,7 +16,7 @@ import { buildSongSlides } from '../../src/lib/songSlides.js'
 import { reconcileChart } from '../../src/lib/chart.js'
 import { transposeChart, transposeKeyOptions, parseKey, hasChords } from '../../src/lib/chords.js'
 import { looksNonEnglish, guessLanguage } from '../../src/lib/language.js'
-import { parseFilename } from '../../src/lib/bulkImport.js'
+import { parseFilename } from '../../src/lib/songFilename.js'
 
 const MAX_TEXT = 200_000
 

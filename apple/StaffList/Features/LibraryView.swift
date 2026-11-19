@@ -17,6 +17,10 @@ struct LibraryView: View {
     @AppStorage("libraryLanguage") private var libraryLanguage = "English"
     @AppStorage("librarySort") private var sort = "az"          // "az" | "recent"
     @State private var showFilters = false
+    /// Search: title / artist / CCLI # (default), or a word or phrase in the lyrics.
+    @State private var searchScope = SearchScope.details
+    enum SearchScope: Hashable { case details, lyrics }
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var rotationOnly = false
     @State private var activeThemes: Set<String> = []
     @State private var include: Set<String> = []                // "occ:Christmas", "lang:Hindi"
@@ -69,7 +73,8 @@ struct LibraryView: View {
         var m: [String: Int] = [:]
         for s in inView { for t in Self.themes(s) { m[t, default: 0] += 1 } }
         let custom = m.keys.filter { !Self.themes.contains($0) }.sorted()
-        return (Self.themes + custom).map { ($0, m[$0] ?? 0) }
+        // Only themes that some song in view has (or that are on).
+        return (Self.themes + custom).map { ($0, m[$0] ?? 0) }.filter { $0.1 > 0 || activeThemes.contains($0.0) }
     }
     private var activeFilterCount: Int { activeThemes.count + (rotationOnly ? 1 : 0) + only.count }
 
@@ -79,7 +84,7 @@ struct LibraryView: View {
         let pool = q.isEmpty ? inView : songs
         let byTitle: (Song, Song) -> Bool = { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         return pool
-            .filter { q.isEmpty || $0.title.lowercased().contains(q) || ($0.artist ?? "").lowercased().contains(q) || ($0.ccliNumber ?? "").contains(q) }
+            .filter { q.isEmpty || matches($0, q) }
             .filter { !rotationOnly || ($0.metadata?.rotation ?? false) }
             .filter(matchesOnly)
             .filter { activeThemes.isEmpty || Self.themes($0).contains(where: activeThemes.contains) }
@@ -92,6 +97,30 @@ struct LibraryView: View {
             }
     }
 
+    private func matches(_ s: Song, _ q: String) -> Bool {
+        switch searchScope {
+        case .details:
+            return s.title.lowercased().contains(q) || (s.artist ?? "").lowercased().contains(q) || (s.ccliNumber ?? "").contains(q)
+        case .lyrics:
+            return lyricLine(s, q) != nil
+        }
+    }
+
+    /// The first lyric line containing the search, shown under the song in a lyrics search.
+    private func lyricLine(_ s: Song, _ q: String) -> String? {
+        let words = q.split(separator: " ").map(String.init)
+        guard !words.isEmpty, let lyrics = s.rawLyrics, !lyrics.isEmpty else { return nil }
+        let lower = lyrics.lowercased()
+        guard words.allSatisfy(lower.contains) else { return nil }
+        let lines = lyrics.components(separatedBy: "\n").filter { !$0.hasPrefix("[") }
+        return lines.first { $0.lowercased().contains(q) } ?? lines.first { l in words.contains { l.lowercased().contains($0) } }
+    }
+
+    private var lyricQuery: String? {
+        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        return searchScope == .lyrics && !q.isEmpty ? q : nil
+    }
+
     private func tagLine(_ s: Song) -> String? {
         guard !visibleByDefault(s) else { return nil }
         let parts = Self.occasions(s) + (Self.language(s) != libraryLanguage ? [Self.language(s)] : [])
@@ -101,16 +130,20 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             List {
-                if showFilters { filterBar }
+                if sizeClass == .regular {
+                    if showFilters { filterBar }
+                } else if activeFilterCount > 0 {
+                    activeSummary
+                }
                 ForEach(filtered) { song in
                     if adding.active {
                         HStack(spacing: 10) {
-                            NavigationLink(value: song) { SongRow(song: song, tag: tagLine(song)) }
+                            NavigationLink(value: song) { SongRow(song: song, tag: tagLine(song), snippet: lyricQuery.flatMap { lyricLine(song, $0) }) }
                             AddSongButton(song: song, model: adding)
                         }
                     } else {
                         NavigationLink(value: song) {
-                            SongRow(song: song, tag: tagLine(song))
+                            SongRow(song: song, tag: tagLine(song), snippet: lyricQuery.flatMap { lyricLine(song, $0) })
                         }
                     }
                 }
@@ -129,12 +162,17 @@ struct LibraryView: View {
                 }
             }
             .navigationDestination(for: Song.self) { SongView(song: $0) }
-            .searchable(text: $search, prompt: "Title, artist or CCLI #")
+            .searchable(text: $search, prompt: searchScope == .lyrics ? "Words in the lyrics" : "Title, artist or CCLI #")
+            .searchScopes($searchScope, activation: .onSearchPresentation) {
+                Text("Title, Artist, CCLI").tag(SearchScope.details)
+                Text("Lyrics").tag(SearchScope.lyrics)
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
-                    Button { withAnimation(.snappy) { showFilters.toggle() } } label: {
-                        Label(activeFilterCount > 0 ? "Filter (\(activeFilterCount))" : "Filter",
-                              systemImage: activeFilterCount > 0 || showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    if sizeClass == .regular {
+                        Button { withAnimation(.snappy) { showFilters.toggle() } } label: { filterLabel }
+                    } else {
+                        filterMenu
                     }
                     sortMenu
                 }
@@ -217,6 +255,62 @@ struct LibraryView: View {
             only.remove(key)
             if on { showFilters = true }
         }))
+    }
+
+    private var filterLabel: some View {
+        Label(activeFilterCount > 0 ? "Filter (\(activeFilterCount))" : "Filter",
+              systemImage: activeFilterCount > 0 || showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+    }
+
+    /// Phones: the filters as a menu of checkmarks (it stays open while you pick), so they take no
+    /// room on the page; whatever is on shows in one line above the songs.
+    private var filterMenu: some View {
+        Menu {
+            Toggle("Rotation List (\(inView.filter { $0.metadata?.rotation ?? false }.count))", isOn: $rotationOnly)
+            if !include.isEmpty {
+                Section("Only") {
+                    ForEach(include.sorted(), id: \.self) { k in
+                        let name = String(k[k.index(after: k.firstIndex(of: ":")!)...])
+                        let n = inView.filter { k.hasPrefix("occ:") ? Self.occasions($0).contains(name) : Self.language($0) == name }.count
+                        Toggle("\(name) (\(n))", isOn: Binding(get: { only.contains(k) }, set: { on in
+                            if on { only.insert(k) } else { only.remove(k) }
+                        }))
+                    }
+                }
+            }
+            if !themeCounts.isEmpty {
+                Section("Themes") {
+                    ForEach(themeCounts, id: \.0) { t, n in
+                        Toggle("\(t) (\(n))", isOn: Binding(get: { activeThemes.contains(t) }, set: { on in
+                            if on { activeThemes.insert(t) } else { activeThemes.remove(t) }
+                        }))
+                    }
+                }
+            }
+            if activeFilterCount > 0 {
+                Button("Clear Filters", systemImage: "xmark", role: .destructive) { activeThemes = []; rotationOnly = false; only = [] }
+            }
+        } label: { filterLabel }
+        .menuActionDismissBehavior(.disabled)
+    }
+
+    /// "Rotation List · Worship · Praise   ✕" — the filters that are on, in one line.
+    private var activeSummary: some View {
+        let names = (rotationOnly ? ["Rotation List"] : [])
+            + only.sorted().map { String($0[$0.index(after: $0.firstIndex(of: ":")!)...]) }
+            + activeThemes.sorted()
+        return HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(Theme.accentLight)
+            Text(names.joined(separator: " · ")).font(.footnote.weight(.medium)).foregroundStyle(Theme.accentLight).lineLimit(1)
+            Spacer(minLength: 4)
+            Text("\(filtered.count)").font(.caption).foregroundStyle(.secondary)
+            Button { activeThemes = []; rotationOnly = false; only = [] } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Clear filters")
+        }
+        .listRowSeparator(.hidden)
     }
 
     private var filterBar: some View {
@@ -317,6 +411,8 @@ struct SongRow: View {
     let song: Song
     /// Occasion / other language, for songs outside the main list.
     var tag: String? = nil
+    /// In a lyrics search: the line that matched.
+    var snippet: String? = nil
 
     /// Original key first, then saved keys: "G, A".
     private var keys: String {
@@ -329,7 +425,8 @@ struct SongRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Title · Artist on one line, like the web list.
+            // Title · Artist on one line, like the web list (and the matching lyric under it).
+            VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(song.title).font(.body.weight(.medium)).lineLimit(1).layoutPriority(1)
                 if let artist = song.artist, !artist.isEmpty {
@@ -342,6 +439,11 @@ struct SongRow: View {
                         .overlay(RoundedRectangle(cornerRadius: 4).stroke(.orange.opacity(0.4)))
                         .lineLimit(1).fixedSize()
                 }
+            }
+            if let snippet {
+                Text("“\(snippet.trimmingCharacters(in: .whitespaces))”")
+                    .font(.caption).italic().foregroundStyle(.secondary).lineLimit(1)
+            }
             }
             Spacer(minLength: 8)
             if !keys.isEmpty {

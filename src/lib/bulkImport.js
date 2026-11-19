@@ -11,22 +11,7 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024
 const ext = name => (name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
 export const normTitle = s => (s || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
 
-// "07 - Goodness Of God - Chord Chart (G).pdf" → { title: "Goodness Of God", ccli, key }
-export function parseFilename(name) {
-  let base = name.replace(/\.[^.]+$/, '')
-  const ccli = base.match(/(?:^|[\s_-])(\d{5,8})(?=$|[\s_-])/)?.[1] || ''
-  const keyM = base.match(/[\s_(-]\(?(?:key\s*(?:of\s*)?)?([A-G][#b]?m?)\)?\s*$/i)
-  if (ccli) base = base.replace(ccli, ' ')
-  base = base
-    .replace(/[\s_(-]\(?(?:key\s*(?:of\s*)?)?[A-G][#b]?m?\)?\s*$/i, '')
-    .replace(/^\s*\d{1,3}\s*[-._)]\s*/, '')
-    .replace(/\b(chord\s*charts?|chords|lead\s*sheet|lyrics?|chart|songselect|praisecharts|pco)\b/gi, ' ')
-    .replace(/[_]+/g, ' ')
-    .replace(/\s*-\s*$/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/^[\s-]+|[\s-]+$/g, '')
-  return { title: base, ccli, key: keyM ? keyM[1] : '' }
-}
+export { parseFilename } from './songFilename.js'
 
 export function fileKind(file) {
   const e = ext(file.name)
