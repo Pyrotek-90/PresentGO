@@ -13,14 +13,15 @@ struct SignInView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
-                VStack(spacing: 6) {
-                    Text("StaffList")
-                        .font(.system(size: 44, weight: .bold, design: .serif))
-                    Text("To the Chief Musician")
-                        .font(.subheadline.italic())
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 60)
+                // The StaffList wordmark, as on the web sign-in page: the crest as the S, "taffList",
+                // and "To the Chief Musician" under it (vector, takes the text color).
+                Image("Wordmark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 93)
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel("StaffList, To the Chief Musician")
+                    .padding(.top, 60)
 
                 VStack(spacing: 12) {
                     TextField("Email", text: $email)
