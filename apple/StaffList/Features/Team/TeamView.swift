@@ -14,6 +14,7 @@ struct TeamView: View {
     @State private var note: String?
     @State private var loading = true
     @AppStorage("teamMembersCollapsed") private var membersCollapsed = false
+    @AppStorage("servingMatrixCollapsed") private var matrixCollapsed = false
     @State private var reloadToken = 0
     @State private var openSet: ServiceSet?
     @State private var expanded = false      // Who's Serving full screen
@@ -80,8 +81,14 @@ struct TeamView: View {
                     }
                     .buttonStyle(.plain)
                     .overlay(alignment: .trailing) {
-                        Button { adding = true } label: {
-                            Label("Add", systemImage: "person.badge.plus").font(.caption.weight(.semibold)).textCase(nil)
+                        HStack(spacing: 14) {
+                            Button { messaging = true } label: {
+                                Label("Message", systemImage: "envelope").font(.caption.weight(.semibold)).textCase(nil)
+                            }
+                            .disabled(members.isEmpty)
+                            Button { adding = true } label: {
+                                Label("Add", systemImage: "person.badge.plus").font(.caption.weight(.semibold)).textCase(nil)
+                            }
                         }
                         .buttonStyle(.borderless)
                     }
@@ -89,21 +96,30 @@ struct TeamView: View {
                 }
                 if !members.isEmpty {
                     Section {
-                        ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
-                                       selectedID: matrixSelected, onSelect: { matrixSelected = $0.id }) { openSet = $0 }
-                            .listRowInsets(EdgeInsets())
+                        if !matrixCollapsed {
+                            ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
+                                           selectedID: matrixSelected, onSelect: { matrixSelected = $0.id },
+                                           showsLegend: false) { openSet = $0 }
+                                .listRowInsets(EdgeInsets())
+                        }
                     } header: {
-                        HStack(spacing: 10) {
-                            Text("Who's Serving")
-                            Spacer()
+                        HStack(spacing: 14) {
+                            Button {
+                                withAnimation(.snappy) { matrixCollapsed.toggle() }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.down").rotationEffect(.degrees(matrixCollapsed ? -90 : 0))
+                                    Text("Serving Matrix")
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint(matrixCollapsed ? "Shows the serving matrix" : "Hides the serving matrix")
+                            // Quiet, like the Team Members' Message and Add buttons.
                             if canEdit {
                                 Button { assigning = true } label: {
-                                    Label("Assign", systemImage: "person.2.badge.plus")
-                                        .font(.caption.weight(.semibold)).textCase(nil)
-                                        .padding(.horizontal, 10).padding(.vertical, 4)
-                                        .foregroundStyle(Theme.accentLight)
-                                        .background(Theme.accent.opacity(0.2), in: Capsule())
-                                        .overlay(Capsule().stroke(Theme.accent.opacity(0.7)))
+                                    Label("Assign", systemImage: "person.2.badge.plus").font(.caption.weight(.semibold)).textCase(nil)
                                 }
                                 .buttonStyle(.borderless)
                             }
@@ -111,8 +127,10 @@ struct TeamView: View {
                                 Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption.weight(.semibold))
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Expand Who's Serving to full screen")
+                            .accessibilityLabel("Expand the serving matrix to full screen")
                         }
+                    } footer: {
+                        if !matrixCollapsed { ScheduleMatrix.Legend() }
                     }
                 }
             }
@@ -129,16 +147,6 @@ struct TeamView: View {
             }
             .navigationTitle("Team")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button("Message Team", systemImage: "envelope") { messaging = true }
-                        .disabled(members.isEmpty)
-                    Button { adding = true } label: {
-                        Label("Add Member", systemImage: "person.badge.plus").labelStyle(.titleAndIcon)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
             .sheet(item: $editing) { m in
                 MemberEditor(member: m, positions: $positions) { await load() }
             }
@@ -157,7 +165,7 @@ struct TeamView: View {
                         ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
                                        selectedID: matrixSelected, onSelect: { matrixSelected = $0.id }) { coverSet = $0 }
                     }
-                    .navigationTitle("Who's Serving")
+                    .navigationTitle("Serving Matrix")
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationDestination(item: $coverSet) { SetDetailView(set: $0) }
                     .toolbar {
@@ -258,18 +266,20 @@ struct TeamView: View {
             }
             .contentShape(Rectangle())
         } else {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(m.name).font(.body.weight(.medium))
+            // Phone: two lines. Name, joined and positions; then email and phone.
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(m.name).font(.subheadline.weight(.semibold)).lineLimit(1).layoutPriority(1)
                         joined(m, large: false)
+                        Text(memberPositions(m).map(\.name).joined(separator: ", "))
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    chips(m)
-                    HStack(spacing: 12) {
-                        if let e = m.email { Label(e, systemImage: "envelope").foregroundStyle(.secondary) } else { Text("No email").foregroundStyle(.orange.opacity(0.8)) }
-                        if let p = m.phone, !p.isEmpty { Label(MemberEditor.formatPhone(p), systemImage: "phone").foregroundStyle(.secondary) } else { Text("No phone").foregroundStyle(.orange.opacity(0.8)) }
+                    HStack(spacing: 10) {
+                        if let e = m.email { Text(e).foregroundStyle(.secondary).truncationMode(.middle) } else { Text("No email").foregroundStyle(.orange.opacity(0.8)) }
+                        if let p = m.phone, !p.isEmpty { Text(MemberEditor.formatPhone(p)).foregroundStyle(.secondary).fixedSize() } else { Text("No phone").foregroundStyle(.orange.opacity(0.8)).fixedSize() }
                     }
-                    .font(.caption).lineLimit(1).labelStyle(CompactLabel())
+                    .font(.caption).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
@@ -296,7 +306,7 @@ struct TeamView: View {
     /// Joined / Invited / Declined / Not invited, as on the web.
     @ViewBuilder
     private func joined(_ m: TeamMember, large: Bool) -> some View {
-        let size: Font = large ? .body : .subheadline
+        let size: Font = large ? .body : .caption
         switch m.joinStatus {
         case "accepted":
             Image(systemName: "checkmark.circle.fill").font(size).foregroundStyle(.green).accessibilityLabel("Joined")
@@ -350,6 +360,14 @@ struct MemberEditor: View {
     @State private var note: String?
     @State private var error: String?
     @FocusState private var newPositionFocused: Bool
+
+    private var emailValid: Bool {
+        let e = email.trimmingCharacters(in: .whitespaces)
+        return e.contains("@") && e.split(separator: "@").last?.contains(".") == true
+    }
+    /// Not joined yet and not already asked.
+    private var canAskToJoin: Bool { !["accepted", "invited"].contains(member?.joinStatus ?? "") }
+    private var willInvite: Bool { inviteAfterSave && canAskToJoin && emailValid }
 
     private var first: String { name.trimmingCharacters(in: .whitespaces).split(separator: " ").first.map(String.init) ?? "them" }
     private var teamName: String { session.currentTeam?.name ?? "the team" }
@@ -438,9 +456,7 @@ struct MemberEditor: View {
                     .padding(.vertical, 4)
                 }
 
-                if !email.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Section { invitation }
-                }
+                Section { invitation }
                 if let note { Section { Text(note).font(.footnote) } }
                 if let error { Section { Text(error).foregroundStyle(.red).font(.footnote) } }
                 if member != nil {
@@ -455,8 +471,8 @@ struct MemberEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if saving { ProgressView() } else {
-                        Button(member == nil ? "Save" : "Update") { Task { await save() } }
-                            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        Button(willInvite ? "Save & Invite" : member == nil ? "Save" : "Update") { Task { await save() } }
+                            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (inviteAfterSave && canAskToJoin && !emailValid))
                     }
                 }
             }
@@ -470,7 +486,8 @@ struct MemberEditor: View {
                 email = member?.email ?? ""
                 phone = MemberEditor.formatPhone(member?.phone ?? "")
                 picked = Set(member?.positionIds ?? [])
-                inviteAfterSave = member == nil || ["declined", nil, "", "not_invited"].contains(member?.joinStatus)
+                // New people: invite by default. Editing someone: only if you turn it on.
+                inviteAfterSave = member == nil
             }
         }
     }
@@ -495,9 +512,18 @@ struct MemberEditor: View {
         default:
             Toggle(isOn: $inviteAfterSave) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Email \(first) an invitation to join \(teamName)\(member?.joinStatus == "declined" ? " again" : "")")
+                    Text("Send an invitation email to join \(teamName)\(member?.joinStatus == "declined" ? " again" : "")")
                     Text("Once they join, they get set requests and see their sets, charts and lyrics.")
                         .font(.caption).foregroundStyle(.secondary)
+                    if inviteAfterSave {
+                        if name.trimmingCharacters(in: .whitespaces).isEmpty || !emailValid {
+                            Text("Fill in the name and email to send it.")
+                                .font(.caption).foregroundStyle(.orange)
+                        } else {
+                            Text("Sent to \(email.trimmingCharacters(in: .whitespaces)) when you tap Save & Invite.")
+                                .font(.caption).foregroundStyle(Theme.accentLight)
+                        }
+                    }
                 }
             }
         }
@@ -567,7 +593,8 @@ struct MemberEditor: View {
                     .select(TeamMember.columns).single().execute().value
             }
             if inviteAfterSave, saved.email != nil, !["accepted", "invited"].contains(saved.joinStatus ?? "") {
-                _ = await Invites.send(members: [saved.id])
+                let result = await Invites.send(members: [saved.id])
+                note = result
             }
             await onSaved()
             dismiss()
@@ -650,12 +677,5 @@ struct MessageTeamView: View {
         } catch {
             result = "Couldn't send. \(error.localizedDescription)"
         }
-    }
-}
-
-/// Icon and text close together, for the email / phone line.
-private struct CompactLabel: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 3) { configuration.icon.font(.system(size: 9)); configuration.title }
     }
 }

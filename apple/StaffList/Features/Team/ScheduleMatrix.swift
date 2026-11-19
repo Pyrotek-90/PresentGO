@@ -27,6 +27,9 @@ struct ScheduleMatrix: View {
     var selectedID: UUID? = nil
     /// Tap a set's header: select it.
     var onSelect: (ServiceSet) -> Void = { _ in }
+    /// The status key and how-to line under the matrix. The Team tab shows them under the pane
+    /// instead (so the pane's bottom row stays thin on the phone).
+    var showsLegend = true
     /// Tap a set's songs: open Edit Set.
     var onOpen: (ServiceSet) -> Void
 
@@ -136,7 +139,7 @@ struct ScheduleMatrix: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     matrix
-                    legend
+                    if showsLegend { ScheduleMatrix.Legend().padding(.horizontal, 10).padding(.vertical, 8) }
                     if let note {
                         Text(note).font(.caption2).foregroundStyle(.secondary)
                             .padding(.horizontal, 10).padding(.bottom, 8)
@@ -157,7 +160,8 @@ struct ScheduleMatrix: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { row in
                     label(row)
-                        .frame(width: labelWidth, height: height(row), alignment: .topLeading)
+                        // Roles sit on the right, next to the sets; section titles stay on the left.
+                        .frame(width: labelWidth, height: height(row), alignment: isPosition(row) ? .topTrailing : .topLeading)
                         .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
                         .overlay(alignment: .bottom) { rule }
                 }
@@ -284,6 +288,11 @@ struct ScheduleMatrix: View {
         }
     }
 
+    private func isPosition(_ row: Row) -> Bool {
+        if case .position = row { return true }
+        return false
+    }
+
     private func bandTitle(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.system(size: 10, weight: .semibold)).tracking(1)
@@ -355,19 +364,28 @@ struct ScheduleMatrix: View {
             .overlay(RoundedRectangle(cornerRadius: 3).stroke(color.opacity(0.6), lineWidth: 0.5))
     }
 
-    private var legend: some View {
-        HStack(spacing: 14) {
-            ForEach([("accepted", "Accepted"), ("invited", "Pending"), ("declined", "Declined"), ("draft", "Not sent")], id: \.0) { key, text in
-                HStack(spacing: 4) {
-                    Circle().fill(statusColor(key)).frame(width: 7, height: 7)
-                    Text(text)
+    /// ● Accepted ● Pending ● Declined ● Not sent, and how to use the matrix.
+    struct Legend: View {
+        var body: some View {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) { dots; Spacer(); hint }
+                VStack(alignment: .leading, spacing: 4) { dots; hint }
+            }
+            .font(.caption2).foregroundStyle(.secondary)
+        }
+        private var dots: some View {
+            HStack(spacing: 12) {
+                ForEach(["accepted", "invited", "declined", "draft"], id: \.self) { key in
+                    HStack(spacing: 4) {
+                        Circle().fill(StatusPill.color(key)).frame(width: 7, height: 7)
+                        Text(StatusPill.label(key))
+                    }
                 }
             }
-            Spacer()
-            Text("Tap a set to edit its team · drag a person to another set").foregroundStyle(.tertiary)
         }
-        .font(.caption2).foregroundStyle(.secondary)
-        .padding(.horizontal, 10).padding(.vertical, 8)
+        private var hint: some View {
+            Text("Tap a set to select it · tap its songs to edit it · drag a person to another set").foregroundStyle(.tertiary)
+        }
     }
 
     private func statusColor(_ status: String?) -> Color { StatusPill.color(status) }
