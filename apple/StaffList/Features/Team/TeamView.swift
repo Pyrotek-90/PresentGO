@@ -128,6 +128,7 @@ struct TeamView: View {
                 }
             }
             .navigationTitle("Team")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button("Message Team", systemImage: "envelope") { messaging = true }

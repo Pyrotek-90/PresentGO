@@ -68,7 +68,7 @@ struct Assignment: Codable, Identifiable, Hashable, Sendable {
 
     var statusLabel: String {
         switch status ?? "draft" {
-        case "invited": return "Waiting"
+        case "invited": return "Pending"
         case "accepted": return "Accepted"
         case "declined": return "Declined"
         default: return "Not sent"

@@ -104,6 +104,7 @@ struct SetsView: View {
                 }
             }
             .navigationTitle(session.currentTeam?.name ?? "Sets")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: ServiceSet.self) { SetDetailView(set: $0) }
             .navigationDestination(for: String.self) { _ in MyTeamsView() }
             .toolbar {
@@ -304,6 +305,10 @@ struct SetDetailView: View {
 
     @State private var arranging: SetItem?
     @State private var notice: String?
+    /// Tap a song: key, arrangement and Song Leader for this set. Tap media: rename / replace.
+    @State private var songOptions: SetItem?
+    @State private var mediaEditing: SetItem?
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     enum SheetKind: String, Identifiable {
         case addSong, announcement, details, media
@@ -315,6 +320,7 @@ struct SetDetailView: View {
     var body: some View {
         itemList
         .navigationTitle(set.name)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { showingCharts = true } label: {
@@ -328,15 +334,21 @@ struct SetDetailView: View {
                     }
                     .disabled(items.isEmpty)
                 }
-                if canEdit {
-                    addMenu
-                    EditButton()
-                }
             }
         }
         .fullScreenCover(isPresented: $presenting) { PresenterView(set: set) }
         .fullScreenCover(isPresented: $showingCharts) { SetChartsView(set: set) }
         .sheet(item: $sheet) { kind in sheetView(kind) }
+        .sheet(item: $songOptions) { item in
+            if let id = item.songId, let song = songs[id] {
+                SongItemSheet(set: set, item: item, song: song,
+                              onChange: { await updateContent($0, on: item) },
+                              onRemove: { await removeItem(item) })
+            }
+        }
+        .sheet(item: $mediaEditing) { item in
+            MediaItemSheet(item: item, onSave: { await updateContent($0, on: item) }, onRemove: { await removeItem(item) })
+        }
         .sheet(item: $arranging) { item in
             if let id = item.songId, let song = songs[id] {
                 SetArrangementSheet(song: song, initial: item.arrangement) { order in
@@ -364,9 +376,7 @@ struct SetDetailView: View {
                             Text(canEdit ? "Nothing in this set yet — add songs, a welcome, announcements or media." : "The leader hasn't added the program yet.")
                                 .foregroundStyle(.secondary)
                         }
-                        if canEdit {
-                            Button { sheet = .addSong } label: { Label("Add Song", systemImage: "plus") }
-                        }
+
                     }
                 }
                 ForEach(items) { item in
@@ -380,11 +390,16 @@ struct SetDetailView: View {
                 HStack {
                     Text("Program")
                     Spacer()
-                    if !items.isEmpty { Text("\(items.count) item\(items.count == 1 ? "" : "s")").textCase(nil) }
+                    if canEdit { addMenu.textCase(nil) }
+                }
+            } footer: {
+                if !items.isEmpty {
+                    Text("\(items.count) item\(items.count == 1 ? "" : "s")\(canEdit ? " · press and hold to reorder, swipe to remove" : "")")
                 }
             }
             SetTeamSection(set: set)
         }
+        .environment(\.defaultMinListRowHeight, 30)
     }
 
     @ViewBuilder private func sheetView(_ kind: SheetKind) -> some View {
@@ -517,15 +532,39 @@ struct SetDetailView: View {
                 Button("Add Worship Leader Notes", systemImage: "text.quote") { Task { await addNotes() } }
             }
             Button("Add Blank Slide", systemImage: "rectangle") { Task { await add(type: "blank", content: JSONObject()) } }
-            Divider()
-            Button("Edit Set Details", systemImage: "pencil") { sheet = .details }
         } label: {
-            Label("Add", systemImage: "plus")
+            // The same pill as the Team section's Assign button.
+            Label("Add Item", systemImage: "plus")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .foregroundStyle(Theme.accentLight)
+                .background(Theme.accent.opacity(0.2), in: Capsule())
+                .overlay(Capsule().stroke(Theme.accent.opacity(0.7)))
         }
+        .buttonStyle(.borderless)
     }
 
     @ViewBuilder private func row(_ item: SetItem) -> some View {
-        if item.type == "song", let id = item.songId, let song = songs[id] {
+        if item.type == "song", let id = item.songId, let song = songs[id], canEdit {
+            // Like the web: tap a song for its key, arrangement and Song Leader in this set.
+            Button { songOptions = item } label: {
+                HStack(spacing: 12) {
+                    ItemIcon(type: "song")
+                    VStack(alignment: .leading, spacing: 1) {
+                        SongRow(song: song)
+                        if let lead = item.content["lead"]?.objectValue?["name"]?.stringValue {
+                            Label(lead, systemImage: "music.mic").font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    if let key = item.key {
+                        Text(Song.shortKey(key)).font(.caption.bold()).foregroundStyle(.tint)
+                    }
+                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .tint(.primary)
+        } else if item.type == "song", let id = item.songId, let song = songs[id] {
             NavigationLink {
                 SongView(song: song, setKey: item.key)
             } label: {
@@ -556,9 +595,36 @@ struct SetDetailView: View {
             } label: {
                 ItemLabel(item: item)
             }
+        } else if item.type == "media" && canEdit {
+            Button { mediaEditing = item } label: {
+                HStack {
+                    ItemLabel(item: item)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .tint(.primary)
         } else {
             ItemLabel(item: item)
         }
+    }
+
+    /// Saves a program item's content (key, arrangement, Song Leader, media name or slides).
+    private func updateContent(_ content: JSONObject, on item: SetItem) async {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        do {
+            let patch: JSONObject = ["content": AnyJSON.object(content)]
+            try await supabase.from("set_items").update(patch).eq("id", value: item.id).execute()
+            items[index].content = content
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func removeItem(_ item: SetItem) async {
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        remove(at: IndexSet(integer: index))
     }
 
     /// AI Worship Leader Notes for songs that don't have one yet, each placed just before its song.

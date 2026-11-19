@@ -99,6 +99,7 @@ struct MediaLibraryView: View {
                 }
             }
             .navigationTitle(onPick == nil ? "Media" : "Add Media")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if onPick != nil {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

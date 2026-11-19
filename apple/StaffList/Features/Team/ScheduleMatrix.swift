@@ -357,7 +357,7 @@ struct ScheduleMatrix: View {
 
     private var legend: some View {
         HStack(spacing: 14) {
-            ForEach([("accepted", "Accepted"), ("invited", "Waiting"), ("declined", "Declined"), ("draft", "Not sent")], id: \.0) { key, text in
+            ForEach([("accepted", "Accepted"), ("invited", "Pending"), ("declined", "Declined"), ("draft", "Not sent")], id: \.0) { key, text in
                 HStack(spacing: 4) {
                     Circle().fill(statusColor(key)).frame(width: 7, height: 7)
                     Text(text)
@@ -370,14 +370,7 @@ struct ScheduleMatrix: View {
         .padding(.horizontal, 10).padding(.vertical, 8)
     }
 
-    private func statusColor(_ status: String?) -> Color {
-        switch status {
-        case "accepted": return .green
-        case "declined": return .red
-        case "invited": return .orange
-        default: return .secondary
-        }
-    }
+    private func statusColor(_ status: String?) -> Color { StatusPill.color(status) }
 
     private func when(_ s: ServiceSet) -> String {
         var parts: [String] = []

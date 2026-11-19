@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, UserPlus, X, Mail, Check, Clock, Send, ExternalLink, RotateCw } from 'lucide-react'
 import { formatSetTime } from '../../lib/sets'
@@ -25,7 +25,8 @@ const COLS = 'grid-cols-[4.75rem_5.5rem_minmax(0,1fr)_auto] sm:grid-cols-[6rem_7
 // `set` is the set shown; `onPrev` / `onNext` step through sets by date. `bare`: no card or
 // header (the Set page wraps it in its own card).
 export default function SchedulePane({ set, index, total, onPrev, onNext, positions, members, assignments,
-  onAdd, onRemove, onSend, sending, sendResult, onRefresh, active = true, multi = false, onSelect, showPrev = true, showNext = true, bare = false }) {
+  onAdd, onRemove, onSend, sending, sendResult, onRefresh, active = true, multi = false, onSelect, showPrev = true, showNext = true, bare = false,
+  assignKey = 0 }) {
   const { pro, requirePro } = useUpgrade()   // scheduling people is Pro
   const [assigning, setAssigning] = useState(false)
 
@@ -46,6 +47,8 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
   const sendable = toSend.filter(a => memById[a.member_id]?.email)
   const noEmail = toSend.length - sendable.length
   const openAssign = () => { if (requirePro('Scheduling your team')) setAssigning(true) }
+  // bare (the set page): the card around it has the Assign button; a new assignKey opens the dialog.
+  useEffect(() => { if (assignKey) openAssign() }, [assignKey])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const assignBtn = (
     <button onClick={openAssign} title={pro ? undefined : 'Assign (Pro)'}
@@ -81,15 +84,15 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
         <p className="px-3 py-6 text-sm text-muted text-center">No dated sets yet. Create a set with a date to schedule your team.</p>
       ) : (
         <div className="p-3 space-y-3">
-          <div className="flex items-center gap-2 min-h-7">
-            <p className="text-sm font-semibold truncate">{bare ? 'Team for This Set' : 'Who\'s serving'}
+          {!bare && <div className="flex items-center gap-2 min-h-7">
+            <p className="text-sm font-semibold truncate">Who's serving
               {valid.length > 0 && <span className="text-xs font-normal text-muted"> · {accepted} of {valid.length} accepted</span>}
             </p>
             <div className="ml-auto flex items-center gap-3 shrink-0">
               {valid.length > 0 && onRefresh && <button onClick={onRefresh} className="flex items-center gap-1 text-[11px] text-muted hover:text-primary" title="Check for new replies"><RotateCw size={11} /> Refresh</button>}
               {assignBtn}
             </div>
-          </div>
+          </div>}
 
           {members.length === 0 && pro && (
             <p className="text-xs text-muted">Add people on the <Link to="/team" className="text-accent-light underline">Team</Link> tab first.</p>
@@ -100,14 +103,15 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
           ) : (
             <div className="space-y-0.5">
               <div className={`grid ${COLS} gap-x-2 sm:gap-x-3 px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted`} aria-hidden="true">
-                <span>Team</span><span>Position</span><span>Name</span><span>Status</span>
+                <span>Section</span><span>Position</span><span>Name</span><span>Status</span>
               </div>
-              <ul className="divide-y divide-border/50 border-t border-border/50">
+              {/* A line above each section only; people in the same section sit together. */}
+              <ul className="border-b border-border/50">
                 {groups.map(g => g.rows.map((a, i) => {
                   const m = memById[a.member_id], p = posById[a.position_id], st = STATUS[statusOf(a)]
                   const draft = statusOf(a) === 'draft'
                   return (
-                    <li key={a.id} className={`grid ${COLS} items-center gap-x-2 sm:gap-x-3 px-1 py-1.5`}>
+                    <li key={a.id} className={`grid ${COLS} items-center gap-x-2 sm:gap-x-3 px-1 py-1 ${i === 0 ? 'border-t border-border/50' : ''}`}>
                       <span className="text-[10px] font-bold uppercase tracking-wide text-accent-light truncate">{i === 0 ? g.label : ''}</span>
                       <span className="text-sm text-muted truncate">{p.name}</span>
                       <span className="text-sm font-medium truncate min-w-0">{m.name}{!m.email && draft && <span className="text-xs font-normal text-amber-300/80"> · no email</span>}</span>
@@ -127,6 +131,8 @@ export default function SchedulePane({ set, index, total, onPrev, onNext, positi
                   )
                 }))}
               </ul>
+              {bare && <p className="px-1 pt-1 text-[11px] text-muted">{accepted} of {valid.length} accepted
+                {onRefresh && <button onClick={onRefresh} className="ml-2 inline-flex items-center gap-1 hover:text-primary" title="Check for new replies"><RotateCw size={10} /> Refresh</button>}</p>}
             </div>
           )}
 

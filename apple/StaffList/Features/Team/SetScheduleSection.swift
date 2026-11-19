@@ -52,6 +52,9 @@ struct SetTeamSection: View {
     @State private var assigning = false
     @State private var sending = false
     @State private var note: String?
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// Phones: a colored dot instead of the status word, with a legend under the table.
+    private var compact: Bool { sizeClass != .regular }
 
     private var canEdit: Bool { session.team(for: set)?.canEdit ?? false }
     private var posById: [UUID: Position] { Dictionary(uniqueKeysWithValues: positions.map { ($0.id, $0) }) }
@@ -72,26 +75,26 @@ struct SetTeamSection: View {
             }
     }
 
-    private var groupWidth: CGFloat { 92 }
-    private var positionWidth: CGFloat { 104 }
+    private var groupWidth: CGFloat { compact ? 66 : 92 }
+    private var positionWidth: CGFloat { compact ? 78 : 104 }
 
     var body: some View {
         Section {
             if !loaded {
                 HStack { Spacer(); ProgressView(); Spacer() }
             } else if assignments.isEmpty {
-                HStack {
-                    Text("No one scheduled yet").foregroundStyle(.secondary)
-                    Spacer()
-                    if canEdit { assignButton }
-                }
+                Text("No one scheduled yet").foregroundStyle(.secondary)
             } else {
                 columnHeader
                 ForEach(ScheduleMatrix.MatrixGroup.allCases, id: \.self) { group in
                     let list = rows(in: group)
-                    // The group's name sits in the first column of its first row only.
+                    // The section's name sits in the first column of its first row only, and the
+                    // people in one section sit together with no lines between them.
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, a in
                         assignmentRow(a, group: i == 0 ? group : nil)
+                            .listRowSeparator(i == 0 ? .visible : .hidden, edges: .top)
+                            .listRowSeparator(i == list.count - 1 ? .visible : .hidden, edges: .bottom)
+                            .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
                     }
                 }
                 if canEdit { sendRow }
@@ -99,13 +102,18 @@ struct SetTeamSection: View {
             if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
         } header: {
             HStack {
-                Text("Team for This Set")
-                if !assignments.isEmpty {
-                    let yes = assignments.filter { $0.status == "accepted" }.count
-                    Text("· \(yes) of \(assignments.count) accepted").textCase(nil)
-                }
+                Text("Team")
+                if !assignments.isEmpty { Text("\(assignments.count)").foregroundStyle(.secondary) }
                 Spacer()
-                if canEdit && !assignments.isEmpty { assignButton.textCase(nil) }
+                if canEdit { assignButton.textCase(nil) }
+            }
+        } footer: {
+            if !assignments.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    let yes = assignments.filter { $0.status == "accepted" }.count
+                    Text("\(yes) of \(assignments.count) accepted")
+                    if compact { StatusLegend() }
+                }
             }
         }
         // The sheet keeps its own copy while open, so changes here don't redraw (and close) it.
@@ -154,13 +162,13 @@ struct SetTeamSection: View {
         .padding(.vertical, 2)
     }
 
-    /// TEAM · POSITION · NAME · STATUS, like the Who's Serving table.
+    /// SECTION · POSITION · NAME · STATUS, like the Who's Serving table.
     private var columnHeader: some View {
         HStack(spacing: 10) {
-            Text("Team").frame(width: groupWidth, alignment: .leading)
+            Text("Section").frame(width: groupWidth, alignment: .leading)
             Text("Position").frame(width: positionWidth, alignment: .leading)
             Text("Name").frame(maxWidth: .infinity, alignment: .leading)
-            Text("Status")
+            Text(compact ? "" : "Status").frame(width: compact ? 12 : nil)
         }
         .font(.system(size: 10, weight: .semibold)).tracking(0.8).textCase(.uppercase)
         .foregroundStyle(.secondary)
@@ -170,22 +178,28 @@ struct SetTeamSection: View {
     private func assignmentRow(_ a: Assignment, group: ScheduleMatrix.MatrixGroup?) -> some View {
         let m = members[a.memberId]
         let draft = (a.status ?? "draft") == "draft"
-        return HStack(spacing: 10) {
+        return HStack(spacing: compact ? 6 : 10) {
             Text(group?.label.uppercased() ?? "")
-                .font(.caption2.weight(.bold)).tracking(0.6).foregroundStyle(Theme.accentLight)
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .font(.system(size: compact ? 9 : 11, weight: .bold)).tracking(0.4).foregroundStyle(Theme.accentLight)
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(width: groupWidth, alignment: .leading)
             Text(posById[a.positionId]?.name ?? "")
-                .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                .font(compact ? .footnote : .subheadline).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85)
                 .frame(width: positionWidth, alignment: .leading)
             HStack(spacing: 4) {
-                Text(m?.name ?? "Someone").font(.subheadline.weight(.medium)).lineLimit(1)
+                Text(m?.name ?? "Someone").font((compact ? Font.footnote : .subheadline).weight(.medium)).lineLimit(1).minimumScaleFactor(0.85)
                 if m?.email == nil && draft {
                     Text("· no email").font(.caption).foregroundStyle(.orange.opacity(0.8)).lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            StatusPill(status: a.status)
+            if compact {
+                Circle().fill(StatusPill.color(a.status)).frame(width: 10, height: 10)
+                    .frame(width: 12)
+                    .accessibilityLabel(StatusPill.label(a.status))
+            } else {
+                StatusPill(status: a.status)
+            }
         }
         .swipeActions {
             if canEdit {
@@ -408,7 +422,7 @@ struct AssignTeamSheet: View {
     }
 
     private func statusColor(_ s: String?) -> Color {
-        switch s { case "accepted": return .green; case "declined": return .red; case "invited": return .orange; default: return .secondary }
+        StatusPill.color(s)
     }
 
     private func toggle(_ m: TeamMember, _ p: Position) async {
@@ -445,29 +459,47 @@ struct StatusPill: View {
     let status: String?
 
     var body: some View {
-        Text(label)
+        Text(Self.label(status))
             .font(.caption.weight(.semibold))
+            .lineLimit(1).fixedSize()
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .foregroundStyle(color)
-            .background(color.opacity(0.15), in: Capsule())
+            .foregroundStyle(Self.color(status))
+            .background(Self.color(status).opacity(0.15), in: Capsule())
     }
 
-    private var label: String {
+    static func label(_ status: String?) -> String {
         switch status ?? "draft" {
-        case "invited": return "Waiting"
+        case "invited": return "Pending"
         case "accepted": return "Accepted"
         case "declined": return "Declined"
         default: return "Not sent"
         }
     }
 
-    private var color: Color {
+    /// Grey not sent, yellow pending, green accepted, red declined.
+    static func color(_ status: String?) -> Color {
         switch status {
         case "accepted": return .green
         case "declined": return .red
-        case "invited": return .orange
-        default: return .secondary
+        case "invited": return .yellow
+        default: return .gray
         }
+    }
+}
+
+/// The key for the status dots: ● Not sent ● Pending ● Accepted ● Declined.
+struct StatusLegend: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(["draft", "invited", "accepted", "declined"], id: \.self) { s in
+                HStack(spacing: 4) {
+                    Circle().fill(StatusPill.color(s)).frame(width: 7, height: 7)
+                    Text(StatusPill.label(s))
+                }
+            }
+        }
+        .font(.caption2)
+        .accessibilityElement(children: .combine)
     }
 }
 

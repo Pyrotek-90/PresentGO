@@ -3,6 +3,8 @@ import SwiftUI
 /// The sets on a calendar, like the web Schedule page: Month or Week, Today and ‹ ›.
 /// Upcoming sets are highlighted in the accent color, past sets are dimmed, today is circled.
 /// Tapping a day selects it (its sets are listed under the calendar); tapping a set opens it.
+/// Weeks start on Monday so the weekend sits together. Month opens on this week and the three after
+/// it; ‹ › then go a whole month at a time, and Today comes back to the four weeks.
 struct SetsCalendar: View {
     let sets: [ServiceSet]
     @Binding var selected: Date
@@ -13,9 +15,15 @@ struct SetsCalendar: View {
     @AppStorage("setsCalendarMode") private var mode = "month"
     @AppStorage("setsCalendarCollapsed") private var collapsed = false
     @State private var cursor = Date.now
+    /// Month view shows this week + 3 until ‹ › is used.
+    @State private var rolling = true
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    private let cal = Calendar.current
+    private let cal: Calendar = {
+        var c = Calendar.current
+        c.firstWeekday = 2   // Monday
+        return c
+    }()
     private var today: Date { cal.startOfDay(for: .now) }
 
     private var byDay: [Date: [ServiceSet]] {
@@ -46,6 +54,9 @@ struct SetsCalendar: View {
             return sameMonth
                 ? "\(first.formatted(.dateTime.month(.wide))) \(first.formatted(.dateTime.day()))–\(last.formatted(.dateTime.day())), \(last.formatted(.dateTime.year()))"
                 : "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(last.formatted(.dateTime.month(.abbreviated).day().year()))"
+        }
+        if rolling, let first = monthDays.first, let last = monthDays.last {
+            return "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(last.formatted(.dateTime.month(.abbreviated).day()))"
         }
         return cursor.formatted(.dateTime.month(.wide).year())
     }
@@ -82,7 +93,7 @@ struct SetsCalendar: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 140)
-            Button("Today") { cursor = .now; selected = today }
+            Button("Today") { cursor = .now; rolling = true; selected = today }
                 .buttonStyle(.bordered).controlSize(.small)
             Button { shift(-1) } label: { Image(systemName: "chevron.left") }
                 .buttonStyle(.borderless).accessibilityLabel(mode == "week" ? "Previous week" : "Previous month")
@@ -91,22 +102,30 @@ struct SetsCalendar: View {
     }
 
     private func shift(_ by: Int) {
+        if mode != "week" && rolling {
+            // From the four weeks: › goes to next month, ‹ to this whole month.
+            rolling = false
+            cursor = cal.date(byAdding: .month, value: by > 0 ? 1 : 0, to: .now) ?? .now
+            return
+        }
         cursor = cal.date(byAdding: mode == "week" ? .weekOfYear : .month, value: by, to: cursor) ?? cursor
     }
 
     // MARK: Month
 
-    private var weekdaySymbols: [String] {
-        let s = cal.veryShortStandaloneWeekdaySymbols
-        let first = cal.firstWeekday - 1
-        return Array(s[first...] + s[..<first])
-    }
+    private let weekdaySymbols = ["M", "Tu", "W", "Th", "F", "Sat", "Sun"]
 
     private var monthDays: [Date] {
+        if rolling {
+            let start = cal.dateInterval(of: .weekOfYear, for: .now)?.start ?? today
+            return (0..<28).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+        }
         guard let start = cal.date(from: cal.dateComponents([.year, .month], from: cursor)) else { return [] }
         let lead = (cal.component(.weekday, from: start) - cal.firstWeekday + 7) % 7
         let gridStart = cal.date(byAdding: .day, value: -lead, to: start) ?? start
-        return (0..<42).compactMap { cal.date(byAdding: .day, value: $0, to: gridStart) }
+        let days = cal.range(of: .day, in: .month, for: start)?.count ?? 30
+        let count = Int((Double(lead + days) / 7).rounded(.up)) * 7
+        return (0..<count).compactMap { cal.date(byAdding: .day, value: $0, to: gridStart) }
     }
 
     private var monthView: some View {
@@ -128,7 +147,7 @@ struct SetsCalendar: View {
     }
 
     private func monthCell(_ day: Date) -> some View {
-        let inMonth = cal.isDate(day, equalTo: cursor, toGranularity: .month)
+        let inMonth = rolling || cal.isDate(day, equalTo: cursor, toGranularity: .month)
         let isSelected = cal.isDate(day, inSameDayAs: selected)
         let daySets = byDay[cal.startOfDay(for: day)] ?? []
         let wide = sizeClass == .regular
@@ -195,16 +214,13 @@ struct SetsCalendar: View {
     private var weekView: some View {
         let days = weekDays(of: cursor)
         return Group {
-            if sizeClass == .regular {
-                HStack(alignment: .top, spacing: 0) {
-                    ForEach(days, id: \.self) { day in weekColumn(day) }
-                }
-                .frame(minHeight: 180, alignment: .top)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(days, id: \.self) { day in weekRow(day) }
+            // Seven columns, only as tall as the busiest day. On the phone, just colored boxes.
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(days, id: \.self) { day in
+                    if sizeClass == .regular { weekColumn(day) } else { weekBoxColumn(day) }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -215,13 +231,12 @@ struct SetsCalendar: View {
         return Button { selected = day } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 4) {
-                    Text(day.formatted(.dateTime.weekday(.abbreviated))).font(.caption).foregroundStyle(.secondary)
+                    Text(weekdaySymbols[(cal.component(.weekday, from: day) + 5) % 7]).font(.caption).foregroundStyle(.secondary)
                     dayNumber(day)
                 }
                 ForEach(daySets) { s in
                     Button { onOpen(s) } label: { setCard(s) }.buttonStyle(.plain)
                 }
-                Spacer(minLength: 0)
             }
             .padding(6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -232,33 +247,34 @@ struct SetsCalendar: View {
         .buttonStyle(.plain)
     }
 
-    /// iPhone: one row per day.
-    private func weekRow(_ day: Date) -> some View {
+    /// iPhone: a narrow column per day with a colored box for each set (tap a box to open the set).
+    private func weekBoxColumn(_ day: Date) -> some View {
         let isSelected = cal.isDate(day, inSameDayAs: selected)
         let daySets = byDay[cal.startOfDay(for: day)] ?? []
+        let label = weekdaySymbols[(cal.component(.weekday, from: day) + 5) % 7]
         return Button { selected = day } label: {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(spacing: 2) {
-                    Text(day.formatted(.dateTime.weekday(.abbreviated))).font(.caption2).foregroundStyle(.secondary)
-                    dayNumber(day)
-                }
-                .frame(width: 40)
-                VStack(alignment: .leading, spacing: 6) {
-                    if daySets.isEmpty {
-                        Text(" ").font(.caption)
+            VStack(spacing: 4) {
+                Text(label).font(.caption2).foregroundStyle(.secondary)
+                dayNumber(day)
+                ForEach(daySets) { s in
+                    Button { onOpen(s) } label: {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(isUpcoming(s) ? color(s).opacity(0.55) : Color.secondary.opacity(0.3))
+                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(isUpcoming(s) ? color(s) : .clear, lineWidth: 1))
+                            .frame(height: 18)
                     }
-                    ForEach(daySets) { s in
-                        Button { onOpen(s) } label: { setCard(s) }.buttonStyle(.plain)
-                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(s.name)
                 }
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12).padding(.vertical, 6)
+            .padding(.horizontal, 3).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(isSelected ? Theme.accent.opacity(0.12) : .clear)
-            .overlay(alignment: .bottom) { Rectangle().fill(Color.secondary.opacity(0.15)).frame(height: 0.5) }
+            .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.15)).frame(width: 0.5) }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted))\(daySets.isEmpty ? "" : ", \(daySets.count) set\(daySets.count == 1 ? "" : "s")")")
     }
 
     private func setCard(_ s: ServiceSet) -> some View {

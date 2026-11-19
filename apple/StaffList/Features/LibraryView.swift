@@ -121,6 +121,7 @@ struct LibraryView: View {
             }
             .overlay { overlay }
             .navigationTitle("Songs")
+            .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top) {
                 if offline {
                     Label("Offline — showing your saved library", systemImage: "icloud.slash")
