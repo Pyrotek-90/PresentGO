@@ -17,6 +17,7 @@ struct TeamDetailsSection: View {
     @State private var saved: (name: String, details: [String: String])?
     @State private var state: SaveState = .idle
     @State private var loadedFor: UUID?
+    @State private var loadFailed = false
 
     private enum SaveState { case idle, saving, saved, failed }
     private static let fields = ["church_name", "contact_name", "contact_email", "contact_phone", "welcome"]
@@ -61,6 +62,15 @@ struct TeamDetailsSection: View {
                         .disabled(!dirty || state == .saving)
                     if state == .saved && !dirty { Text("Saved").font(.caption).foregroundStyle(.green) }
                     if state == .failed { Text("Couldn't save. Please try again.").font(.caption).foregroundStyle(.red) }
+                }
+            } else if alwaysOpen {
+                // In the sheet there's no header, so an empty section would never appear (and never
+                // load). Show a row while the details load.
+                if loadFailed {
+                    Text("Couldn't load the team details. Check your connection and try again.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                } else {
+                    HStack { Spacer(); ProgressView(); Spacer() }
                 }
             }
         } header: {
@@ -128,7 +138,11 @@ struct TeamDetailsSection: View {
 
     private func load() async {
         guard let team = session.currentTeam, loadedFor != team.id else { return }
-        guard let row: Row = try? await supabase.from("churches").select("name, details").eq("id", value: team.id).single().execute().value else { return }
+        loadFailed = false
+        guard let row: Row = try? await supabase.from("churches").select("name, details").eq("id", value: team.id).single().execute().value else {
+            loadFailed = true
+            return
+        }
         var d: [String: String] = [:]
         for k in Self.fields { d[k] = row.details?[k] ?? "" }
         name = row.name
