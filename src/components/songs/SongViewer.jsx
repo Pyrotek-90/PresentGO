@@ -159,7 +159,7 @@ export default function SongViewer({ song, onClose, setNav, onModeChange, startA
   useEffect(() => { onModeChange?.(mode) }, [mode])
   useEffect(() => { if (wantEnd.current) { const t = setTimeout(() => { wantEnd.current = false }, 400); return () => clearTimeout(t) } }, [])
   // A set's chosen key wins; otherwise the song's preferred key, then the original.
-  const [activeKey] = useState(initialKey || (keys.includes(meta.preferred_key) ? meta.preferred_key : '') || keys[0] || '')
+  const [activeKey, setActiveKey] = useState(initialKey || (keys.includes(meta.preferred_key) ? meta.preferred_key : '') || keys[0] || '')
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -379,18 +379,27 @@ export default function SongViewer({ song, onClose, setNav, onModeChange, startA
 
         {/* Key and BPM (read only), then Aa: text size and columns in one popup, like the iOS app */}
         <div className="order-2 flex items-center gap-3 shrink-0">
-          {mode === 'chords' && activeKey && (
-            <span className="flex items-baseline gap-1 text-sm">
-              <span className="text-muted font-medium">Key</span>
-              <span className="font-bold text-accent-light">{shortKey(activeKey)}</span>
-            </span>
-          )}
           {meta.bpm && (
             <span className="hidden sm:flex items-baseline gap-1 text-sm">
               <span className="text-muted font-medium">BPM</span>
               <span className="font-bold">{meta.bpm}</span>
             </span>
           )}
+          {/* From the Songs page the key can be changed (Default = the preferred key); in a set it's the set's key, shown only. */}
+          {mode === 'chords' && activeKey && (setNav || keys.length < 2 ? (
+            <span className="flex items-baseline gap-1 text-sm">
+              <span className="text-muted font-medium">Key</span>
+              <span className="font-bold">{shortKey(activeKey)}</span>
+            </span>
+          ) : (
+            <label className="flex items-center gap-1 text-sm">
+              <span className="text-muted font-medium">Key</span>
+              <select value={activeKey} onChange={e => setActiveKey(e.target.value)} aria-label="Key"
+                className="h-8 rounded-lg border border-accent bg-accent/25 text-accent-light font-bold px-1.5 text-sm">
+                {keys.map(k => <option key={k} value={k}>{shortKey(k)}{meta.preferred_key === k ? ' · Default' : ''}</option>)}
+              </select>
+            </label>
+          ))}
           <div className="relative">
             <button onClick={() => setSizeOpen(o => !o)} aria-label="Text size and columns" aria-expanded={sizeOpen}
               className={`min-w-[2.5rem] h-8 px-2 rounded-lg border text-xs font-semibold ${sizeOpen ? 'border-accent text-accent-light bg-accent/15' : 'border-border text-accent-light hover:bg-card'}`}>

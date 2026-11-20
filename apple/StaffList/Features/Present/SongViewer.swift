@@ -12,7 +12,8 @@ struct SongLayout {
     /// Lines kept together on a page: a section header, or a chord line with its lyric.
     struct Unit { let lines: [Line] }
     struct Section { let units: [Unit] }
-    struct Column { var lines: [Line] = []; var gaps: Set<Int> = [] }   // gaps: line indexes with space above
+    /// gaps: line indexes with space above; rows: how many rows each line takes (long lyrics wrap).
+    struct Column { var lines: [Line] = []; var gaps: Set<Int> = []; var rows: [Int] = [] }
 
     let fontSize: CGFloat
     let columns: Int
@@ -89,6 +90,10 @@ struct SongLayout {
         }
     }
 
+    /// Every line is drawn at one size. Automatic sizing picks the largest size that puts the whole
+    /// song on one screen (one column, or two on a wide screen). Long lyric lines may wrap to a second
+    /// row rather than shrinking the whole song; chord lines never wrap. A song too long for one
+    /// screen at a readable size is paged at a comfortable size.
     static func make(sections: [Section], chart: Bool, size: CGSize, manualSize: CGFloat?, columnsPref: Int?) -> SongLayout {
         let wide = size.width >= 640
         let padX: CGFloat = wide ? 20 : 14
@@ -96,70 +101,95 @@ struct SongLayout {
         let width = max(size.width - padX * 2, 100)
         let height = max(size.height - 24, 100)
 
-        // Each line's width at 100pt, plus its indent.
-        var widest100: CGFloat = 0
-        for s in sections { for u in s.units { for l in u.lines {
+        // Each line's width at 100pt (with its indent), measured once; a little slack for rounding.
+        var w100: [Line: CGFloat] = [:]
+        var widestChord100: CGFloat = 0, widest100: CGFloat = 0
+        for s in sections { for u in s.units { for l in u.lines where w100[l] == nil {
             let attrs: [NSAttributedString.Key: Any] = [.font: font(l.kind, chart: chart)]
-            let w = l.kind == .header
-                ? (l.text.uppercased() as NSString).size(withAttributes: attrs).width * 1.12   // letter spacing
-                : (l.text as NSString).size(withAttributes: attrs).width + 50                   // 0.5em indent
+            let w = (l.kind == .header
+                ? (l.text.uppercased() as NSString).size(withAttributes: attrs).width + CGFloat(l.text.count) * 7
+                : (l.text as NSString).size(withAttributes: attrs).width + 50) * 1.03
+            w100[l] = w
             widest100 = max(widest100, w)
+            if l.kind == .chords { widestChord100 = max(widestChord100, w) }
         } } }
         func colWidth(_ cols: Int) -> CGFloat { (width - CGFloat(cols - 1) * colGap) / CGFloat(cols) }
-        func fitsWidth(_ f: CGFloat, _ cols: Int) -> Bool { widest100 * f / 100 <= colWidth(cols) }
-        func widestFit(_ cols: Int) -> CGFloat { floor(colWidth(cols) / widest100 * 100) }
-
-        let maxSize: CGFloat = 32
-        let comfort: CGFloat = wide ? (chart ? 18 : 22) : (chart ? 15 : 16)
-        let floorTwo: CGFloat = 15
-        let minReadable: CGFloat = wide ? 12 : 11
-
-        func onePage(_ f: CGFloat, _ cols: Int) -> Bool {
-            fitsWidth(f, cols) && pack(sections, f, height).count <= cols
+        func rows(_ l: Line, _ f: CGFloat, _ cw: CGFloat) -> Int {
+            guard l.kind != .chords else { return 1 }
+            return max(1, Int(ceil((w100[l] ?? 0) * f / 100 / cw)))
         }
+
+        let maxSize: CGFloat = 40
+        let minSize: CGFloat = wide ? 13 : 11
+        let comfort: CGFloat = wide ? (chart ? 18 : 22) : (chart ? 15 : 16)
+        let colChoices: [Int] = {
+            if let p = columnsPref { return [p == 2 && wide ? 2 : 1] }
+            return wide ? [1, 2] : [1]
+        }()
+
+        /// The largest size that fits the song on one page, with or without wrapping.
+        func best(wrap: Bool) -> (f: CGFloat, cols: Int)? {
+            var out: (f: CGFloat, cols: Int)?
+            for c in colChoices {
+                let cw = colWidth(c)
+                for f in stride(from: maxSize, through: minSize, by: -1) {
+                    if widestChord100 * f / 100 > cw { continue }          // chords never wrap
+                    if !wrap && widest100 * f / 100 > cw { continue }
+                    if pack(sections, f, height, cw: cw, rows: rows).count <= c {
+                        if out == nil || f > out!.f { out = (f, c) }
+                        break
+                    }
+                }
+            }
+            return out
+        }
+
         var f: CGFloat
         var cols: Int
         if let manual = manualSize {
             f = manual
-            if let p = columnsPref { cols = p == 2 && wide ? 2 : 1 } else { cols = onePage(f, 1) || !wide ? 1 : 2 }
-        } else if let p = columnsPref {
-            cols = p == 2 && wide ? 2 : 1
-            f = stride(from: maxSize, through: comfort, by: -1).first { onePage($0, cols) } ?? min(comfort, max(minReadable, widestFit(cols)))
-        } else if let one = stride(from: maxSize, through: comfort, by: -1).first(where: { onePage($0, 1) }) {
-            f = one; cols = 1
-        } else if wide, let two = stride(from: maxSize, through: min(comfort, floorTwo), by: -1).first(where: { onePage($0, 2) }) {
-            f = two; cols = 2
-        } else if wide, widestFit(2) >= floorTwo {
-            cols = 2; f = min(comfort, widestFit(2))
+            cols = colChoices.count == 1 ? colChoices[0]
+                : (pack(sections, f, height, cw: colWidth(1), rows: rows).count <= 1 ? 1 : 2)
         } else {
-            cols = 1; f = min(comfort, max(minReadable, widestFit(1)))
+            let plain = best(wrap: false), wrapped = best(wrap: true)
+            // Whole lines read best: only wrap when it buys clearly larger text.
+            if let p = plain, (wrapped?.f ?? 0) < p.f + 4 { (f, cols) = (p.f, p.cols) }
+            else if let w = wrapped { (f, cols) = (w.f, w.cols) }
+            else {
+                // Too long for one screen: page it at a comfortable size.
+                cols = colChoices.last ?? 1
+                f = min(comfort, max(minSize, floor(colWidth(cols) / max(widestChord100, 1) * 100)))
+            }
         }
-        if manualSize == nil { f = max(minReadable, min(f, widestFit(cols))) }
 
-        let columns = pack(sections, f, height)
+        let cw = colWidth(cols)
+        let columns = pack(sections, f, height, cw: cw, rows: rows)
         let pages = stride(from: 0, to: max(columns.count, 1), by: cols).map { Array(columns[$0..<min($0 + cols, columns.count)]) }
         return SongLayout(fontSize: f, columns: cols, pages: pages.isEmpty ? [[]] : pages, chart: chart)
     }
 
     /// Fills columns of the given height: a section goes whole into the next column when it doesn't
     /// fit; one taller than a column is split between units (never between a chord and its lyric).
-    private static func pack(_ sections: [Section], _ f: CGFloat, _ height: CGFloat) -> [Column] {
+    private static func pack(_ sections: [Section], _ f: CGFloat, _ height: CGFloat, cw: CGFloat,
+                             rows: (Line, CGFloat, CGFloat) -> Int) -> [Column] {
         let lineH = f * 1.32, gap = f * 0.8
         var cols: [Column] = []
         var cur = Column()
         var h: CGFloat = 0
         func newColumn() { if !cur.lines.isEmpty { cols.append(cur) }; cur = Column(); h = 0 }
+        func unitH(_ u: Unit) -> CGFloat { CGFloat(u.lines.reduce(0) { $0 + rows($1, f, cw) }) * lineH }
         for s in sections {
-            let secH = CGFloat(s.units.reduce(0) { $0 + $1.lines.count }) * lineH
+            let secH = s.units.reduce(0) { $0 + unitH($1) }
             let above = cur.lines.isEmpty ? 0 : gap
             if h + above + secH > height && secH <= height { newColumn() }
             var first = true
             for u in s.units {
-                let uh = CGFloat(u.lines.count) * lineH
+                let uh = unitH(u)
                 let lead = first && !cur.lines.isEmpty ? gap : 0
                 if h + lead + uh > height && !cur.lines.isEmpty { newColumn() }
                 if first && !cur.lines.isEmpty { cur.gaps.insert(cur.lines.count); h += gap }
                 cur.lines += u.lines
+                cur.rows += u.lines.map { rows($0, f, cw) }
                 h += uh
                 first = false
             }
@@ -186,6 +216,8 @@ struct SongViewer: View {
     let entries: [Entry]
     var startIndex = 0
     var onClose: (() -> Void)? = nil
+    /// The Songs page lets you pick a key here; from a set the key is the set's, shown only.
+    var allowKeyChange = false
 
     @AppStorage("viewerMode") private var modeRaw = "lyrics"
     @AppStorage("viewerSizeChords") private var sizeChords: Double = 0   // 0 = fit automatically
@@ -301,8 +333,10 @@ struct SongViewer: View {
             Spacer(minLength: 6)
             // Key and BPM are shown, not changed here (a set's key is chosen on the set).
             // Each label is the same size as its value.
-            if chartMode, let k = activeKey(index) { fact("Key", Song.shortKey(k), accent: true) }
             if let bpm = song.metadata?.bpm?.value, !bpm.isEmpty { fact("BPM", bpm) }
+            if chartMode, let k = activeKey(index) {
+                if allowKeyChange { keyMenu } else { fact("Key", Song.shortKey(k)) }
+            }
             sizeMenu
             if let onClose {
                 Button(action: onClose) { Image(systemName: "xmark").font(.body.weight(.semibold)) }
@@ -336,8 +370,8 @@ struct SongViewer: View {
                 ForEach(others, id: \.self) { k in keyButton(k, current: current) }
             }
         } label: {
-            HStack(spacing: 4) {
-                Text("KEY").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundStyle(Theme.muted)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("Key").font(.subheadline.weight(.medium)).foregroundStyle(Theme.muted)
                 Text(current.map(Song.shortKey) ?? "").font(.subheadline.bold())
                     .padding(.horizontal, 8).frame(minWidth: 34, minHeight: 28)
                     .foregroundStyle(Theme.accentLight)
@@ -353,7 +387,9 @@ struct SongViewer: View {
             keys[index] = k
             page = 0
         } label: {
-            if Chords.sameKey(k, current) { Label(k, systemImage: "checkmark") } else { Text(k) }
+            let isDefault = song.metadata?.preferredKey.map { Chords.sameKey($0, k) } ?? false
+            let t = isDefault ? "\(k) · Default" : k
+            if Chords.sameKey(k, current) { Label(t, systemImage: "checkmark") } else { Text(t) }
         }
     }
 
@@ -437,7 +473,8 @@ struct SongViewer: View {
             ForEach(Array(col.lines.enumerated()), id: \.offset) { i, line in
                 if col.gaps.contains(i) { Color.clear.frame(height: l.gap) }
                 lineView(line, l)
-                    .frame(height: l.lineHeight, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: l.lineHeight * CGFloat(i < col.rows.count ? col.rows[i] : 1),
+                           alignment: .topLeading)
             }
         }
     }
@@ -450,17 +487,20 @@ struct SongViewer: View {
             Text(line.text.uppercased())
                 .font(.system(size: f * 0.72, weight: .bold)).tracking(f * 0.07)
                 .foregroundStyle(Theme.muted)
-                .lineLimit(1)
+                .lineSpacing(f * 0.3)
+                .frame(minHeight: f * 1.32)
         case .chords:
             Text(line.text)
                 .font(.system(size: f, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.accentLight)
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .lineLimit(1).fixedSize(horizontal: true, vertical: false)   // same size as every other line
+                .frame(minHeight: f * 1.32)
                 .padding(.leading, f * 0.5)
         case .lyric:
             Text(line.text)
                 .font(l.chart ? .system(size: f, weight: .semibold, design: .monospaced) : .system(size: f, weight: .semibold))
-                .lineLimit(1).minimumScaleFactor(0.6)
+                .lineSpacing(f * 0.1)                 // a long line wraps; it never shrinks
+                .frame(minHeight: f * 1.32)
                 .padding(.leading, f * 0.5)
         }
     }

@@ -14,7 +14,7 @@ struct SongView: View {
     }
 
     var body: some View {
-        SongViewer(entries: [SongViewer.Entry(song: song, key: setKey)])
+        SongViewer(entries: [SongViewer.Entry(song: song, key: setKey)], allowKeyChange: setKey == nil)
             .id(song.updatedAt ?? song.title)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)

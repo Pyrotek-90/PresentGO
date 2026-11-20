@@ -56,14 +56,17 @@ struct MainTabView: View {
             ForEach(tabs, id: \.id) { t in
                 if visited.contains(t.id) {
                     page(t.id)
+                        // Room at the end of every list and scroll view so the last row clears the bar.
+                        .contentMargins(.bottom, 84, for: .scrollContent)
+                        .contentMargins(.bottom, 70, for: .scrollIndicators)
                         .opacity(tab == t.id ? 1 : 0)
                         .allowsHitTesting(tab == t.id)
                         .accessibilityHidden(tab != t.id)
                 }
             }
         }
-        // `spacing` lets every page scroll a little past the bubble so its last row is fully visible.
-        .safeAreaInset(edge: .bottom, spacing: 18) {
+        // The bubble floats over the page (the page scrolls under it); content margins above leave room.
+        .overlay(alignment: .bottom) {
             // A floating, see-through bubble like the system tab bar: the page scrolls under it.
             HStack(spacing: 2) {
                 ForEach(tabs, id: \.id) { t in
@@ -87,6 +90,7 @@ struct MainTabView: View {
             .modifier(GlassBubble())
             .padding(.horizontal, 20)
             .padding(.bottom, 2)
+            .ignoresSafeArea(.keyboard)
         }
         .onChange(of: tabs.map(\.id)) { _, ids in if !ids.contains(tab) { tab = "sets" } }
     }
