@@ -23,7 +23,74 @@ struct MainTabView: View {
     @Environment(SessionStore.self) private var session
     @State private var tab = "sets"
 
+    @State private var visited: Set<String> = ["sets"]
+
+    private var tabs: [(id: String, title: String)] {
+        var t = [("sets", "Sets"), ("songs", "Songs")]
+        if session.currentTeam?.canEdit ?? false { t.append(("team", "Team")) }
+        t += [("media", "Media"), ("settings", "Settings")]
+        return t
+    }
+
     var body: some View {
+        Group {
+            if UIDevice.current.userInterfaceIdiom == .phone { phoneTabs } else { padTabs }
+        }
+        .id(session.currentTeam?.id)   // reload every tab when the team changes
+    }
+
+    @ViewBuilder private func page(_ id: String) -> some View {
+        switch id {
+        case "sets": SetsView()
+        case "songs": LibraryView()
+        case "team": TeamView()
+        case "media": MediaLibraryView()
+        default: SettingsView()
+        }
+    }
+
+    /// iPhone: a simple bar of page names, like the iPad's. Each page is made the first time it's
+    /// opened and then kept, so it stays where you left it.
+    private var phoneTabs: some View {
+        ZStack {
+            ForEach(tabs, id: \.id) { t in
+                if visited.contains(t.id) {
+                    page(t.id)
+                        .opacity(tab == t.id ? 1 : 0)
+                        .allowsHitTesting(tab == t.id)
+                        .accessibilityHidden(tab != t.id)
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(tabs, id: \.id) { t in
+                    Button {
+                        visited.insert(t.id)
+                        tab = t.id
+                    } label: {
+                        VStack(spacing: 5) {
+                            Text(t.title)
+                                .font(.subheadline.weight(tab == t.id ? .semibold : .regular))
+                                .foregroundStyle(tab == t.id ? Theme.accentLight : .secondary)
+                            Capsule().fill(tab == t.id ? Theme.accentLight : .clear).frame(width: 18, height: 3)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 10).padding(.bottom, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(tab == t.id ? [.isSelected, .isButton] : .isButton)
+                }
+            }
+            .background(.bar, ignoresSafeAreaEdges: .bottom)
+            .overlay(alignment: .top) { Divider() }
+        }
+        .onChange(of: tabs.map(\.id)) { _, ids in if !ids.contains(tab) { tab = "sets" } }
+    }
+
+    /// iPad: the system tab bar (shown as page names at the top).
+    private var padTabs: some View {
         TabView(selection: $tab) {
             SetsView()
                 .tabItem { item("Sets", "music.note.list", "sets") }.tag("sets")
@@ -38,7 +105,6 @@ struct MainTabView: View {
             SettingsView()
                 .tabItem { item("Settings", "gearshape", "settings") }.tag("settings")
         }
-        .id(session.currentTeam?.id)   // reload every tab when the team changes
     }
 
     private func item(_ title: String, _ symbol: String, _ id: String) -> some View {

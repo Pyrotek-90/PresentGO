@@ -27,6 +27,7 @@ struct TeamView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var membersByID: [UUID: TeamMember] { Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) }) }
+    @State private var showingDetails = false
     private var canEdit: Bool { session.currentTeam?.canEdit ?? false }
     private var filtering: Bool { !search.trimmingCharacters(in: .whitespaces).isEmpty || filterPosition != nil }
     private var showMembers: Bool { !membersCollapsed || filtering }
@@ -44,7 +45,6 @@ struct TeamView: View {
     var body: some View {
         NavigationStack {
             List {
-                if canEdit { TeamDetailsSection() }
                 if let note {
                     Section { Text(note).font(.footnote) }
                 }
@@ -109,7 +109,7 @@ struct TeamView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "chevron.down").rotationEffect(.degrees(matrixCollapsed ? -90 : 0))
-                                    Text("Serving Matrix")
+                                    Text("Serving")
                                     Spacer()
                                 }
                                 .contentShape(Rectangle())
@@ -147,6 +147,16 @@ struct TeamView: View {
             }
             .navigationTitle("Team")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if canEdit {
+                    // Team Details is set once, so it lives behind a title-bar button.
+                    ToolbarItem(placement: .primaryAction) {
+                        HeaderIconButton("Team Details", systemImage: "building.2") { showingDetails = true }
+                    }
+                    .headerIconItem()
+                }
+            }
+            .sheet(isPresented: $showingDetails) { TeamDetailsSheet() }
             .sheet(item: $editing) { m in
                 MemberEditor(member: m, positions: $positions) { await load() }
             }
@@ -165,7 +175,7 @@ struct TeamView: View {
                         ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
                                        selectedID: matrixSelected, onSelect: { matrixSelected = $0.id }) { coverSet = $0 }
                     }
-                    .navigationTitle("Serving Matrix")
+                    .navigationTitle("Serving")
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationDestination(item: $coverSet) { SetDetailView(set: $0) }
                     .toolbar {
@@ -266,18 +276,29 @@ struct TeamView: View {
             }
             .contentShape(Rectangle())
         } else {
-            // Phone: two lines. Name, joined and positions; then email and phone.
+            // Phone: two lines in two columns. Left: name (and joined), then email.
+            // Right, in one aligned column: positions, then phone.
             HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(m.name).font(.subheadline.weight(.semibold)).lineLimit(1).layoutPriority(1)
-                        joined(m, large: false)
-                        Text(memberPositions(m).map(\.name).joined(separator: ", "))
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 2) {
+                    GridRow {
+                        HStack(spacing: 6) {
+                            Text(m.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            joined(m, large: false)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(memberPositions(m).map(\.name).joined(separator: ", ").ifEmpty("—"))
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            .frame(width: 112, alignment: .leading)
                     }
-                    HStack(spacing: 10) {
-                        if let e = m.email { Text(e).foregroundStyle(.secondary).truncationMode(.middle) } else { Text("No email").foregroundStyle(.orange.opacity(0.8)) }
-                        if let p = m.phone, !p.isEmpty { Text(MemberEditor.formatPhone(p)).foregroundStyle(.secondary).fixedSize() } else { Text("No phone").foregroundStyle(.orange.opacity(0.8)).fixedSize() }
+                    GridRow {
+                        Group {
+                            if let e = m.email { Text(e).foregroundStyle(.secondary).truncationMode(.middle) } else { Text("No email").foregroundStyle(.orange.opacity(0.8)) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Group {
+                            if let p = m.phone, !p.isEmpty { Text(MemberEditor.formatPhone(p)).foregroundStyle(.secondary).monospacedDigit() } else { Text("No phone").foregroundStyle(.orange.opacity(0.8)) }
+                        }
+                        .frame(width: 112, alignment: .leading)
                     }
                     .font(.caption).lineLimit(1)
                 }

@@ -40,30 +40,30 @@ struct SettingsView: View {
                 // MARK: Preferences
                 Section {
                     Toggle(isOn: Binding(get: { offlineEnabled }, set: { setOffline($0) })) {
-                        Label {
+                        PrefLabel(icon: "arrow.down.circle") {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Offline Copies")
                                 Text(offlineNote).font(.caption).foregroundStyle(.secondary)
                             }
-                        } icon: { Image(systemName: "arrow.down.circle") }
+                        }
                     }
                     Toggle(isOn: Binding(get: { viewerMode == "chords" }, set: { viewerMode = $0 ? "chords" : "lyrics" })) {
-                        Label {
+                        PrefLabel(icon: "music.note") {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Open songs in Chord Chart")
                                 Text("Otherwise the Song Viewer opens in Lyrics.").font(.caption).foregroundStyle(.secondary)
                             }
-                        } icon: { Image(systemName: "music.note") }
+                        }
                     }
                     // The answer sits at the trailing edge, in the same column as the toggles.
                     HStack(spacing: 8) {
-                        Label {
+                        PrefLabel(icon: "character.bubble") {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Song Library language")
                                 Text(languageState ?? "Songs in other languages are hidden from the main list.")
                                     .font(.caption).foregroundStyle(languageState == "Couldn't save. Try again." ? .red : .secondary)
                             }
-                        } icon: { Image(systemName: "character.bubble") }
+                        }
                         Spacer(minLength: 4)
                         Menu {
                             Picker("Song Library language", selection: Binding(get: { libraryLanguage }, set: { l in Task { await saveLanguage(l) } })) {
@@ -83,7 +83,7 @@ struct SettingsView: View {
                         // Each team with its color right here; tap to change colors or switch teams.
                         NavigationLink { MyTeamsView() } label: {
                             HStack(alignment: .firstTextBaseline) {
-                                Label("My Teams", systemImage: "person.3")
+                                PrefLabel(icon: "person.3") { Text("My Teams") }
                                 Spacer(minLength: 12)
                                 VStack(alignment: .trailing, spacing: 4) {
                                     ForEach(session.teams) { t in
@@ -103,8 +103,6 @@ struct SettingsView: View {
                 } header: {
                     Text("Preferences")
                 }
-                // On the phone, no icons: the descriptions get the full width.
-                .labelStyle(PhoneTitleOnlyLabelStyle())
 
                 // MARK: Library (Admins and Leaders)
                 if session.currentTeam?.canEdit ?? false {
@@ -431,7 +429,7 @@ struct CalendarSyncRows: View {
 
     var body: some View {
         Toggle(isOn: Binding(get: { token != nil }, set: { on in Task { await set(on) } })) {
-            Label {
+            PrefLabel(icon: "calendar.badge.plus") {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Calendar Sync")
                     Text(pro || token != nil
@@ -439,7 +437,7 @@ struct CalendarSyncRows: View {
                          : "Show your sets in Apple or Google Calendar. Part of Pro.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            } icon: { Image(systemName: "calendar.badge.plus") }
+            }
         }
         .disabled(loading || busy || (!pro && token == nil))
         .task { await load() }
@@ -757,13 +755,17 @@ struct DeleteAccountView: View {
 }
 
 
-/// Icon and title on iPad; just the title on iPhone, where width is tight.
-struct PhoneTitleOnlyLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
+/// A Preferences row's title and description. iPad: with its icon. iPhone: no icon, so the
+/// description has the full width and fits in two lines.
+struct PrefLabel<Content: View>: View {
+    let icon: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
         if UIDevice.current.userInterfaceIdiom == .phone {
-            configuration.title
+            content.lineLimit(2)
         } else {
-            Label(configuration)
+            Label { content } icon: { Image(systemName: icon) }
         }
     }
 }

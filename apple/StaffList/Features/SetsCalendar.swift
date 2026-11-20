@@ -46,22 +46,25 @@ struct SetsCalendar: View {
 
     // MARK: Header
 
+    /// Month names: full on the iPad ("November"), short on the iPhone ("Nov") to leave room for
+    /// the Month / Week buttons.
     private var title: String {
+        let m: Date.FormatStyle.Symbol.Month = phone ? .abbreviated : .wide
         if mode == "week" {
             let days = weekDays(of: cursor)
             guard let first = days.first, let last = days.last else { return "" }
             let sameMonth = cal.isDate(first, equalTo: last, toGranularity: .month)
             return sameMonth
-                ? "\(first.formatted(.dateTime.month(phone ? .abbreviated : .wide))) \(first.formatted(.dateTime.day()))–\(last.formatted(.dateTime.day())), \(last.formatted(.dateTime.year()))"
-                : "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(last.formatted(.dateTime.month(.abbreviated).day().year()))"
+                ? "\(first.formatted(.dateTime.month(m))) \(first.formatted(.dateTime.day()))–\(last.formatted(.dateTime.day())), \(last.formatted(.dateTime.year()))"
+                : "\(first.formatted(.dateTime.month(m).day())) – \(last.formatted(.dateTime.month(m).day().year()))"
         }
         if rolling, let first = monthDays.first, let last = monthDays.last {
-            return "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(last.formatted(.dateTime.month(.abbreviated).day()))"
+            return "\(first.formatted(.dateTime.month(m).day())) – \(last.formatted(.dateTime.month(m).day()))"
         }
-        return cursor.formatted(.dateTime.month(phone ? .abbreviated : .wide).year())
+        return cursor.formatted(.dateTime.month(m).year())
     }
 
-    private var phone: Bool { sizeClass == .compact }
+    private var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
     private var header: some View {
         HStack(spacing: 8) {

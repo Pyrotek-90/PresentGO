@@ -94,6 +94,7 @@ struct MediaLibraryView: View {
     @State private var folders: [MediaFolder] = []
     @State private var folderID: UUID?
     @State private var search = ""
+    @State private var searchShown = false
     @AppStorage("mediaView") private var viewMode = "grid"
     @State private var loading = true
     @State private var photoSelection: [PhotosPickerItem] = []
@@ -152,7 +153,7 @@ struct MediaLibraryView: View {
             }
             .navigationTitle(onPick == nil ? "Media" : "Add Media")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $search, prompt: "Search files and folders")
+            .searchable(text: $search, isPresented: $searchShown, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search files and folders")
             .toolbar { toolbar }
             .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: 20, matching: .images)
             .onChange(of: photoSelection) { _, picked in
@@ -199,6 +200,10 @@ struct MediaLibraryView: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
         }
         ToolbarItem(placement: .primaryAction) {
+            HeaderIconButton("Search", systemImage: "magnifyingglass") { searchShown = true }
+        }
+        .headerIconItem()
+        ToolbarItem(placement: .primaryAction) {
             Button { viewMode = viewMode == "grid" ? "list" : "grid" } label: {
                 HeaderIconLabel(systemImage: viewMode == "grid" ? "list.bullet" : "square.grid.2x2")
             }
@@ -216,6 +221,7 @@ struct MediaLibraryView: View {
                 } label: {
                     HeaderIconLabel(systemImage: "plus")
                 }
+                .headerMenuStyle()
                 .accessibilityLabel("Add")
                 .disabled(progress != nil)
             }

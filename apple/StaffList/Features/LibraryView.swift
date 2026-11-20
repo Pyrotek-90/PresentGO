@@ -163,7 +163,9 @@ struct LibraryView: View {
                 }
             }
             .navigationDestination(for: Song.self) { SongView(song: $0) }
-            .searchable(text: $search, isPresented: $searchShown, prompt: searchScope == .lyrics ? "Words in the lyrics" : "Title, artist or CCLI #")
+            // In a drawer under the title on the iPad too (like the iPhone), opened by the Search
+            // button, so there's one search control and its scopes don't cover the first song.
+            .searchable(text: $search, isPresented: $searchShown, placement: .navigationBarDrawer(displayMode: .automatic), prompt: searchScope == .lyrics ? "Words in the lyrics" : "Title, artist or CCLI #")
             .searchScopes($searchScope, activation: .onSearchPresentation) {
                 Text("Title, Artist, CCLI").tag(SearchScope.details)
                 Text("Lyrics").tag(SearchScope.lyrics)
@@ -174,9 +176,9 @@ struct LibraryView: View {
                         Button { withAnimation(.snappy) { showFilters.toggle() } } label: { filterLabel }
                             .buttonStyle(.plain)
                     } else {
-                        filterMenu
+                        filterMenu.headerMenuStyle()
                     }
-                    sortMenu
+                    sortMenu.headerMenuStyle()
                 }
                 .headerIconItem()
                 // Search, for people who don't know to pull the list down.
@@ -187,8 +189,7 @@ struct LibraryView: View {
                 if session.currentTeam?.canEdit ?? false {
                     ToolbarItem(placement: .primaryAction) {
                         if adding.active {
-                            Button { adding.active = false } label: { Label("Done", systemImage: "checkmark") }
-                                .labelStyle(.titleAndIcon)
+                            HeaderIconButton("Done", systemImage: "checkmark") { adding.active = false }
                         } else {
                             Menu {
                                 Button("Add Songs to a Set", systemImage: "text.badge.plus") {
@@ -200,6 +201,7 @@ struct LibraryView: View {
                             } label: {
                                 HeaderIconLabel(systemImage: "plus")
                             }
+                            .headerMenuStyle()
                             .accessibilityLabel("Add")
                         }
                     }

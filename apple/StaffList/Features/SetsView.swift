@@ -120,8 +120,9 @@ struct SetsView: View {
             .navigationDestination(for: ServiceSet.self) { SetDetailView(set: $0) }
             .navigationDestination(for: String.self) { _ in MyTeamsView() }
             .toolbar {
-                // The StaffList wordmark in place of the title on the landing page.
-                ToolbarItem(placement: .principal) {
+                // The StaffList wordmark: top left on the iPad, centered on the iPhone.
+                // Notifications at the top right.
+                ToolbarItem(placement: UIDevice.current.userInterfaceIdiom == .pad ? .topBarLeading : .principal) {
                     Image("Wordmark")
                         .resizable()
                         .scaledToFit()
@@ -129,7 +130,8 @@ struct SetsView: View {
                         .foregroundStyle(.primary)
                         .accessibilityLabel("StaffList")
                 }
-                ToolbarItem(placement: .topBarLeading) {
+                .headerIconItem()
+                ToolbarItem(placement: .topBarTrailing) {
                     HeaderIconButton("Notifications", systemImage: "bell") { showingInbox = true }
                 }
                 .headerIconItem()
@@ -475,34 +477,56 @@ struct SetDetailView: View {
     /// line, with a pencil to edit (Admins and Leaders). The set's name is in the title bar —
     /// the details were entered when the set was created, so the screen is about the program.
     private var detailsSection: some View {
+        // One card: the name, when (date · time · length) and where, with Edit in its corner.
+        // Tap anywhere on it to edit all of them together.
         Section {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(whenLine).font(.subheadline.weight(.medium))
-                    if let more = moreLine {
-                        Text(more).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            Button { if canEdit { sheet = .details } } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(set.name).font(.title3.weight(.bold)).foregroundStyle(.primary).lineLimit(2)
+                        detailLine(whenLine, "calendar")
+                        if let venue = set.venueText { detailLine(venue, "mappin.and.ellipse") }
+                        if let more = extraLine { detailLine(more, "clock.arrow.circlepath") }
+                        if let notice {
+                            Text(notice).font(.caption).foregroundStyle(.tint)
+                        }
                     }
-                    if let notice {
-                        Text(notice).font(.caption).foregroundStyle(.tint)
+                    Spacer(minLength: 8)
+                    if canEdit {
+                        Label("Edit", systemImage: "pencil")
+                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentLight)
+                            .padding(.top, 4)
                     }
                 }
-                Spacer(minLength: 8)
+                .contentShape(Rectangle())
             }
-        } header: {
-            // The set's name sits just above its details, with Edit like New Set on the Sets page.
-            HStack(alignment: .firstTextBaseline) {
-                Text(set.name).font(.title3.weight(.bold)).foregroundStyle(.primary)
-                    .textCase(nil).lineLimit(2)
-                Spacer(minLength: 8)
-                if canEdit {
-                    Button { sheet = .details } label: {
-                        Label("Edit", systemImage: "pencil").font(.caption.weight(.semibold)).textCase(nil)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Edit set details")
-                }
-            }
+            .buttonStyle(.plain)
+            .disabled(!canEdit)
+            .accessibilityHint(canEdit ? "Edit the set's name, date, time, length and location" : "")
         }
+    }
+
+    private func detailLine(_ text: String, _ icon: String) -> some View {
+        Label {
+            Text(text).foregroundStyle(.secondary).lineLimit(2)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(Theme.accentLight).frame(width: 16)
+        }
+        .font(.subheadline)
+        .labelStyle(.titleAndIcon)
+    }
+
+    /// Other times and the repeat rule: "Rehearsal Fri 7:00 PM · Repeats weekly"
+    private var extraLine: String? {
+        var parts: [String] = []
+        for t in set.extraTimes ?? [] {
+            var p = t.label
+            if let d = ServiceSet.dayFormatter.date(from: t.date) { p += " " + d.formatted(.dateTime.weekday(.abbreviated)) }
+            if let c = SetDetailsSheet.clock(t.time) { p += " " + c.formatted(date: .omitted, time: .shortened) }
+            parts.append(p)
+        }
+        if set.seriesId != nil, let rule = set.recurrence { parts.append(Self.repeatText(rule, from: set.date)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// "Main Sanctuary · Rehearsal Fri 7:00 PM · Repeats weekly"

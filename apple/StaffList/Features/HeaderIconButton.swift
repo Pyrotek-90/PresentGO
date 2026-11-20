@@ -53,3 +53,14 @@ extension ToolbarContent {
         }
     }
 }
+
+extension View {
+    /// For a Menu in the top bar: keep the squared label as drawn (no tint, no system glyph),
+    /// so it matches the HeaderIconButtons on the iPad as well as the iPhone.
+    func headerMenuStyle() -> some View {
+        self.menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .tint(.primary)
+    }
+}

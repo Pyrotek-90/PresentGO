@@ -9,6 +9,8 @@ struct TeamDetailsSection: View {
     @Environment(SessionStore.self) private var session
     @AppStorage("teamDetailsOpen") private var open = false
     @Environment(\.horizontalSizeClass) private var sizeClass
+    /// In the Team Details sheet: always open, no collapsible header.
+    var alwaysOpen = false
 
     @State private var name = ""
     @State private var details: [String: String] = [:]
@@ -33,7 +35,7 @@ struct TeamDetailsSection: View {
 
     var body: some View {
         Section {
-            if open, saved != nil {
+            if open || alwaysOpen, saved != nil {
                 Label("These details go in every invitation email: the invitation to join the team, and each set request.",
                       systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary)
@@ -62,6 +64,12 @@ struct TeamDetailsSection: View {
                 }
             }
         } header: {
+            if !alwaysOpen { header }
+        }
+        .task(id: session.currentTeam?.id) { await load() }
+    }
+
+    private var header: some View {
             Button {
                 withAnimation(.snappy) { open.toggle() }
             } label: {
@@ -75,8 +83,6 @@ struct TeamDetailsSection: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint(open ? "Hides the team details" : "Shows the team details")
-        }
-        .task(id: session.currentTeam?.id) { await load() }
     }
 
     private func binding(_ key: String) -> Binding<String> {
@@ -152,6 +158,19 @@ struct TeamDetailsSection: View {
             if newName != team.name { await session.loadTeams() }
         } catch {
             state = .failed
+        }
+    }
+}
+
+/// Team Details from the Team page's title-bar button.
+struct TeamDetailsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            Form { TeamDetailsSection(alwaysOpen: true) }
+                .navigationTitle("Team Details")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 }
