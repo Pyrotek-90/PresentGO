@@ -218,6 +218,9 @@ struct SongViewer: View {
     var onClose: (() -> Void)? = nil
     /// The Songs page lets you pick a key here; from a set the key is the set's, shown only.
     var allowKeyChange = false
+    /// Pushed from the Songs page: title, BPM, Key and Aa sit in the navigation bar, between Back
+    /// and Edit, instead of a header row of their own.
+    var headerInNavBar = false
 
     @AppStorage("viewerMode") private var modeRaw = "lyrics"
     @AppStorage("viewerSizeChords") private var sizeChords: Double = 0   // 0 = fit automatically
@@ -268,8 +271,10 @@ struct SongViewer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider().overlay(Theme.border)
+            if !headerInNavBar {
+                header
+                Divider().overlay(Theme.border)
+            }
             GeometryReader { geo in
                 let current = layout(index)
                 pageView(current)
@@ -300,6 +305,11 @@ struct SongViewer: View {
         .onChange(of: sizeChords) { page = 0 }
         .onChange(of: sizeLyrics) { page = 0 }
         .onChange(of: columnsPref) { page = 0 }
+        .toolbar {
+            if headerInNavBar {
+                ToolbarItem(placement: .principal) { headerRow.frame(maxWidth: .infinity) }
+            }
+        }
     }
 
     // MARK: Turning pages
@@ -323,6 +333,12 @@ struct SongViewer: View {
     // MARK: Header — title, artist, key, BPM and controls on one line
 
     private var header: some View {
+        headerRow
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(Theme.panel)
+    }
+
+    private var headerRow: some View {
         HStack(spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(song.title).font(.headline).lineLimit(1).layoutPriority(1)
@@ -345,8 +361,6 @@ struct SongViewer: View {
                     .accessibilityLabel("Close")
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(Theme.panel)
     }
 
     private func fact(_ label: String, _ value: String, accent: Bool = false) -> some View {
@@ -562,6 +576,9 @@ struct SongViewer: View {
                         }
                     }
                 }
+                // Not the page's bottom margin (that's for lists above the iPhone page bar).
+                .contentMargins(.bottom, 0, for: .scrollContent)
+                .contentMargins(.bottom, 0, for: .scrollIndicators)
                 .frame(maxWidth: sizeClass == .regular ? 520 : 200)
                 .fixedSize(horizontal: true, vertical: false)
                 .accessibilityLabel("Song structure: \(arrangement.joined(separator: ", "))")

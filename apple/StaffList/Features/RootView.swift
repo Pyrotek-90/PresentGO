@@ -24,6 +24,7 @@ struct MainTabView: View {
     @State private var tab = "sets"
 
     @State private var visited: Set<String> = ["sets"]
+    @State private var chrome = ChromeState()
 
     private var tabs: [(id: String, title: String)] {
         var t = [("sets", "Sets"), ("songs", "Songs")]
@@ -37,6 +38,7 @@ struct MainTabView: View {
             if UIDevice.current.userInterfaceIdiom == .phone { phoneTabs } else { padTabs }
         }
         .id(session.currentTeam?.id)   // reload every tab when the team changes
+        .environment(chrome)
     }
 
     @ViewBuilder private func page(_ id: String) -> some View {
@@ -67,6 +69,7 @@ struct MainTabView: View {
         }
         // The bubble floats over the page (the page scrolls under it); content margins above leave room.
         .overlay(alignment: .bottom) {
+          if !chrome.hidePageBar {
             // A floating, see-through bubble like the system tab bar: the page scrolls under it.
             HStack(spacing: 2) {
                 ForEach(tabs, id: \.id) { t in
@@ -91,7 +94,10 @@ struct MainTabView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 2)
             .ignoresSafeArea(.keyboard)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+          }
         }
+        .animation(.snappy, value: chrome.hidePageBar)
         .onChange(of: tabs.map(\.id)) { _, ids in if !ids.contains(tab) { tab = "sets" } }
     }
 
@@ -161,4 +167,9 @@ struct GlassBubble: ViewModifier {
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
         }
     }
+}
+
+/// App-wide chrome: a full-screen page (the Song Viewer) hides the iPhone page bar.
+@Observable final class ChromeState {
+    var hidePageBar = false
 }
