@@ -242,7 +242,7 @@ struct SetsCalendar: View {
             }
             .padding(6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(isSelected ? Theme.accent.opacity(0.12) : .clear)
+            .background(dayFill(daySets, selected: isSelected))
             .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.15)).frame(width: 0.5) }
             .contentShape(Rectangle())
         }
@@ -271,12 +271,26 @@ struct SetsCalendar: View {
             }
             .padding(.horizontal, 3).padding(.vertical, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(isSelected ? Theme.accent.opacity(0.12) : .clear)
+            .background(dayFill(daySets, selected: isSelected))
             .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.15)).frame(width: 0.5) }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(day.formatted(date: .complete, time: .omitted))\(daySets.isEmpty ? "" : ", \(daySets.count) set\(daySets.count == 1 ? "" : "s")")")
+    }
+
+    /// A day with a set is shaded all over in its team color (grey once it's past); the chosen day
+    /// gets an accent outline on top.
+    @ViewBuilder private func dayFill(_ daySets: [ServiceSet], selected: Bool) -> some View {
+        ZStack {
+            if let s = daySets.first {
+                (isUpcoming(s) ? color(s).opacity(0.2) : Color.secondary.opacity(0.12))
+            }
+            if selected {
+                Theme.accent.opacity(daySets.isEmpty ? 0.12 : 0.08)
+                RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.accentLight.opacity(0.7), lineWidth: 1.5)
+            }
+        }
     }
 
     private func setCard(_ s: ServiceSet) -> some View {

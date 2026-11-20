@@ -423,6 +423,8 @@ struct SongRow: View {
     var tag: String? = nil
     /// In a lyrics search: the line that matched.
     var snippet: String? = nil
+    /// Off in a set, where the row shows only the set's one key.
+    var showKeys = true
 
     /// Original key first, then saved keys: "G, A".
     private var keys: String {
@@ -456,7 +458,7 @@ struct SongRow: View {
             }
             }
             Spacer(minLength: 8)
-            if !keys.isEmpty {
+            if showKeys && !keys.isEmpty {
                 Text(keys)
                     .font(.caption.monospaced().bold())
                     .padding(.horizontal, 8).padding(.vertical, 3)

@@ -551,6 +551,14 @@ struct SetDetailView: View {
         return "\(f) · \(r.count ?? 12) sets"
     }
 
+    /// The one key a song shows in this set: the key chosen for this set, else the song's
+    /// Preferred Key, else its original key. Changing it here never changes the song.
+    static func setKey(_ item: SetItem, _ song: Song) -> String? {
+        let m = song.metadata
+        for k in [item.key, m?.preferredKey, m?.originalKey, m?.key] { if let k, !k.isEmpty { return k } }
+        return nil
+    }
+
     private var addMenu: some View {
         Menu {
             Button("Add Song", systemImage: "music.note") { sheet = .addSong }
@@ -575,12 +583,12 @@ struct SetDetailView: View {
                 HStack(spacing: 12) {
                     ItemIcon(type: "song")
                     VStack(alignment: .leading, spacing: 1) {
-                        SongRow(song: song)
+                        SongRow(song: song, showKeys: false)
                         if let lead = item.content["lead"]?.objectValue?["name"]?.stringValue {
                             Label(lead, systemImage: "music.mic").font(.caption2).foregroundStyle(.secondary)
                         }
                     }
-                    if let key = item.key {
+                    if let key = Self.setKey(item, song) {
                         Text(Song.shortKey(key)).font(.caption.bold()).foregroundStyle(.tint)
                     }
                     Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
@@ -594,8 +602,8 @@ struct SetDetailView: View {
             } label: {
                 HStack(spacing: 12) {
                     ItemIcon(type: "song")
-                    SongRow(song: song)
-                    if let key = item.key {
+                    SongRow(song: song, showKeys: false)
+                    if let key = Self.setKey(item, song) {
                         Text(Song.shortKey(key)).font(.caption.bold()).foregroundStyle(.tint)
                     }
                 }
