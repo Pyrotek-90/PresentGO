@@ -347,7 +347,7 @@ struct SetDetailView: View {
 
     var body: some View {
         itemList
-        .navigationTitle("")
+        .navigationTitle("Set Details")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

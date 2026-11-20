@@ -55,9 +55,8 @@ struct SettingsView: View {
                             }
                         } icon: { Image(systemName: "music.note") }
                     }
-                    Picker(selection: Binding(get: { libraryLanguage }, set: { l in Task { await saveLanguage(l) } })) {
-                        ForEach(languageOptions, id: \.self) { Text($0).tag($0) }
-                    } label: {
+                    // The answer sits at the trailing edge, in the same column as the toggles.
+                    HStack(spacing: 8) {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Song Library language")
@@ -65,6 +64,19 @@ struct SettingsView: View {
                                     .font(.caption).foregroundStyle(languageState == "Couldn't save. Try again." ? .red : .secondary)
                             }
                         } icon: { Image(systemName: "character.bubble") }
+                        Spacer(minLength: 4)
+                        Menu {
+                            Picker("Song Library language", selection: Binding(get: { libraryLanguage }, set: { l in Task { await saveLanguage(l) } })) {
+                                ForEach(languageOptions, id: \.self) { Text($0).tag($0) }
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(libraryLanguage)
+                                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                            }
+                            .foregroundStyle(.secondary)
+                        }
+                        .fixedSize()
                     }
                     CalendarSyncRows()
                     if !session.teams.isEmpty {
@@ -91,6 +103,8 @@ struct SettingsView: View {
                 } header: {
                     Text("Preferences")
                 }
+                // On the phone, no icons: the descriptions get the full width.
+                .labelStyle(PhoneTitleOnlyLabelStyle())
 
                 // MARK: Library (Admins and Leaders)
                 if session.currentTeam?.canEdit ?? false {
@@ -738,6 +752,18 @@ struct DeleteAccountView: View {
             await session.signOut()
         } catch {
             self.error = "Your account couldn't be deleted. Please try again, or contact us from Help & Support."
+        }
+    }
+}
+
+
+/// Icon and title on iPad; just the title on iPhone, where width is tight.
+struct PhoneTitleOnlyLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            configuration.title
+        } else {
+            Label(configuration)
         }
     }
 }

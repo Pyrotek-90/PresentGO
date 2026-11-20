@@ -132,10 +132,11 @@ struct MediaLibraryView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    usage
                     if query.isEmpty { breadcrumbs }
                     if let progress { ProgressView(progress).frame(maxWidth: .infinity) }
                     if viewMode == "grid" { grid } else { list }
+                    // Storage, file and folder counts at the end, after the folders and files.
+                    usage.padding(.top, 12)
                 }
                 .padding()
             }
