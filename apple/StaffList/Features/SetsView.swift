@@ -351,6 +351,7 @@ struct SetDetailView: View {
     var body: some View {
         itemList
         .navigationTitle("Set Details")
+        .squaredBackButton()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -850,7 +851,7 @@ struct AddSongSheet: View {
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search songs")
             .navigationTitle("Add Song")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem() }
             .task {
                 guard let team = session.currentTeam else { return }
                 songs = (try? await supabase.from("songs").select(Song.columns)
@@ -888,10 +889,10 @@ struct AnnouncementSheet: View {
             .navigationTitle("Announcement")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { onSave(title, slides); dismiss() }.disabled(slides.isEmpty)
-                }
+                    HeaderTextButton("Add") { onSave(title, slides); dismiss() }.disabled(slides.isEmpty)
+                }.headerIconItem()
             }
         }
     }
@@ -920,13 +921,13 @@ struct SetArrangementSheet: View {
             ArrangementEditor(title: song.title, order: $order, sections: sections,
                               resetLabel: "Use the Song's Own Order", onReset: { order = slideSequence(song.slides) })
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
+                        HeaderTextButton("Save") {
                             onSave(order == slideSequence(song.slides) ? nil : order)
                             dismiss()
                         }
-                    }
+                    }.headerIconItem()
                 }
         }
     }

@@ -77,7 +77,7 @@ struct PlanMatrixView: View {
             .safeAreaInset(edge: .bottom) { footer }
             .navigationTitle("Plans & Features")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { HeaderTextButton("Done") { dismiss() } }.headerIconItem() }
         }
     }
 

@@ -197,7 +197,7 @@ struct MediaLibraryView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if onPick != nil {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
         }
         ToolbarItem(placement: .primaryAction) {
             HeaderIconButton("Search", systemImage: "magnifyingglass") { searchShown = true }
@@ -576,14 +576,14 @@ struct MediaFileSheet: View {
             .navigationTitle(item.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
                 if canEdit {
                     ToolbarItem(placement: .confirmationAction) {
                         if saving { ProgressView() } else {
-                            Button("Save") { Task { await save() } }
+                            HeaderTextButton("Save") { Task { await save() } }
                                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (name == item.name && folder == item.folderId))
                         }
-                    }
+                    }.headerIconItem()
                 }
             }
             .confirmationDialog("Delete \(item.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {

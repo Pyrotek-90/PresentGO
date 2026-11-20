@@ -64,3 +64,67 @@ extension View {
             .tint(.primary)
     }
 }
+
+/// A top-bar text button in the same squared style: Save, Done, Add, Send and the like.
+/// Confirming actions are filled teal; others use the soft fill of the icon buttons.
+struct HeaderTextButton: View {
+    let title: String
+    var prominent = true
+    let action: () -> Void
+    @Environment(\.isEnabled) private var enabled
+
+    init(_ title: String, prominent: Bool = true, action: @escaping () -> Void) {
+        self.title = title
+        self.prominent = prominent
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .frame(minWidth: 34, minHeight: 34)
+                .foregroundStyle(prominent ? Color.white : Color.primary)
+                .background(prominent ? Theme.accent : Color.primary.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(prominent ? Theme.accentLight.opacity(0.5) : Color.primary.opacity(0.12), lineWidth: 0.5))
+                .opacity(enabled ? 1 : 0.4)
+                .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A squared Back button in place of the system one, on every pushed page.
+struct SquaredBackButton: ViewModifier {
+    @Environment(\.dismiss) private var dismiss
+    func body(content: Content) -> some View {
+        content
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    HeaderIconButton("Back", systemImage: "chevron.left") { dismiss() }
+                }
+                .headerIconItem()
+            }
+    }
+}
+
+extension View {
+    func squaredBackButton() -> some View { modifier(SquaredBackButton()) }
+}
+
+/// Swiping from the left edge still goes back when the system Back button is replaced.
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        interactivePopGestureRecognizer?.delegate = self
+    }
+
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        viewControllers.count > 1
+    }
+}

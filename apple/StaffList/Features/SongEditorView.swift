@@ -122,12 +122,12 @@ struct SongEditorView: View {
             .navigationTitle(song == nil ? "New Song" : "Edit Song")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
                 ToolbarItem(placement: .confirmationAction) {
                     if saving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!canSave)
+                        HeaderTextButton("Save") { Task { await save() } }.disabled(!canSave)
                     }
-                }
+                }.headerIconItem()
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: Self.fileTypes) { result in
                 Task { await importFile(result) }

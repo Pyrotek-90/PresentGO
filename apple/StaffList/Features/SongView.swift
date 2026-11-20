@@ -29,6 +29,7 @@ struct SongView: View {
             }
             // Full screen for the song, like the set's Song Viewer: no page bar.
             .toolbar(.hidden, for: .tabBar)
+            .squaredBackButton()
             .onAppear { chrome?.hidePageBar = true }
             .onDisappear { chrome?.hidePageBar = false }
             .sheet(isPresented: $editing) {

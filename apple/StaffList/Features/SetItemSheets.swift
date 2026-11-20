@@ -146,9 +146,9 @@ struct SongItemSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { editingSong = true } label: { Label("Edit Song", systemImage: "pencil") }
-                }
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                    HeaderIconButton("Edit Song", systemImage: "pencil") { editingSong = true }
+                }.headerIconItem()
+                ToolbarItem(placement: .confirmationAction) { HeaderTextButton("Done") { dismiss() } }.headerIconItem()
             }
             .confirmationDialog("Remove \(song.title) from this set?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Remove from Set", role: .destructive) {
@@ -372,12 +372,12 @@ struct MediaItemSheet: View {
             .navigationTitle("Edit Media")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
                 ToolbarItem(placement: .confirmationAction) {
                     if saving { ProgressView() } else {
-                        Button("Save") { Task { await save() } }.disabled(!changed)
+                        HeaderTextButton("Save") { Task { await save() } }.disabled(!changed)
                     }
-                }
+                }.headerIconItem()
             }
             .confirmationDialog("Remove this from the set?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Remove from Set", role: .destructive) { Task { await onRemove(); dismiss() } }

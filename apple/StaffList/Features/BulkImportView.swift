@@ -50,8 +50,8 @@ struct BulkImportView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.disabled(running)
-                }
+                    HeaderTextButton("Done") { dismiss() }.disabled(running)
+                }.headerIconItem()
             }
             .fileImporter(isPresented: $showPicker, allowedContentTypes: Self.types, allowsMultipleSelection: true) { result in
                 if case .success(let urls) = result { Task { await run(urls) } }

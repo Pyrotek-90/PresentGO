@@ -315,6 +315,7 @@ struct MyTeamsView: View {
             }
         }
         .navigationTitle("My Teams")
+        .squaredBackButton()
     }
 
     private func swatches(_ t: Team) -> some View {

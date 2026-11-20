@@ -28,7 +28,7 @@ struct SetChartsView: View {
 
     private func closable<C: View>(@ViewBuilder _ content: () -> C) -> some View {
         content().overlay(alignment: .topTrailing) {
-            Button("Done") { dismiss() }.padding()
+            HeaderTextButton("Done") { dismiss() }.padding()
         }
     }
 

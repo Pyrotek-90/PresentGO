@@ -184,7 +184,7 @@ struct TeamDetailsSheet: View {
             Form { TeamDetailsSection(alwaysOpen: true) }
                 .navigationTitle("Team Details")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { HeaderTextButton("Done") { dismiss() } }.headerIconItem() }
         }
     }
 }

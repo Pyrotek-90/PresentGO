@@ -41,7 +41,7 @@ struct InboxView: View {
             }
             .navigationTitle("Notifications")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { HeaderTextButton("Done") { dismiss() } }.headerIconItem() }
             .alert("Couldn't save your answer", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") {}
             } message: { Text(error ?? "") }

@@ -176,13 +176,13 @@ struct SetDetailsSheet: View {
             .navigationTitle(set == nil ? "New Set" : "Set Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
                 ToolbarItem(placement: .confirmationAction) {
                     if saving { ProgressView() } else {
-                        Button(set == nil ? "Create" : "Save") { Task { await save() } }
+                        HeaderTextButton(set == nil ? "Create" : "Save") { Task { await save() } }
                             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                }
+                }.headerIconItem()
             }
             .confirmationDialog("Delete \"\(set?.name ?? "")\"?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete Set", role: .destructive) { Task { await delete() } }

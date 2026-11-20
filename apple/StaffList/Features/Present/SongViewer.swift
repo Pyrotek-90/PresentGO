@@ -349,7 +349,7 @@ struct SongViewer: View {
             Spacer(minLength: 6)
             // Key and BPM are shown, not changed here (a set's key is chosen on the set).
             // Each label is the same size as its value.
-            if let bpm = song.metadata?.bpm?.value, !bpm.isEmpty { fact("BPM", bpm) }
+            if UIDevice.current.userInterfaceIdiom != .phone, let bpm = song.metadata?.bpm?.value, !bpm.isEmpty { fact("BPM", bpm) }
             if chartMode, let k = activeKey(index) {
                 if allowKeyChange { keyMenu } else { fact("Key", Song.shortKey(k)) }
             }

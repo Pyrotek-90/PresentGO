@@ -226,6 +226,8 @@ struct SetItem: Codable, Identifiable, Hashable, Sendable {
     var displayTitle: String {
         if let t = content["song_title"]?.stringValue, !t.isEmpty { return t }
         if let t = content["title"]?.stringValue, !t.isEmpty { return t }
+        // Media: its name from the Media library, or the name given to it in this set.
+        if let t = content["media_name"]?.stringValue, !t.isEmpty { return t }
         switch type {
         case "blank": return "Blank slide"
         case "note": return "Worship Leader Note"

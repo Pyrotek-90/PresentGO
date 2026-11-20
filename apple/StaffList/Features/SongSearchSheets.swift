@@ -63,7 +63,7 @@ struct LyricsSearchSheet: View {
             }
             .navigationTitle("Search Lyrics")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem() }
             .onAppear {
                 query = initialQuery
                 focused = true
@@ -129,7 +129,7 @@ struct YouTubeSearchSheet: View {
             }
             .navigationTitle("Find on YouTube")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem() }
             .task {
                 defer { loading = false }
                 do {

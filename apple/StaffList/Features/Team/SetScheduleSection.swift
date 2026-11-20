@@ -342,9 +342,9 @@ struct AssignTeamSheet: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { adding = true } label: { Label("Add Member", systemImage: "person.badge.plus") }
-                }
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                    HeaderIconButton("Add Member", systemImage: "person.badge.plus") { adding = true }
+                }.headerIconItem()
+                ToolbarItem(placement: .confirmationAction) { HeaderTextButton("Done") { dismiss() } }.headerIconItem()
             }
             .sheet(item: $editing) { m in
                 MemberEditor(member: m, positions: $positions) { await reloadMembers() }

@@ -181,10 +181,10 @@ struct TeamView: View {
                     .toolbar {
                         if canEdit {
                             ToolbarItem(placement: .topBarLeading) {
-                                Button { assigningFull = true } label: { Label("Assign", systemImage: "person.2.badge.plus") }
-                            }
+                                HeaderIconButton("Assign", systemImage: "person.2.badge.plus") { assigningFull = true }
+                            }.headerIconItem()
                         }
-                        ToolbarItem(placement: .confirmationAction) { Button("Done") { expanded = false } }
+                        ToolbarItem(placement: .confirmationAction) { HeaderTextButton("Done") { expanded = false } }.headerIconItem()
                     }
                     .sheet(isPresented: $assigningFull, onDismiss: { reloadToken += 1 }) {
                         TeamAssignSheet(members: membersByID, positions: positions, initialSetID: matrixSelected)
@@ -489,13 +489,13 @@ struct MemberEditor: View {
             .navigationTitle(member == nil ? "Add Team Member" : "Edit Team Member")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { HeaderIconButton("Cancel", systemImage: "xmark") { dismiss() } }.headerIconItem()
                 ToolbarItem(placement: .confirmationAction) {
                     if saving { ProgressView() } else {
-                        Button(willInvite ? "Save & Invite" : member == nil ? "Save" : "Update") { Task { await save() } }
+                        HeaderTextButton(willInvite ? "Save & Invite" : member == nil ? "Save" : "Update") { Task { await save() } }
                             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (inviteAfterSave && canAskToJoin && !emailValid))
                     }
-                }
+                }.headerIconItem()
             }
             .confirmationDialog("Delete \(member?.name ?? "this member")?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { Task { await delete() } }
@@ -671,13 +671,13 @@ struct MessageTeamView: View {
             .navigationTitle("Message Team")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(result == nil ? "Cancel" : "Done") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { HeaderTextButton(result == nil ? "Cancel" : "Done", prominent: result != nil) { dismiss() } }.headerIconItem()
                 ToolbarItem(placement: .confirmationAction) {
                     if sending { ProgressView() } else {
-                        Button("Send") { Task { await send() } }
+                        HeaderTextButton("Send") { Task { await send() } }
                             .disabled(picked.isEmpty || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || result != nil)
                     }
-                }
+                }.headerIconItem()
             }
         }
     }
