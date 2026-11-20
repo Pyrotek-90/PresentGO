@@ -54,7 +54,7 @@ struct SetsView: View {
                     if !teamsShown.isEmpty { colorKey }
                 }
                 if !setsOnSelectedDay.isEmpty || !Calendar.current.isDateInToday(selectedDay) {
-                    Section(selectedDay.formatted(.dateTime.weekday(.wide).month(.wide).day())) {
+                    Section(selectedDay.formatted(.dateTime.weekday(.wide).month(UIDevice.current.userInterfaceIdiom == .phone ? .abbreviated : .wide).day())) {
                         if setsOnSelectedDay.isEmpty {
                             Text("No sets on this day").foregroundStyle(.secondary)
                             if canEdit {
@@ -125,7 +125,7 @@ struct SetsView: View {
                     Image("Wordmark")
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 30)
+                        .frame(height: 45)
                         .foregroundStyle(.primary)
                         .accessibilityLabel("StaffList")
                 }
@@ -302,7 +302,8 @@ extension ServiceSet {
     /// "Sunday, November 16, 2026 · 10:30 AM"
     var whenText: String? {
         var parts: [String] = []
-        if let date { parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day().year())) }
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        if let date { parts.append(date.formatted(.dateTime.weekday(phone ? .abbreviated : .wide).month(phone ? .abbreviated : .wide).day().year())) }
         if let time = timeValue { parts.append(time.formatted(date: .omitted, time: .shortened)) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -346,22 +347,19 @@ struct SetDetailView: View {
 
     var body: some View {
         itemList
-        .navigationTitle(set.name)
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button { showingCharts = true } label: {
-                    Label("Song Viewer", systemImage: "book")
-                }
-                .help("Song Viewer: step through the songs in order")
-                .disabled(!items.contains { $0.type == "song" })
+                HeaderIconButton("Song Viewer", systemImage: "book") { showingCharts = true }
+                    .help("Song Viewer: step through the songs in order")
+                    .disabled(!items.contains { $0.type == "song" })
                 if session.team(for: set)?.canPresent ?? false {
-                    Button { presenting = true } label: {
-                        Label("Present", systemImage: "play.display")
-                    }
-                    .disabled(items.isEmpty)
+                    HeaderIconButton("Present", systemImage: "play.display") { presenting = true }
+                        .disabled(items.isEmpty)
                 }
             }
+            .headerIconItem()
         }
         .fullScreenCover(isPresented: $presenting) { PresenterView(set: set) }
         .fullScreenCover(isPresented: $showingCharts) { SetChartsView(set: set) }
@@ -489,14 +487,18 @@ struct SetDetailView: View {
                     }
                 }
                 Spacer(minLength: 8)
+            }
+        } header: {
+            // The set's name sits just above its details, with Edit like New Set on the Sets page.
+            HStack(alignment: .firstTextBaseline) {
+                Text(set.name).font(.title3.weight(.bold)).foregroundStyle(.primary)
+                    .textCase(nil).lineLimit(2)
+                Spacer(minLength: 8)
                 if canEdit {
                     Button { sheet = .details } label: {
-                        Image(systemName: "pencil")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(width: 32, height: 32)
-                            .background(Color.secondary.opacity(0.15), in: Circle())
+                        Label("Edit", systemImage: "pencil").font(.caption.weight(.semibold)).textCase(nil)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .accessibilityLabel("Edit set details")
                 }
             }
@@ -560,13 +562,8 @@ struct SetDetailView: View {
             }
             Button("Add Blank Slide", systemImage: "rectangle") { Task { await add(type: "blank", content: JSONObject()) } }
         } label: {
-            // The same pill as the Team section's Assign button.
-            Label("Add Item", systemImage: "plus")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .foregroundStyle(Theme.accentLight)
-                .background(Theme.accent.opacity(0.2), in: Capsule())
-                .overlay(Capsule().stroke(Theme.accent.opacity(0.7)))
+            // Same as New Set on the Sets page.
+            Label("Add Item", systemImage: "plus").font(.caption.weight(.semibold))
         }
         .buttonStyle(.borderless)
     }

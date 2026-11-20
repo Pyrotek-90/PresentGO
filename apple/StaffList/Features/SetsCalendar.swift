@@ -52,14 +52,16 @@ struct SetsCalendar: View {
             guard let first = days.first, let last = days.last else { return "" }
             let sameMonth = cal.isDate(first, equalTo: last, toGranularity: .month)
             return sameMonth
-                ? "\(first.formatted(.dateTime.month(.wide))) \(first.formatted(.dateTime.day()))–\(last.formatted(.dateTime.day())), \(last.formatted(.dateTime.year()))"
+                ? "\(first.formatted(.dateTime.month(phone ? .abbreviated : .wide))) \(first.formatted(.dateTime.day()))–\(last.formatted(.dateTime.day())), \(last.formatted(.dateTime.year()))"
                 : "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(last.formatted(.dateTime.month(.abbreviated).day().year()))"
         }
         if rolling, let first = monthDays.first, let last = monthDays.last {
             return "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(last.formatted(.dateTime.month(.abbreviated).day()))"
         }
-        return cursor.formatted(.dateTime.month(.wide).year())
+        return cursor.formatted(.dateTime.month(phone ? .abbreviated : .wide).year())
     }
+
+    private var phone: Bool { sizeClass == .compact }
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -72,7 +74,7 @@ struct SetsCalendar: View {
                         .rotationEffect(.degrees(collapsed ? -90 : 0))
                     Text(collapsed ? "Calendar" : title).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
                     if collapsed {
-                        Text("· \(cursor.formatted(.dateTime.month(.wide).year()))").font(.subheadline).foregroundStyle(.secondary)
+                        Text("· \(cursor.formatted(.dateTime.month(phone ? .abbreviated : .wide).year()))").font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
                 }

@@ -103,18 +103,15 @@ struct SetTeamSection: View {
         } header: {
             HStack {
                 Text("Team")
-                if !assignments.isEmpty { Text("\(assignments.count)").foregroundStyle(.secondary) }
+                if !assignments.isEmpty {
+                    let yes = assignments.filter { $0.status == "accepted" }.count
+                    Text("\(yes) of \(assignments.count) accepted").foregroundStyle(.secondary).textCase(nil)
+                }
                 Spacer()
                 if canEdit { assignButton.textCase(nil) }
             }
         } footer: {
-            if !assignments.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    let yes = assignments.filter { $0.status == "accepted" }.count
-                    Text("\(yes) of \(assignments.count) accepted")
-                    if compact { StatusLegend() }
-                }
-            }
+            if !assignments.isEmpty && compact { StatusLegend() }
         }
         // The sheet keeps its own copy while open, so changes here don't redraw (and close) it.
         .sheet(isPresented: $assigning, onDismiss: { Task { await load() } }) {
@@ -124,14 +121,12 @@ struct SetTeamSection: View {
         .task(id: set.id) { await load() }
     }
 
+    private var statusWidth: CGFloat { compact ? 40 : 84 }
+
     private var assignButton: some View {
         Button { assigning = true } label: {
-            Label("Assign", systemImage: "person.2.badge.plus")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .foregroundStyle(Theme.accentLight)
-                .background(Theme.accent.opacity(0.2), in: Capsule())
-                .overlay(Capsule().stroke(Theme.accent.opacity(0.7)))
+            // Same as New Set on the Sets page.
+            Label("Assign", systemImage: "plus").font(.caption.weight(.semibold))
         }
         .buttonStyle(.borderless)
     }
@@ -164,11 +159,11 @@ struct SetTeamSection: View {
 
     /// SECTION · POSITION · NAME · STATUS, like the Who's Serving table.
     private var columnHeader: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: compact ? 6 : 10) {
             Text("Section").frame(width: groupWidth, alignment: .leading)
             Text("Position").frame(width: positionWidth, alignment: .leading)
             Text("Name").frame(maxWidth: .infinity, alignment: .leading)
-            Text(compact ? "" : "Status").frame(width: compact ? 12 : nil)
+            Text("Status").frame(width: statusWidth, alignment: compact ? .center : .trailing)
         }
         .font(.system(size: 10, weight: .semibold)).tracking(0.8).textCase(.uppercase)
         .foregroundStyle(.secondary)
@@ -195,10 +190,10 @@ struct SetTeamSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if compact {
                 Circle().fill(StatusPill.color(a.status)).frame(width: 10, height: 10)
-                    .frame(width: 12)
+                    .frame(width: statusWidth)
                     .accessibilityLabel(StatusPill.label(a.status))
             } else {
-                StatusPill(status: a.status)
+                StatusPill(status: a.status).frame(width: statusWidth, alignment: .trailing)
             }
         }
         .swipeActions {
