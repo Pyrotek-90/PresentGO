@@ -18,7 +18,8 @@ struct RootView: View {
 }
 
 /// Tabs on iPhone; on iPad, iOS 18+ shows them as a sidebar-adaptable bar automatically.
-/// The tab icons are rounded squares like the title-bar buttons: outlined, and filled when chosen.
+/// Tab icons are StaffList's own outline set (Assets: TabSets, TabSongs, TabTeam, TabMedia,
+/// TabSettings), drawn as template images so they take the tab's color.
 struct MainTabView: View {
     @Environment(SessionStore.self) private var session
     @State private var tab = "sets"
@@ -59,8 +60,8 @@ struct MainTabView: View {
                 if visited.contains(t.id) {
                     page(t.id)
                         // Room at the end of every list and scroll view so the last row clears the bar.
-                        .contentMargins(.bottom, 84, for: .scrollContent)
-                        .contentMargins(.bottom, 70, for: .scrollIndicators)
+                        .contentMargins(.bottom, 100, for: .scrollContent)
+                        .contentMargins(.bottom, 86, for: .scrollIndicators)
                         .opacity(tab == t.id ? 1 : 0)
                         .allowsHitTesting(tab == t.id)
                         .accessibilityHidden(tab != t.id)
@@ -77,13 +78,23 @@ struct MainTabView: View {
                         visited.insert(t.id)
                         tab = t.id
                     } label: {
-                        Text(t.title)
-                            .font(.footnote.weight(tab == t.id ? .semibold : .medium))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                            .foregroundStyle(tab == t.id ? Theme.accentLight : .primary)
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .background(tab == t.id ? Color.primary.opacity(0.12) : .clear, in: Capsule())
-                            .contentShape(Capsule())
+                        VStack(spacing: 3) {
+                            Image(Self.tabIcon(t.id))
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 22, height: 22)
+                                .accessibilityHidden(true)
+                            Text(t.title)
+                                .font(.caption.weight(tab == t.id ? .semibold : .medium))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        .foregroundStyle(tab == t.id ? Theme.accentLight : .primary)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .padding(.vertical, 3)
+                        .background(tab == t.id ? Color.primary.opacity(0.12) : .clear,
+                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(tab == t.id ? [.isSelected, .isButton] : .isButton)
@@ -105,53 +116,33 @@ struct MainTabView: View {
     private var padTabs: some View {
         TabView(selection: $tab) {
             SetsView()
-                .tabItem { item("Sets", "music.note.list", "sets") }.tag("sets")
+                .tabItem { item("Sets", "sets") }.tag("sets")
             LibraryView()
-                .tabItem { item("Songs", "books.vertical", "songs") }.tag("songs")
+                .tabItem { item("Songs", "songs") }.tag("songs")
             if session.currentTeam?.canEdit ?? false {
                 TeamView()
-                    .tabItem { item("Team", "person.3", "team") }.tag("team")
+                    .tabItem { item("Team", "team") }.tag("team")
             }
             MediaLibraryView()
-                .tabItem { item("Media", "photo.on.rectangle", "media") }.tag("media")
+                .tabItem { item("Media", "media") }.tag("media")
             SettingsView()
-                .tabItem { item("Settings", "gearshape", "settings") }.tag("settings")
+                .tabItem { item("Settings", "settings") }.tag("settings")
         }
     }
 
-    private func item(_ title: String, _ symbol: String, _ id: String) -> some View {
-        Label { Text(title) } icon: { Image(uiImage: TabIcon.image(symbol, selected: tab == id)) }
+    private func item(_ title: String, _ id: String) -> some View {
+        Label { Text(title) } icon: { Image(Self.tabIcon(id)).renderingMode(.template) }
     }
-}
 
-/// Draws a tab icon as a template image: a rounded square with the symbol inside.
-enum TabIcon {
-    private static var cache: [String: UIImage] = [:]
-
-    static func image(_ symbol: String, selected: Bool) -> UIImage {
-        let key = symbol + (selected ? "#on" : "#off")
-        if let hit = cache[key] { return hit }
-        let size = CGSize(width: 30, height: 30)
-        let rect = CGRect(origin: .zero, size: size).insetBy(dx: 1.5, dy: 1.5)
-        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: selected ? .bold : .semibold)
-        let glyph = UIImage(systemName: symbol, withConfiguration: config)?.withRenderingMode(.alwaysTemplate)
-        let img = UIGraphicsImageRenderer(size: size).image { ctx in
-            let box = UIBezierPath(roundedRect: rect, cornerRadius: 8.5)
-            UIColor.black.setFill(); UIColor.black.setStroke()
-            if selected { box.fill() } else { box.lineWidth = 1.6; box.stroke() }
-            if let glyph {
-                let g = glyph.size
-                let r = CGRect(x: (size.width - g.width) / 2, y: (size.height - g.height) / 2, width: g.width, height: g.height)
-                if selected {
-                    // Knock the symbol out of the filled square.
-                    glyph.withTintColor(.black).draw(in: r, blendMode: .destinationOut, alpha: 1)
-                } else {
-                    glyph.withTintColor(.black).draw(in: r)
-                }
-            }
-        }.withRenderingMode(.alwaysTemplate)
-        cache[key] = img
-        return img
+    /// The asset name of each tab's icon.
+    static func tabIcon(_ id: String) -> String {
+        switch id {
+        case "sets": return "TabSets"
+        case "songs": return "TabSongs"
+        case "team": return "TabTeam"
+        case "media": return "TabMedia"
+        default: return "TabSettings"
+        }
     }
 }
 
