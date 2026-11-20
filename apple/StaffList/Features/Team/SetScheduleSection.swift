@@ -94,7 +94,6 @@ struct SetTeamSection: View {
                         assignmentRow(a, group: i == 0 ? group : nil)
                             .listRowSeparator(i == 0 ? .visible : .hidden, edges: .top)
                             .listRowSeparator(i == list.count - 1 ? .visible : .hidden, edges: .bottom)
-                            .listRowInsets(EdgeInsets(top: SetRowMetrics.vInset, leading: 16, bottom: SetRowMetrics.vInset, trailing: 16))
                     }
                 }
                 if canEdit { sendRow }

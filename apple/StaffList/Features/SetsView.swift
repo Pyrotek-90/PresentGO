@@ -409,7 +409,6 @@ struct SetDetailView: View {
                 }
                 ForEach(items) { item in
                     row(item)
-                        .listRowInsets(EdgeInsets(top: SetRowMetrics.vInset, leading: 16, bottom: SetRowMetrics.vInset, trailing: 16))
                 }
                 .onMove { from, to in move(from: from, to: to) }
                 .onDelete { offsets in remove(at: offsets) }
@@ -1025,8 +1024,8 @@ struct ItemLabel: View {
     }
 }
 
-/// Row size shared by the set's Program and Team tables, so they match.
+/// Row size shared by the set's Program and Team tables, so they match: the list's standard
+/// spacing, with every row at least as tall as the Program's item icon.
 enum SetRowMetrics {
-    static let vInset: CGFloat = 4
-    static let minHeight: CGFloat = 30   // the Program's item icon
+    static let minHeight: CGFloat = 30
 }
