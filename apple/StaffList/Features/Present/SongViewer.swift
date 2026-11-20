@@ -299,15 +299,10 @@ struct SongViewer: View {
                 }
             }
             Spacer(minLength: 6)
-            if chartMode, activeKey(index) != nil { keyMenu }
-            if let bpm = song.metadata?.bpm?.value, !bpm.isEmpty {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text("BPM").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundStyle(Theme.muted)
-                    Text(bpm).font(.subheadline.bold())
-                }
-                .accessibilityElement(children: .combine)
-            }
-            if song.hasChart { modeToggle }
+            // Key and BPM are shown, not changed here (a set's key is chosen on the set).
+            // Each label is the same size as its value.
+            if chartMode, let k = activeKey(index) { fact("Key", Song.shortKey(k), accent: true) }
+            if let bpm = song.metadata?.bpm?.value, !bpm.isEmpty { fact("BPM", bpm) }
             sizeMenu
             if let onClose {
                 Button(action: onClose) { Image(systemName: "xmark").font(.body.weight(.semibold)) }
@@ -318,6 +313,15 @@ struct SongViewer: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 6)
         .background(Theme.panel)
+    }
+
+    private func fact(_ label: String, _ value: String, accent: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(label).foregroundStyle(Theme.muted).fontWeight(.medium)
+            Text(value).fontWeight(.bold).foregroundStyle(accent ? Theme.accentLight : .primary)
+        }
+        .font(.subheadline)
+        .accessibilityElement(children: .combine)
     }
 
     private var keyMenu: some View {
@@ -373,7 +377,7 @@ struct SongViewer: View {
 
     private var sizeMenu: some View {
         Menu {
-            Section("Text size") {
+            Section("Text Size · \(manualSize == nil ? "Auto, " : "")\(Int(layout(index).fontSize)) pt") {
                 Button("Larger", systemImage: "plus") { setSize(+2) }
                 Button("Smaller", systemImage: "minus") { setSize(-2) }
                 Button("Fit Automatically", systemImage: manualSize == nil ? "checkmark" : "arrow.up.left.and.arrow.down.right") { setSize(nil) }

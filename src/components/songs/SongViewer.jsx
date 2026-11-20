@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { X, Music2, Music, Mic, Minus, Plus, Square, Columns2, ChevronLeft, ChevronRight, List } from 'lucide-react'
+import { X, Minus, Plus, Check, Maximize2, ChevronLeft, ChevronRight, List } from 'lucide-react'
 import { transposeChart, isChordLine, isBarToken } from '../../lib/chords'
 import { reconcileChart, lyricSections } from '../../lib/chart'
 import { getPref } from '../../lib/prefs'
@@ -144,19 +144,22 @@ function ChartBlock({ block }) {
 
 // `setNav` turns this into "set mode": the songs of a set played back to back.
 //   { index, total, titles, onNext(), onPrev(), onJump(i) }   `startAtEnd` lands on the last page (coming back from the next song).
-export default function SongViewer({ song, onClose, setNav, initialMode, onModeChange, startAtEnd, initialKey, lead }) {
+export default function SongViewer({ song, onClose, setNav, onModeChange, startAtEnd, initialKey, lead }) {
   const meta = song.metadata || {}
   const original = meta.original_key || meta.key || ''
   const keys = [...new Set([original, ...(meta.transposed_keys || []), initialKey].filter(Boolean))]
   const hasChart = !!meta.chord_chart?.trim()
 
-  const [mode, setMode] = useState(() => initialMode || (getPref('viewerMode', 'lyrics') === 'chords' ? 'chords' : 'lyrics'))
+  // Lyrics or Chord Chart comes from Settings → Chord Chart; there's no switch in the viewer.
+  // A song without a chart shows its lyrics.
+  const mode = getPref('viewerMode', 'lyrics') === 'chords' && hasChart ? 'chords' : 'lyrics'
+  const [sizeOpen, setSizeOpen] = useState(false)
   const [showList, setShowList] = useState(false)
   const wantEnd = useRef(!!startAtEnd)
   useEffect(() => { onModeChange?.(mode) }, [mode])
   useEffect(() => { if (wantEnd.current) { const t = setTimeout(() => { wantEnd.current = false }, 400); return () => clearTimeout(t) } }, [])
   // A set's chosen key wins; otherwise the song's preferred key, then the original.
-  const [activeKey, setActiveKey] = useState(initialKey || (keys.includes(meta.preferred_key) ? meta.preferred_key : '') || keys[0] || '')
+  const [activeKey] = useState(initialKey || (keys.includes(meta.preferred_key) ? meta.preferred_key : '') || keys[0] || '')
   const [page, setPage] = useState(0)
   const [pages, setPages] = useState(1)
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -319,29 +322,12 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
   }
 
   const bump = d => setManual(m => {
-    const nextSize = Math.max(10, Math.min(60, Math.round(m[mode] || fontSize) + d))
+    const from = m[mode] ? (widthOk ? m[mode] : clampPhone(m[mode])) : fontSize
+    const nextSize = widthOk ? Math.max(10, Math.min(60, Math.round(from) + d)) : clampPhone(Math.round(from) + d)
     const out = { ...m, [mode]: nextSize }
     try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
     return out
   })
-  // Phone size button. From Auto it steps up to 24, wraps round to 13, keeps stepping up
-  // through the sizes below the auto size, then returns to Auto, so every size is one loop away.
-  const autoSize = useRef(20)
-  if (!manual[mode]) autoSize.current = fontSize
-  const cycleSize = () => {
-    const current = manual[mode] != null ? clampPhone(manual[mode]) : null
-    const auto = autoSize.current
-    const order = [...SIZE_STEPS.filter(v => v > auto), ...SIZE_STEPS.filter(v => v < auto)]
-    const target = current == null ? order[0] : order[order.indexOf(current) + 1]
-    if (target == null) return resetSize()
-    setManual(m => {
-      const out = { ...m, [mode]: target }
-      try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
-      return out
-    })
-  }
-  const cycleKey = () => keys.length > 1 && setActiveKey(keys[(keys.indexOf(activeKey) + 1) % keys.length])
-
   const resetSize = () => setManual(m => {
     const out = { ...m }; delete out[mode]
     try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
@@ -391,73 +377,49 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
           )}
         </div>
 
-        <div className="hidden sm:flex order-2 items-center gap-3 min-w-0 shrink overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-          {/* View controls */}
-          <div className="flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="View">
-            {[['lyrics', Mic, 'Lyrics'], ['chords', Music, 'Chord Chart']].map(([id, Icon, label]) => (
-              <button key={id} onClick={() => setMode(id)} title={label} aria-label={label} aria-pressed={mode === id}
-                className={`w-10 h-8 flex items-center justify-center transition-colors ${mode === id ? 'bg-accent/25 text-accent-light' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
-                <Icon size={16} />
-              </button>
-            ))}
-          </div>
-
-          <div className="hidden sm:flex rounded-lg overflow-hidden border border-border shrink-0" role="group" aria-label="Columns">
-            <button onClick={() => pickCols('auto')} aria-pressed={cols === 'auto'} title={`Auto: picks the best layout for each song (now ${effCols} column${effCols > 1 ? 's' : ''})`}
-              className={`px-2 h-8 text-xs font-semibold transition-colors ${cols === 'auto' ? 'bg-accent/25 text-accent-light' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>Auto</button>
-            {[[1, Square, 'Single column'], [2, Columns2, widthOk ? 'Two columns' : 'Two columns (needs a wider screen — try landscape)']].map(([n, Icon, label]) => (
-              <button key={n} onClick={() => pickCols(n)} title={label} aria-label={label} aria-pressed={cols === n} disabled={n === 2 && !widthOk}
-                className={`w-9 h-8 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${cols === n ? 'bg-accent/25 text-accent-light' : 'bg-card text-muted hover:text-[#f5f5f5]'}`}>
-                <Icon size={15} />
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label="Text size">
-            <button onClick={() => bump(-2)} className="w-8 h-8 flex items-center justify-center text-muted hover:text-[#f5f5f5] hover:bg-card" aria-label="Smaller text"><Minus size={14} /></button>
-            <button onClick={resetSize} title={manual[mode] ? 'Back to auto-fit' : 'Auto-fit text size'}
-              className={`px-2 h-8 text-xs font-semibold border-x border-border ${manual[mode] ? 'text-muted hover:text-[#f5f5f5]' : 'text-accent-light'}`}>
-              {manual[mode] ? 'Fit' : 'Aa'}
-            </button>
-            <button onClick={() => bump(2)} className="w-8 h-8 flex items-center justify-center text-muted hover:text-[#f5f5f5] hover:bg-card" aria-label="Larger text"><Plus size={14} /></button>
-          </div>
-
-          {/* BPM and Key */}
-          {mode === 'chords' && meta.bpm && (
-            <span className="hidden sm:flex items-baseline gap-1 shrink-0">
-              <span className="text-[10px] uppercase tracking-widest text-muted">BPM</span>
-              <span className="text-base font-bold">{meta.bpm}</span>
+        {/* Key and BPM (read only), then Aa: text size and columns in one popup, like the iOS app */}
+        <div className="order-2 flex items-center gap-3 shrink-0">
+          {mode === 'chords' && activeKey && (
+            <span className="flex items-baseline gap-1 text-sm">
+              <span className="text-muted font-medium">Key</span>
+              <span className="font-bold text-accent-light">{shortKey(activeKey)}</span>
             </span>
           )}
-          {mode === 'chords' && keys.length > 0 && (
-            <div className="flex items-center gap-1 shrink-0">
-              <span className="text-[10px] uppercase tracking-widest text-muted">Key</span>
-              {keys.map(k => (
-                <button key={k} onClick={() => setActiveKey(k)} title={[k, meta.preferred_key === k && 'Preferred key', meta.key_notes?.[k]].filter(Boolean).join(' · ')}
-                  className={`relative shrink-0 min-w-[2.25rem] px-2 h-8 rounded-md border text-sm font-semibold transition-colors ${
-                    activeKey === k ? 'border-accent bg-accent/25 text-accent-light' : 'border-border text-muted hover:text-[#f5f5f5]'
-                  }`}>{shortKey(k)}{meta.preferred_key === k && <span className="absolute left-1/2 -translate-x-1/2 bottom-0.5 w-1 h-1 rounded-full bg-accent-light" aria-hidden />}</button>
-              ))}
-            </div>
+          {meta.bpm && (
+            <span className="hidden sm:flex items-baseline gap-1 text-sm">
+              <span className="text-muted font-medium">BPM</span>
+              <span className="font-bold">{meta.bpm}</span>
+            </span>
           )}
-        </div>
-
-        {/* Phone: one compact row — each control is a single tap button */}
-        <div className="sm:hidden order-2 flex items-center gap-1.5 shrink-0">
-          {mode === 'chords' && keys.length > 0 && (
-            <button onClick={cycleKey} title={`Key: ${activeKey} — tap for the next key`} aria-label={`Key ${activeKey}`}
-              className="min-w-[2.25rem] h-8 px-2 rounded-lg border border-accent bg-accent/25 text-accent-light text-sm font-semibold">{shortKey(activeKey)}</button>
-          )}
-          <button onClick={() => setMode(m => (m === 'lyrics' ? 'chords' : 'lyrics'))}
-            title={mode === 'lyrics' ? 'Lyrics — tap for the chord chart' : 'Chord chart — tap for lyrics'}
-            aria-label={mode === 'lyrics' ? 'Showing lyrics. Switch to chord chart' : 'Showing chord chart. Switch to lyrics'}
-            className="w-9 h-8 flex items-center justify-center rounded-lg border border-border bg-accent/25 text-accent-light">
-            {mode === 'lyrics' ? <Mic size={16} /> : <Music size={16} />}
-          </button>
-          <button onClick={cycleSize} title={`Text size ${PHONE_MIN}–${PHONE_MAX} — tap to change, loops back to Auto`} aria-label="Text size"
-            className="min-w-[2.5rem] h-8 px-2 rounded-lg border border-border bg-card text-xs font-semibold text-accent-light">
-            {manual[mode] ? clampPhone(manual[mode]) : 'Aa'}
-          </button>
+          <div className="relative">
+            <button onClick={() => setSizeOpen(o => !o)} aria-label="Text size and columns" aria-expanded={sizeOpen}
+              className={`min-w-[2.5rem] h-8 px-2 rounded-lg border text-xs font-semibold ${sizeOpen ? 'border-accent text-accent-light bg-accent/15' : 'border-border text-accent-light hover:bg-card'}`}>
+              Aa
+            </button>
+            {sizeOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setSizeOpen(false)} />
+                <div className="absolute right-0 top-10 z-20 w-56 rounded-xl border border-border bg-surface shadow-2xl py-1 text-sm">
+                  <p className="px-3 pt-1.5 pb-1 flex items-baseline justify-between text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    <span>Text Size</span>
+                    <span className="normal-case tracking-normal text-[#f5f5f5] font-semibold">{manual[mode] ? fontSize : `Auto · ${fontSize}`}</span>
+                  </p>
+                  <MenuRow icon={Plus} label="Larger" onClick={() => bump(2)} />
+                  <MenuRow icon={Minus} label="Smaller" onClick={() => bump(-2)} />
+                  <MenuRow icon={manual[mode] ? Maximize2 : Check} label="Fit Automatically" active={!manual[mode]} onClick={resetSize} />
+                  {widthOk && (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Columns</p>
+                      {[['auto', `Auto (now ${effCols})`], [1, 'One Column'], [2, 'Two Columns']].map(([v, label]) => (
+                        <MenuRow key={v} icon={cols === v ? Check : null} label={label} active={cols === v} onClick={() => pickCols(v)} />
+                      ))}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <button onClick={onClose} className="order-3 p-2 rounded-lg hover:bg-card text-muted hover:text-[#f5f5f5] shrink-0" aria-label="Close"><X size={18} /></button>
@@ -466,13 +428,7 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
       <div ref={viewportRef} className="relative flex-1 min-h-0 overflow-hidden select-none"
         style={{ padding: `${PAD_V}px ${pad}px` }}
         onClick={onTap} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        {mode === 'chords' && !hasChart ? (
-          <div className="h-full flex flex-col items-center justify-center gap-2 text-muted text-center">
-            <Music2 size={32} />
-            <p className="text-sm">No chord chart for this song yet.</p>
-            <p className="text-xs">Open the song editor and add one on the Chords step.</p>
-          </div>
-        ) : (
+        {(
           <div ref={innerRef}
             className="font-semibold"
             style={{ transform: `translateX(${-page * (box.w)}px)`, transition: 'transform 0.2s ease', columnFill: 'auto', lineHeight: 1.4 }}>
@@ -531,5 +487,16 @@ export default function SongViewer({ song, onClose, setNav, initialMode, onModeC
         </div>
       )}
     </div>
+  )
+}
+
+// One row of the Aa popup.
+function MenuRow({ icon: Icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick}
+      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-card ${active ? 'text-accent-light' : 'text-[#f5f5f5]'}`}>
+      <span className="w-4 flex justify-center">{Icon && <Icon size={14} />}</span>
+      {label}
+    </button>
   )
 }

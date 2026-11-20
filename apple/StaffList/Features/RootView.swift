@@ -62,7 +62,8 @@ struct MainTabView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // `spacing` lets every page scroll a little past the bubble so its last row is fully visible.
+        .safeAreaInset(edge: .bottom, spacing: 18) {
             // A floating, see-through bubble like the system tab bar: the page scrolls under it.
             HStack(spacing: 2) {
                 ForEach(tabs, id: \.id) { t in
