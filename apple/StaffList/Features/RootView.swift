@@ -63,28 +63,29 @@ struct MainTabView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(spacing: 0) {
+            // A floating, see-through bubble like the system tab bar: the page scrolls under it.
+            HStack(spacing: 2) {
                 ForEach(tabs, id: \.id) { t in
                     Button {
                         visited.insert(t.id)
                         tab = t.id
                     } label: {
-                        VStack(spacing: 5) {
-                            Text(t.title)
-                                .font(.subheadline.weight(tab == t.id ? .semibold : .regular))
-                                .foregroundStyle(tab == t.id ? Theme.accentLight : .secondary)
-                            Capsule().fill(tab == t.id ? Theme.accentLight : .clear).frame(width: 18, height: 3)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 10).padding(.bottom, 4)
-                        .contentShape(Rectangle())
+                        Text(t.title)
+                            .font(.footnote.weight(tab == t.id ? .semibold : .medium))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .foregroundStyle(tab == t.id ? Theme.accentLight : .primary)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .background(tab == t.id ? Color.primary.opacity(0.12) : .clear, in: Capsule())
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(tab == t.id ? [.isSelected, .isButton] : .isButton)
                 }
             }
-            .background(.bar, ignoresSafeAreaEdges: .bottom)
-            .overlay(alignment: .top) { Divider() }
+            .padding(5)
+            .modifier(GlassBubble())
+            .padding(.horizontal, 20)
+            .padding(.bottom, 2)
         }
         .onChange(of: tabs.map(\.id)) { _, ids in if !ids.contains(tab) { tab = "sets" } }
     }
@@ -140,5 +141,19 @@ enum TabIcon {
         }.withRenderingMode(.alwaysTemplate)
         cache[key] = img
         return img
+    }
+}
+
+/// Liquid Glass on iOS 26 and later; a thin material bubble before that.
+struct GlassBubble: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
+        }
     }
 }

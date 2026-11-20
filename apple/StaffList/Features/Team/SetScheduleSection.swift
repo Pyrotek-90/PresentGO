@@ -94,7 +94,7 @@ struct SetTeamSection: View {
                         assignmentRow(a, group: i == 0 ? group : nil)
                             .listRowSeparator(i == 0 ? .visible : .hidden, edges: .top)
                             .listRowSeparator(i == list.count - 1 ? .visible : .hidden, edges: .bottom)
-                            .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+                            .listRowInsets(EdgeInsets(top: SetRowMetrics.vInset, leading: 16, bottom: SetRowMetrics.vInset, trailing: 16))
                     }
                 }
                 if canEdit { sendRow }
@@ -196,6 +196,7 @@ struct SetTeamSection: View {
                 StatusPill(status: a.status).frame(width: statusWidth, alignment: .trailing)
             }
         }
+        .frame(minHeight: SetRowMetrics.minHeight)   // same row height as the Program
         .swipeActions {
             if canEdit {
                 Button("Remove", role: .destructive) { Task { await remove([a]) } }

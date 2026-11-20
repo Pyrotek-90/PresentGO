@@ -126,7 +126,8 @@ struct SetsView: View {
                     Image("Wordmark")
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 45)
+                        .frame(width: 102, height: 45)   // the wordmark is 2.26 : 1
+                        .fixedSize()
                         .foregroundStyle(.primary)
                         .accessibilityLabel("StaffList")
                 }
@@ -408,6 +409,7 @@ struct SetDetailView: View {
                 }
                 ForEach(items) { item in
                     row(item)
+                        .listRowInsets(EdgeInsets(top: SetRowMetrics.vInset, leading: 16, bottom: SetRowMetrics.vInset, trailing: 16))
                 }
                 .onMove { from, to in move(from: from, to: to) }
                 .onDelete { offsets in remove(at: offsets) }
@@ -477,32 +479,31 @@ struct SetDetailView: View {
     /// line, with a pencil to edit (Admins and Leaders). The set's name is in the title bar —
     /// the details were entered when the set was created, so the screen is about the program.
     private var detailsSection: some View {
-        // One card: the name, when (date · time · length) and where, with Edit in its corner.
-        // Tap anywhere on it to edit all of them together.
+        // The set: its name, when (date · time · length) and where. Edit sits in the header,
+        // like Add Item and Assign below, and edits all of them together.
         Section {
-            Button { if canEdit { sheet = .details } } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(set.name).font(.title3.weight(.bold)).foregroundStyle(.primary).lineLimit(2)
-                        detailLine(whenLine, "calendar")
-                        if let venue = set.venueText { detailLine(venue, "mappin.and.ellipse") }
-                        if let more = extraLine { detailLine(more, "clock.arrow.circlepath") }
-                        if let notice {
-                            Text(notice).font(.caption).foregroundStyle(.tint)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    if canEdit {
-                        Label("Edit", systemImage: "pencil")
-                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accentLight)
-                            .padding(.top, 4)
-                    }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(set.name).font(.title3.weight(.bold)).foregroundStyle(.primary).lineLimit(2)
+                detailLine(whenLine, "calendar")
+                if let venue = set.venueText { detailLine(venue, "mappin.and.ellipse") }
+                if let more = extraLine { detailLine(more, "clock.arrow.circlepath") }
+                if let notice {
+                    Text(notice).font(.caption).foregroundStyle(.tint)
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .disabled(!canEdit)
-            .accessibilityHint(canEdit ? "Edit the set's name, date, time, length and location" : "")
+            .padding(.vertical, 2)
+        } header: {
+            HStack {
+                Text("Set")
+                Spacer()
+                if canEdit {
+                    Button { sheet = .details } label: {
+                        Label("Edit", systemImage: "pencil").font(.caption.weight(.semibold)).textCase(nil)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Edit the set's name, date, time, length and location")
+                }
+            }
         }
     }
 
@@ -1022,4 +1023,10 @@ struct ItemLabel: View {
                 .foregroundStyle(item.type == "song" ? .secondary : .primary)
         }
     }
+}
+
+/// Row size shared by the set's Program and Team tables, so they match.
+enum SetRowMetrics {
+    static let vInset: CGFloat = 4
+    static let minHeight: CGFloat = 30   // the Program's item icon
 }
