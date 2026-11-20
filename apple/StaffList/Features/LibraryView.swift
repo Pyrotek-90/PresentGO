@@ -19,6 +19,7 @@ struct LibraryView: View {
     @State private var showFilters = false
     /// Search: title / artist / CCLI # (default), or a word or phrase in the lyrics.
     @State private var searchScope = SearchScope.details
+    @State private var searchShown = false
     enum SearchScope: Hashable { case details, lyrics }
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var rotationOnly = false
@@ -162,7 +163,7 @@ struct LibraryView: View {
                 }
             }
             .navigationDestination(for: Song.self) { SongView(song: $0) }
-            .searchable(text: $search, prompt: searchScope == .lyrics ? "Words in the lyrics" : "Title, artist or CCLI #")
+            .searchable(text: $search, isPresented: $searchShown, prompt: searchScope == .lyrics ? "Words in the lyrics" : "Title, artist or CCLI #")
             .searchScopes($searchScope, activation: .onSearchPresentation) {
                 Text("Title, Artist, CCLI").tag(SearchScope.details)
                 Text("Lyrics").tag(SearchScope.lyrics)
@@ -171,11 +172,18 @@ struct LibraryView: View {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     if sizeClass == .regular {
                         Button { withAnimation(.snappy) { showFilters.toggle() } } label: { filterLabel }
+                            .buttonStyle(.plain)
                     } else {
                         filterMenu
                     }
                     sortMenu
                 }
+                .headerIconItem()
+                // Search, for people who don't know to pull the list down.
+                ToolbarItem(placement: .primaryAction) {
+                    HeaderIconButton("Search", systemImage: "magnifyingglass") { searchShown = true }
+                }
+                .headerIconItem()
                 if session.currentTeam?.canEdit ?? false {
                     ToolbarItem(placement: .primaryAction) {
                         if adding.active {
@@ -190,10 +198,12 @@ struct LibraryView: View {
                                 Button("New Song", systemImage: "square.and.pencil") { creating = true }
                                 Button("Import Charts…", systemImage: "square.and.arrow.down.on.square") { importing = true }
                             } label: {
-                                Label("Add", systemImage: "plus")
+                                HeaderIconLabel(systemImage: "plus")
                             }
+                            .accessibilityLabel("Add")
                         }
                     }
+                    .headerIconItem()
                 }
             }
             .sheet(isPresented: $creating) { SongEditorView() }
@@ -244,7 +254,7 @@ struct LibraryView: View {
                 }
             }
         } label: {
-            Label(sort == "recent" ? "Recent" : "A–Z", systemImage: include.isEmpty ? "arrow.up.arrow.down.circle" : "arrow.up.arrow.down.circle.fill")
+            HeaderIconLabel(systemImage: "arrow.up.arrow.down", badge: !include.isEmpty)
         }
         .accessibilityLabel("Sort and show more songs")
     }
@@ -258,8 +268,8 @@ struct LibraryView: View {
     }
 
     private var filterLabel: some View {
-        Label(activeFilterCount > 0 ? "Filter (\(activeFilterCount))" : "Filter",
-              systemImage: activeFilterCount > 0 || showFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+        HeaderIconLabel(systemImage: "line.3.horizontal.decrease", badge: activeFilterCount > 0 || showFilters)
+            .accessibilityLabel(activeFilterCount > 0 ? "Filter, \(activeFilterCount) on" : "Filter")
     }
 
     /// Phones: the filters as a menu of checkmarks (it stays open while you pick), so they take no

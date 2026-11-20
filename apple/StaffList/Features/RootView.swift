@@ -37,18 +37,5 @@ struct MainTabView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .id(session.currentTeam?.id)   // reload every tab when the team changes
-        // The StaffList wordmark, ghosted behind the tab bar like a watermark.
-        .overlay(alignment: .bottom) {
-            Image("Wordmark")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 30)
-                .foregroundStyle(.primary)
-                .opacity(0.08)
-                .padding(.bottom, 4)
-                .ignoresSafeArea(.keyboard)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
     }
 }

@@ -5,192 +5,19 @@ import OfflineMode from '../components/settings/OfflineMode'
 import MyTeams from '../components/settings/MyTeams'
 import DeleteAccount from '../components/settings/DeleteAccount'
 import ExportLibrary from '../components/settings/ExportLibrary'
+import PlanMatrix from '../components/settings/PlanMatrix'
+import { PLAN_LABEL } from '../lib/plans'
 import { getPref, setPref } from '../lib/prefs'
 import { useTheme } from '../contexts/ThemeContext'
 import {
-  Sun, Moon, Shield, Check, ExternalLink,
-  Church, Zap, Bell, Star, Music, Languages, MonitorPlay,
+  Sun, Moon, Shield, ExternalLink,
+  Star, Music, Languages,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useChurch } from '../contexts/ChurchContext'
 import { DEFAULT_LIBRARY_LANGUAGE, songLanguage } from '../lib/songTags'
 import { useEffect, useState } from 'react'
-
-// ─── Subscription plans ────────────────────────────────────────────────────────
-
-const PLANS = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: null,
-    badge: 'Current Plan',
-    badgeClass: 'bg-accent/20 text-accent-light',
-    icon: Star,
-    iconClass: 'text-accent-light',
-    borderClass: '',
-    description: 'Your music book: songs, charts and sets.',
-    features: [
-      'Unlimited songs, chord charts & transposition',
-      'Unlimited imports (ChordPro, PDF charts, bulk folder)',
-      'Sets, the Song Viewer and the schedule calendar',
-      'Team Details',
-      '100 MB Content Library',
-    ],
-    cta: 'Your current plan',
-    ctaDisabled: true,
-  },
-  {
-    id: 'solo',
-    name: 'Solo',
-    price: '$5',
-    period: '/month',
-    yearly: 'or $50/year — save about 17%',
-    badge: 'Coming Soon',
-    badgeClass: 'bg-sky-500/20 text-sky-300',
-    icon: MonitorPlay,
-    iconClass: 'text-sky-400',
-    borderClass: 'border-sky-500/30',
-    description: 'For a worship leader who presents on Sunday.',
-    features: [
-      'Everything in Free',
-      '500 MB Content Library',
-      'Presenting: controller, Up Next, Loop, TV output',
-      'CCLI Report',
-      'Export the Song Library as a PDF songbook',
-      'Up to 3 devices signed in at once',
-    ],
-    cta: 'Notify Me When Available',
-    ctaDisabled: false,
-    comingSoon: true,
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '$12',
-    period: '/month',
-    yearly: 'or $100/year — save about 30%',
-    badge: 'Coming Soon',
-    badgeClass: 'bg-purple-500/20 text-purple-300',
-    icon: Zap,
-    iconClass: 'text-purple-400',
-    borderClass: 'border-purple-500/30',
-    description: 'For worship teams: AI tools and scheduling.',
-    features: [
-      'Everything in Solo, with no device limit',
-      '1 GB Content Library',
-      'AI Translate (lyrics & slide translations)',
-      'AI Worship Leader Notes',
-      'AI key / BPM lookup & Smart Cleanup',
-      'Team scheduling, email invites & calendar sync',
-      'Add, invite and message team members',
-      'Shared team access: musicians and singers open their sets, charts and lyrics',
-    ],
-    cta: 'Notify Me When Available',
-    ctaDisabled: false,
-    comingSoon: true,
-  },
-  {
-    id: 'ultimate',
-    name: 'Ultimate',
-    price: null,
-    badge: 'Coming Soon',
-    badgeClass: 'bg-amber-500/20 text-amber-300',
-    icon: Church,
-    iconClass: 'text-amber-400',
-    borderClass: 'border-amber-500/30',
-    description: 'For whole churches with several ministries.',
-    features: [
-      'Everything in Pro',
-      '5 GB Content Library',
-      'Up to 5 workspaces (Main Service, Youth, Kids…), each with its own leaders',
-      'Custom announcements page',
-      'Registrations',
-      'Merchandise',
-    ],
-    cta: 'Notify Me When Available',
-    ctaDisabled: false,
-    comingSoon: true,
-  },
-]
-
-// ─── Plan card ─────────────────────────────────────────────────────────────────
-
-// `current`: the team's plan. Billing isn't built yet, so other plans offer "Notify me".
-function PlanCard({ plan, current }) {
-  const isCurrent = plan.id === current
-  const [notified, setNotified] = useState(false)
-  const Icon = plan.icon
-
-  const checkColor =
-    plan.id === 'solo'     ? 'text-sky-400'    :
-    plan.id === 'pro'      ? 'text-purple-400' :
-    plan.id === 'ultimate' ? 'text-amber-400'  : 'text-accent-light'
-
-  return (
-    <div className={`card space-y-4 ${plan.borderClass}`}>
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-primary">{plan.name}</span>
-            {(isCurrent || plan.id !== 'free') && (
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isCurrent ? 'bg-accent/20 text-accent-light' : plan.badgeClass}`}>
-                {isCurrent ? 'Current Plan' : plan.badge}
-              </span>
-            )}
-          </div>
-          {plan.price ? (
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-xl font-bold text-primary">{plan.price}</span>
-              <span className="text-xs text-muted">{plan.period}</span>
-              {plan.yearly && <span className="text-xs text-muted ml-2">{plan.yearly}</span>}
-            </div>
-          ) : (
-            <div className="text-xl font-bold text-primary">
-              {plan.id === 'free' ? 'Free' : <span className="text-base text-muted font-medium">Pricing coming soon</span>}
-            </div>
-          )}
-          <p className="text-xs text-muted">{plan.description}</p>
-        </div>
-        <Icon size={20} className={`${plan.iconClass} shrink-0 mt-1`} />
-      </div>
-
-      {/* Feature list */}
-      <ul className="space-y-2">
-        {plan.features.map(f => (
-          <li key={f} className="flex items-center gap-2.5 text-sm text-muted">
-            <Check size={13} className={`${checkColor} shrink-0`} />
-            {f}
-          </li>
-        ))}
-      </ul>
-
-      {/* CTA */}
-      {!isCurrent && plan.id !== 'free' && (
-        <button
-          onClick={() => setNotified(true)}
-          disabled={notified}
-          className={`w-full py-2 rounded-lg text-sm font-medium border transition-colors ${
-            notified
-              ? 'border-green-500/40 text-green-400 bg-green-500/10 cursor-default'
-              : 'border-border text-muted hover:text-primary hover:border-accent'
-          }`}
-        >
-          {notified ? (
-            <span className="flex items-center justify-center gap-2">
-              <Check size={14} /> You're on the list!
-            </span>
-          ) : (
-            <span className="flex items-center justify-center gap-2">
-              <Bell size={14} /> {plan.cta}
-            </span>
-          )}
-        </button>
-      )}
-    </div>
-  )
-}
 
 // ─── Main Settings page ────────────────────────────────────────────────────────
 
@@ -200,9 +27,10 @@ export default function Settings() {
   const pickViewerMode = m => { setViewerMode(m); setPref('viewerMode', m) }
   const { user } = useAuth()
   const { scope, plan: currentPlan } = useChurch()
-  // "See plans" from an upgrade prompt lands on the plans.
+  // "See plans" from an upgrade prompt opens the Feature Matrix.
+  const [showPlans, setShowPlans] = useState(false)
   useEffect(() => {
-    if (window.location.hash === '#plans') setTimeout(() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' }), 150)
+    if (window.location.hash === '#plans') setShowPlans(true)
   }, [])
   const [libLang, setLibLang] = useState(user?.user_metadata?.library_language || DEFAULT_LIBRARY_LANGUAGE)
   const [libLangState, setLibLangState] = useState(null)   // null | 'saving' | 'saved' | 'error'
@@ -357,17 +185,24 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* ── Subscription Plans ────────────────────────────────────────── */}
-        <section className="space-y-3">
-          <h2 id="plans" className="text-xs font-semibold text-muted uppercase tracking-wider scroll-mt-4">Subscription Plans</h2>
-          <div className="space-y-4">
-            {PLANS.map(plan => <PlanCard key={plan.id} plan={plan} current={currentPlan} />)}
-          </div>
-        </section>
-
         {/* ── Account ───────────────────────────────────────────────────── */}
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Account</h2>
+          <div className="card flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted">Signed in as</p>
+              <p className="text-sm text-primary truncate">{user?.email}</p>
+            </div>
+          </div>
+          <button id="plans" onClick={() => setShowPlans(true)} className="card w-full flex items-center gap-3 text-left hover:border-accent scroll-mt-4">
+            <Star size={18} className="text-accent-light shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-primary">Plan: <span className="text-accent-light">{PLAN_LABEL[currentPlan] || 'Free'}</span></p>
+              <p className="text-xs text-muted">See what each plan includes, or change your plan.</p>
+            </div>
+            <span className="text-xs text-accent-light font-medium">Compare plans ›</span>
+          </button>
+          {showPlans && <PlanMatrix current={currentPlan} onClose={() => setShowPlans(false)} />}
           <ExportLibrary />
           <DeleteAccount />
         </section>

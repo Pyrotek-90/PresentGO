@@ -69,7 +69,7 @@ struct SetsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if !upcoming.isEmpty {
-                    Section("Upcoming") {
+                    Section {
                         ForEach(upcoming.prefix(upcomingShown)) { SetRow(set: $0, songs: songCounts[$0.id], color: color($0), reply: serving[$0.id] == "invited", team: teamName($0)) }
                         if upcoming.count > upcomingShown {
                             Button {
@@ -79,6 +79,18 @@ struct SetsView: View {
                                     .font(.subheadline.weight(.medium))
                             }
                         }
+                    } header: {
+                        HStack {
+                            Text("Upcoming")
+                            Spacer()
+                            newSetButton
+                        }
+                    }
+                } else if canEdit && !sets.isEmpty {
+                    Section {
+                        Text("No upcoming sets").foregroundStyle(.secondary)
+                    } header: {
+                        HStack { Text("Upcoming"); Spacer(); newSetButton }
                     }
                 }
                 if !past.isEmpty {
@@ -103,19 +115,24 @@ struct SetsView: View {
                     }
                 }
             }
-            .navigationTitle(session.currentTeam?.name ?? "Sets")
+            .navigationTitle("Sets")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: ServiceSet.self) { SetDetailView(set: $0) }
             .navigationDestination(for: String.self) { _ in MyTeamsView() }
             .toolbar {
+                // The StaffList wordmark in place of the title on the landing page.
+                ToolbarItem(placement: .principal) {
+                    Image("Wordmark")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 30)
+                        .foregroundStyle(.primary)
+                        .accessibilityLabel("StaffList")
+                }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Notifications", systemImage: "bell") { showingInbox = true }
+                    HeaderIconButton("Notifications", systemImage: "bell") { showingInbox = true }
                 }
-                if canEdit {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("New Set", systemImage: "plus") { creating = true }
-                    }
-                }
+                .headerIconItem()
             }
             .sheet(isPresented: $showingInbox) { InboxView() }
             .sheet(isPresented: $creating) {
@@ -165,6 +182,16 @@ struct SetsView: View {
             } else {
                 self.error = error.localizedDescription
             }
+        }
+    }
+
+    /// Quiet "+ New Set", like the Team tab's Add.
+    @ViewBuilder private var newSetButton: some View {
+        if canEdit {
+            Button { creating = true } label: {
+                Label("New Set", systemImage: "plus").font(.caption.weight(.semibold)).textCase(nil)
+            }
+            .buttonStyle(.borderless)
         }
     }
 

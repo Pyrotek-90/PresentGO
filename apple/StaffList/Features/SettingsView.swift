@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var confirmSignOut = false
     @AppStorage(OfflineStore.enabledKey) private var offlineEnabled = true
     @State private var offlineSaving = false
+    @State private var showPlans = false
 
     private var version: String {
         let info = Bundle.main.infoDictionary
@@ -25,25 +26,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                // MARK: Account
-                Section("Account") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Signed in as").font(.caption).foregroundStyle(.secondary)
-                            Text(session.user?.email ?? "").lineLimit(1).truncationMode(.middle)
-                        }
-                        Spacer(minLength: 8)
-                        Button("Sign Out") { confirmSignOut = true }
-                            .buttonStyle(.bordered).controlSize(.small)
-                    }
-                    if let team = session.currentTeam {
-                        LabeledContent("Plan") {
-                            Text(planName(team.plan)).foregroundStyle(team.isPaid ? Theme.accentLight : .secondary)
-                        }
-                    }
-                    NavigationLink { DeleteAccountView() } label: { Text("Delete Account").foregroundStyle(.red) }
-                }
-
                 // MARK: Appearance
                 Section("Appearance") {
                     Picker(selection: $appearance) {
@@ -148,6 +130,30 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: Account
+                Section("Account") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Signed in as").font(.caption).foregroundStyle(.secondary)
+                            Text(session.user?.email ?? "").lineLimit(1).truncationMode(.middle)
+                        }
+                        Spacer(minLength: 8)
+                        Button("Sign Out") { confirmSignOut = true }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
+                    if let team = session.currentTeam {
+                        Button { showPlans = true } label: {
+                            HStack {
+                                Text("Plan").foregroundStyle(.primary)
+                                Spacer()
+                                Text(planName(team.plan)).foregroundStyle(Theme.accentLight)
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                    NavigationLink { DeleteAccountView() } label: { Text("Delete Account").foregroundStyle(.red) }
+                }
+
                 // MARK: Footer — links and version on a line or two
                 Section {
                 } footer: {
@@ -168,6 +174,7 @@ struct SettingsView: View {
                 Button("Sign Out", role: .destructive) { Task { await session.signOut() } }
             }
             .task { await loadLanguages() }
+            .sheet(isPresented: $showPlans) { PlanMatrixView(current: session.currentTeam?.plan ?? "free") }
         }
     }
 
