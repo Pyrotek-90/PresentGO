@@ -18,24 +18,61 @@ struct RootView: View {
 }
 
 /// Tabs on iPhone; on iPad, iOS 18+ shows them as a sidebar-adaptable bar automatically.
+/// The tab icons are rounded squares like the title-bar buttons: outlined, and filled when chosen.
 struct MainTabView: View {
     @Environment(SessionStore.self) private var session
+    @State private var tab = "sets"
 
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             SetsView()
-                .tabItem { Label("Sets", systemImage: "music.note.list") }
+                .tabItem { item("Sets", "music.note.list", "sets") }.tag("sets")
             LibraryView()
-                .tabItem { Label("Songs", systemImage: "books.vertical") }
+                .tabItem { item("Songs", "books.vertical", "songs") }.tag("songs")
             if session.currentTeam?.canEdit ?? false {
                 TeamView()
-                    .tabItem { Label("Team", systemImage: "person.3") }
+                    .tabItem { item("Team", "person.3", "team") }.tag("team")
             }
             MediaLibraryView()
-                .tabItem { Label("Media", systemImage: "photo.on.rectangle") }
+                .tabItem { item("Media", "photo.on.rectangle", "media") }.tag("media")
             SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tabItem { item("Settings", "gearshape", "settings") }.tag("settings")
         }
         .id(session.currentTeam?.id)   // reload every tab when the team changes
+    }
+
+    private func item(_ title: String, _ symbol: String, _ id: String) -> some View {
+        Label { Text(title) } icon: { Image(uiImage: TabIcon.image(symbol, selected: tab == id)) }
+    }
+}
+
+/// Draws a tab icon as a template image: a rounded square with the symbol inside.
+enum TabIcon {
+    private static var cache: [String: UIImage] = [:]
+
+    static func image(_ symbol: String, selected: Bool) -> UIImage {
+        let key = symbol + (selected ? "#on" : "#off")
+        if let hit = cache[key] { return hit }
+        let size = CGSize(width: 30, height: 30)
+        let rect = CGRect(origin: .zero, size: size).insetBy(dx: 1.5, dy: 1.5)
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: selected ? .bold : .semibold)
+        let glyph = UIImage(systemName: symbol, withConfiguration: config)?.withRenderingMode(.alwaysTemplate)
+        let img = UIGraphicsImageRenderer(size: size).image { ctx in
+            let box = UIBezierPath(roundedRect: rect, cornerRadius: 8.5)
+            UIColor.black.setFill(); UIColor.black.setStroke()
+            if selected { box.fill() } else { box.lineWidth = 1.6; box.stroke() }
+            if let glyph {
+                let g = glyph.size
+                let r = CGRect(x: (size.width - g.width) / 2, y: (size.height - g.height) / 2, width: g.width, height: g.height)
+                if selected {
+                    // Knock the symbol out of the filled square.
+                    glyph.withTintColor(.black).draw(in: r, blendMode: .destinationOut, alpha: 1)
+                } else {
+                    glyph.withTintColor(.black).draw(in: r)
+                }
+            }
+        }.withRenderingMode(.alwaysTemplate)
+        cache[key] = img
+        return img
     }
 }
