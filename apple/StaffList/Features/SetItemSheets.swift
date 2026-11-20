@@ -158,7 +158,7 @@ struct SongItemSheet: View {
             .sheet(isPresented: $arranging) {
                 SetArrangementSheet(song: song, initial: setOrder) { order in setArrangement(order) }
             }
-            .sheet(isPresented: $editingSong) {
+            .fullScreenCover(isPresented: $editingSong) {   // full screen: preparing a song is real work
                 SongEditorView(song: song, onSaved: { song = $0 }, onDeleted: { dismiss() })
             }
             .task { await loadTeam() }

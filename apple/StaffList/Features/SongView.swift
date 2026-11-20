@@ -32,7 +32,7 @@ struct SongView: View {
             .squaredBackButton()
             .onAppear { chrome?.hidePageBar = true }
             .onDisappear { chrome?.hidePageBar = false }
-            .sheet(isPresented: $editing) {
+            .fullScreenCover(isPresented: $editing) {   // full screen: preparing a song is real work
                 SongEditorView(song: song, onSaved: { song = $0 }, onDeleted: { dismiss() })
             }
     }

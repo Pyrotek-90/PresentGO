@@ -7,19 +7,21 @@ import { splitRepeat } from '../../lib/repeat'
 
 const PAD = 20 // horizontal page padding, px
 const PAD_V = 12 // vertical page padding, px
-const FIT = { lyrics: [32, 15], chords: [32, 15] }       // auto-fit [largest, smallest] font size
+// 12–25 px covers every real use: no bigger, and nothing smaller than 12.
+const SIZE_MIN = 12, SIZE_MAX = 25
+const FIT = { lyrics: [25, 15], chords: [25, 15] }       // auto-fit [largest, smallest] font size
 const COMFORT = { lyrics: 22, chords: 18 }              // never auto-shrink below this; paginate instead
-const FIT_PHONE = { lyrics: [32, 15], chords: [30, 15] } // phones: smaller text so more of the song is visible
+const FIT_PHONE = { lyrics: [25, 15], chords: [25, 15] } // phones: smaller text so more of the song is visible
 const COMFORT_PHONE = { lyrics: 16, chords: 15 }
 const FLOOR_TWO_COL = { lyrics: 15, chords: 15 }        // two columns may go a little smaller to keep a song on one page
 const MIN_READABLE = { lyrics: 12, chords: 12 }         // last resort: smallest size used to keep one long line from wrapping
-const MIN_READABLE_PHONE = { lyrics: 11, chords: 11 }
+const MIN_READABLE_PHONE = { lyrics: 12, chords: 12 }
 const COLS_KEY = 'presentgo.viewer.cols.v2'
 const TWO_COL_MIN_WIDTH = 640
 const shortKey = k => k.replace(' Major', '').replace(' Minor', 'm')
 const SIZE_KEY = 'presentgo.viewer.size'
-const SIZE_STEPS = [13, 16, 20, 24]   // phone size button choices (13 smallest, 24 largest)
-const PHONE_MIN = SIZE_STEPS[0], PHONE_MAX = SIZE_STEPS[SIZE_STEPS.length - 1]
+const SIZE_STEPS = [12, 16, 20, 24]   // phone size button choices (13 smallest, 24 largest)
+const PHONE_MIN = SIZE_MIN, PHONE_MAX = SIZE_MAX
 const clampPhone = v => Math.max(PHONE_MIN, Math.min(PHONE_MAX, v))
 const loadSizes = () => { try { return JSON.parse(localStorage.getItem(SIZE_KEY)) || {} } catch { return {} } }
 
@@ -323,7 +325,7 @@ export default function SongViewer({ song, onClose, setNav, onModeChange, startA
 
   const bump = d => setManual(m => {
     const from = m[mode] ? (widthOk ? m[mode] : clampPhone(m[mode])) : fontSize
-    const nextSize = widthOk ? Math.max(10, Math.min(60, Math.round(from) + d)) : clampPhone(Math.round(from) + d)
+    const nextSize = widthOk ? Math.max(SIZE_MIN, Math.min(SIZE_MAX, Math.round(from) + d)) : clampPhone(Math.round(from) + d)
     const out = { ...m, [mode]: nextSize }
     try { localStorage.setItem(SIZE_KEY, JSON.stringify(out)) } catch { /* ignore */ }
     return out
@@ -413,8 +415,8 @@ export default function SongViewer({ song, onClose, setNav, onModeChange, startA
                     <span>Text Size</span>
                     <span className="normal-case tracking-normal text-[#f5f5f5] font-semibold">{manual[mode] ? fontSize : `Auto · ${fontSize}`}</span>
                   </p>
-                  <MenuRow icon={Plus} label="Larger" onClick={() => bump(2)} />
-                  <MenuRow icon={Minus} label="Smaller" onClick={() => bump(-2)} />
+                  <MenuRow icon={Plus} label="Larger" onClick={() => bump(1)} />
+                  <MenuRow icon={Minus} label="Smaller" onClick={() => bump(-1)} />
                   <MenuRow icon={manual[mode] ? Maximize2 : Check} label="Fit Automatically" active={!manual[mode]} onClick={resetSize} />
                   {widthOk && (
                     <>

@@ -30,6 +30,8 @@ struct ScheduleMatrix: View {
     /// The status key and how-to line under the matrix. The Team tab shows them under the pane
     /// instead (so the pane's bottom row stays thin on the phone).
     var showsLegend = true
+    /// Fill the space given (the full-screen Serving view) instead of a fixed-height pane.
+    var fillsSpace = false
     /// Tap a set's songs: open Edit Set.
     var onOpen: (ServiceSet) -> Void
 
@@ -42,9 +44,18 @@ struct ScheduleMatrix: View {
     @State private var dropTarget: String?
     @State private var note: String?
 
-    private var columnWidth: CGFloat { sizeClass == .regular ? 168 : 136 }
-    private var labelWidth: CGFloat { sizeClass == .regular ? 108 : 84 }
-    private let line: CGFloat = 19
+    /// Scrolled distance of the cells, so the pinned header row and label column follow them.
+    @State private var offset: CGPoint = .zero
+    /// Landscape (a phone on its side, or a wide iPad): text a point or two larger.
+    @State private var wideContainer = false
+    @Environment(\.verticalSizeClass) private var vSizeClass
+
+    private var landscape: Bool { vSizeClass == .compact || wideContainer }
+    private var fs: CGFloat { landscape ? 13.5 : 12 }          // names, songs, positions
+    private var fsSmall: CGFloat { landscape ? 12.5 : 11 }     // dates
+    private var columnWidth: CGFloat { (sizeClass == .regular ? 168 : 136) + (landscape ? 14 : 0) }
+    private var labelWidth: CGFloat { (sizeClass == .regular ? 108 : 84) + (landscape ? 10 : 0) }
+    private var line: CGFloat { landscape ? 21 : 19 }
     private let today = ServiceSet.dayFormatter.string(from: .now)
 
     // MARK: Rows
@@ -114,7 +125,7 @@ struct ScheduleMatrix: View {
 
     private func height(_ row: Row) -> CGFloat {
         switch row {
-        case .header: return 50
+        case .header: return landscape ? 54 : 50
         case .songsTitle, .section: return 24
         case .songs:
             let most = sets.map { songs[$0.id]?.count ?? 0 }.max() ?? 0
@@ -153,47 +164,97 @@ struct ScheduleMatrix: View {
         }
     }
 
+    /// The header row (set names and dates) and the left column (sections and positions) stay put;
+    /// the cells scroll both ways under them.
     private var matrix: some View {
         let rows = rows
-        return HStack(alignment: .top, spacing: 0) {
-            // Row labels, pinned on the left.
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(rows) { row in
-                    label(row)
-                        // Roles sit on the right, next to the sets; section titles stay on the left.
-                        .frame(width: labelWidth, height: height(row), alignment: isPosition(row) ? .topTrailing : .topLeading)
-                        .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
-                        .overlay(alignment: .bottom) { rule }
-                }
-            }
-            .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.35)).frame(width: 1) }
-
-            // One column per set, scrolling sideways a set at a time.
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
+        let bodyRows = rows.filter { $0 != .header }
+        let headerH = height(.header)
+        let bodyH = bodyRows.reduce(0) { $0 + height($1) }
+        let content = VStack(spacing: 0) {
+            // Pinned header row.
+            HStack(spacing: 0) {
+                label(.header)
+                    .frame(width: labelWidth, height: headerH, alignment: .topLeading)
+                    .overlay(alignment: .trailing) { divider }
+                HStack(spacing: 0) {
                     ForEach(sets) { s in
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(rows) { row in
-                                droppable(row, s) {
-                                    tappable(row, s) {
-                                        cell(row, s)
-                                            .frame(width: columnWidth, height: height(row), alignment: .topLeading)
-                                            .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
-                                            .overlay(alignment: .bottom) { rule }
+                        tappable(.header, s) {
+                            cell(.header, s).frame(width: columnWidth, height: headerH, alignment: .topLeading)
+                        }
+                        .modifier(columnStyle(s))
+                    }
+                }
+                .offset(x: offset.x)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
+            }
+            .overlay(alignment: .bottom) { Rectangle().fill(Color.secondary.opacity(0.35)).frame(height: 1) }
+            .zIndex(1)
+
+            HStack(spacing: 0) {
+                // Pinned label column.
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(bodyRows) { row in
+                        label(row)
+                            .frame(width: labelWidth, height: height(row), alignment: isPosition(row) ? .topTrailing : .topLeading)
+                            .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
+                            .overlay(alignment: .bottom) { rule }
+                    }
+                }
+                .offset(y: offset.y)
+                .frame(width: labelWidth, alignment: .top)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .clipped()
+                .overlay(alignment: .trailing) { divider }
+
+                // The cells, scrolling both ways.
+                ScrollView([.horizontal, .vertical]) {
+                    HStack(spacing: 0) {
+                        ForEach(sets) { s in
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(bodyRows) { row in
+                                    droppable(row, s) {
+                                        tappable(row, s) {
+                                            cell(row, s)
+                                                .frame(width: columnWidth, height: height(row), alignment: .topLeading)
+                                                .background(isBand(row) ? Color.secondary.opacity(0.1) : .clear)
+                                                .overlay(alignment: .bottom) { rule }
+                                        }
                                     }
                                 }
                             }
+                            .modifier(columnStyle(s))
                         }
-                        .background(isSelected(s) ? Theme.accent.opacity(0.15) : isNext(s) ? Theme.accent.opacity(0.07) : .clear)
-                        .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 0.5) }
-                        .overlay { if isSelected(s) { Rectangle().stroke(Theme.accent.opacity(0.6), lineWidth: 1) } }
-                        .opacity(isPast(s) && !isSelected(s) ? 0.6 : 1)
                     }
+                    .onGeometryChange(for: CGPoint.self) { $0.frame(in: .named("matrixCells")).origin } action: { offset = $0 }
                 }
-                .scrollTargetLayout()
+                .coordinateSpace(.named("matrixCells"))
+                .scrollIndicators(.visible)
             }
-            .scrollTargetBehavior(.viewAligned)
-            .scrollIndicators(.visible)
+        }
+        .onGeometryChange(for: Bool.self) { $0.size.width >= 1000 } action: { wideContainer = $0 }
+
+        return content
+            .frame(height: fillsSpace ? nil : min(headerH + bodyH + 2, 460))
+            .frame(maxHeight: fillsSpace ? .infinity : nil, alignment: .top)
+    }
+
+    private var divider: some View { Rectangle().fill(Color.secondary.opacity(0.35)).frame(width: 1) }
+
+    /// A set's column: tinted when chosen or next, outlined when chosen, faded when past.
+    private func columnStyle(_ s: ServiceSet) -> ColumnStyle {
+        ColumnStyle(selected: isSelected(s), next: isNext(s), past: isPast(s))
+    }
+
+    private struct ColumnStyle: ViewModifier {
+        let selected: Bool, next: Bool, past: Bool
+        func body(content: Content) -> some View {
+            content
+                .background(selected ? Theme.accent.opacity(0.15) : next ? Theme.accent.opacity(0.07) : .clear)
+                .overlay(alignment: .trailing) { Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 0.5) }
+                .overlay { if selected { Rectangle().stroke(Theme.accent.opacity(0.6), lineWidth: 1) } }
+                .opacity(past && !selected ? 0.6 : 1)
         }
     }
 
@@ -274,7 +335,7 @@ struct ScheduleMatrix: View {
         switch row {
         case .header:
             Text("\(sets.count) set\(sets.count == 1 ? "" : "s")")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.system(size: fs)).foregroundStyle(.secondary)
                 .padding(8)
         case .songsTitle:
             bandTitle("Songs")
@@ -283,7 +344,7 @@ struct ScheduleMatrix: View {
         case .section(let s):
             bandTitle(s.label)
         case .position(let p):
-            Text(p.name).font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
+            Text(p.name).font(.system(size: fs, weight: .medium)).lineLimit(1).minimumScaleFactor(0.8)
                 .padding(.horizontal, 8).padding(.top, 6)
         }
     }
@@ -295,7 +356,7 @@ struct ScheduleMatrix: View {
 
     private func bandTitle(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold)).tracking(1)
+            .font(.system(size: landscape ? 11 : 10, weight: .semibold)).tracking(1)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8).padding(.top, 6)
     }
@@ -309,9 +370,9 @@ struct ScheduleMatrix: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     if isNext(s) { tag("NEXT", Theme.accentLight) } else if isPast(s) { tag("LAST", .secondary) }
-                    Text(s.name).font(.caption.weight(.semibold)).lineLimit(1)
+                    Text(s.name).font(.system(size: fs, weight: .semibold)).lineLimit(1)
                 }
-                Text(when(s)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(when(s)).font(.system(size: fsSmall)).foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(8)
             .overlay(alignment: .top) {
@@ -333,7 +394,7 @@ struct ScheduleMatrix: View {
                     .frame(height: line)
                 }
             }
-            .font(.caption)
+            .font(.system(size: fs))
             .padding(.horizontal, 8).padding(.top, 5)
         case .position(let p):
             VStack(alignment: .leading, spacing: 0) {
@@ -352,7 +413,7 @@ struct ScheduleMatrix: View {
                     .accessibilityLabel("\(p.name): \(members[a.memberId]?.name ?? ""), \(a.statusLabel)")
                 }
             }
-            .font(.caption)
+            .font(.system(size: fs))
             .padding(.horizontal, 8).padding(.top, 5)
         }
     }

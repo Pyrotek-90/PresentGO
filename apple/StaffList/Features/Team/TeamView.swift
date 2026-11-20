@@ -171,10 +171,10 @@ struct TeamView: View {
             }
             .fullScreenCover(isPresented: $expanded, onDismiss: { reloadToken += 1 }) {
                 NavigationStack {
-                    ScrollView {
-                        ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
-                                       selectedID: matrixSelected, onSelect: { matrixSelected = $0.id }) { coverSet = $0 }
-                    }
+                    // The matrix scrolls itself, with its header row and position names pinned.
+                    ScheduleMatrix(members: membersByID, positions: positions, reloadToken: reloadToken,
+                                   selectedID: matrixSelected, onSelect: { matrixSelected = $0.id },
+                                   fillsSpace: true) { coverSet = $0 }
                     .navigationTitle("Serving")
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationDestination(item: $coverSet) { SetDetailView(set: $0) }

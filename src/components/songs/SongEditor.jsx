@@ -1515,8 +1515,9 @@ export default function SongEditor({ libraryLanguages = [], song, onClose, onSav
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-4 pt-3 sm:pt-6 bg-black/70">
-      <div className={`bg-surface border border-border rounded-2xl w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[92dvh] flex flex-col ${step === 1 ? 'h-[calc(100dvh-1.5rem)] sm:h-[92dvh]' : ''}`}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-[2dvh] bg-black/70">
+      {/* As large as the window allows: preparing a song is real work. */}
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-[1400px] h-[calc(100dvh-1.5rem)] sm:h-[96dvh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">

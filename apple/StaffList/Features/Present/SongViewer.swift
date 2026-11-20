@@ -20,6 +20,9 @@ struct SongLayout {
     let pages: [[Column]]
     let chart: Bool
 
+    static let maxSize: CGFloat = 25
+    static let minSize: CGFloat = 12
+
     var lineHeight: CGFloat { fontSize * 1.32 }
     var gap: CGFloat { fontSize * 0.8 }
 
@@ -67,6 +70,9 @@ struct SongLayout {
                 units.append(Unit(lines: [Line(kind: .header, text: String(t.dropFirst().dropLast()))]))
             } else if !t.isEmpty {
                 units.append(Unit(lines: [Line(kind: .lyric, text: line)]))
+            } else {
+                // A blank line ends a verse or chorus, so the page breaks there, never mid-verse.
+                flush()
             }
         }
         flush()
@@ -119,8 +125,9 @@ struct SongLayout {
             return max(1, Int(ceil((w100[l] ?? 0) * f / 100 / cw)))
         }
 
-        let maxSize: CGFloat = 40
-        let minSize: CGFloat = wide ? 13 : 11
+        // 12–25 pt covers every real use: larger isn't needed, smaller can't be read on a stand.
+        let maxSize: CGFloat = SongLayout.maxSize
+        let minSize: CGFloat = SongLayout.minSize
         let comfort: CGFloat = wide ? (chart ? 18 : 22) : (chart ? 15 : 16)
         let colChoices: [Int] = {
             if let p = columnsPref { return [p == 2 && wide ? 2 : 1] }
@@ -428,8 +435,13 @@ struct SongViewer: View {
     private var sizeMenu: some View {
         Menu {
             Section("Text Size · \(manualSize == nil ? "Auto, " : "")\(Int(layout(index).fontSize)) pt") {
-                Button("Larger", systemImage: "plus") { setSize(+2) }
-                Button("Smaller", systemImage: "minus") { setSize(-2) }
+                // Larger and Smaller keep the menu open to tap again; anything else closes it.
+                Button("Larger", systemImage: "plus") { setSize(+1) }
+                    .menuActionDismissBehavior(.disabled)
+                    .disabled(Int(layout(index).fontSize) >= Int(SongLayout.maxSize))
+                Button("Smaller", systemImage: "minus") { setSize(-1) }
+                    .menuActionDismissBehavior(.disabled)
+                    .disabled(Int(layout(index).fontSize) <= Int(SongLayout.minSize))
                 Button("Fit Automatically", systemImage: manualSize == nil ? "checkmark" : "arrow.up.left.and.arrow.down.right") { setSize(nil) }
             }
             if sizeClass == .regular {
@@ -450,7 +462,7 @@ struct SongViewer: View {
 
     private func setSize(_ delta: Double?) {
         let current = Double(layout(index).fontSize)
-        let value = delta.map { min(60, max(10, (manualSize.map(Double.init) ?? current) + $0)) } ?? 0
+        let value = delta.map { min(Double(SongLayout.maxSize), max(Double(SongLayout.minSize), (manualSize.map(Double.init) ?? current) + $0)) } ?? 0
         if modeRaw == "chords" { sizeChords = value } else { sizeLyrics = value }
     }
 

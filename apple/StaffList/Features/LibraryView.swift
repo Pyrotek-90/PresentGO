@@ -208,7 +208,7 @@ struct LibraryView: View {
                     .headerIconItem()
                 }
             }
-            .sheet(isPresented: $creating) { SongEditorView() }
+            .fullScreenCover(isPresented: $creating) { SongEditorView() }   // full screen: preparing a song is real work
             .sheet(isPresented: $importing) { BulkImportView(existingTitles: Set(songs.map(\.title))) }
             .refreshable { await load() }
             .task { await load() }
